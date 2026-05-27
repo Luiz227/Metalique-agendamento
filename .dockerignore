@@ -1,0 +1,8 @@
+node_modules
+**/node_modules
+.git
+.next
+*.log
+.env
+**/.env
+service-planner-easypanel.zip

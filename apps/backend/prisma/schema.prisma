@@ -1,0 +1,244 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  LOGISTICS
+  TECHNICIAN
+  VALIDATOR
+}
+
+enum AppointmentStatus {
+  DRAFT
+  WAITING
+  READY
+  CRITICAL
+  COMPLETED
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  passwordHash  String
+  role          UserRole
+  active        Boolean  @default(true)
+  refreshToken  String?
+  technician    Technician?
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([role, active])
+  @@map("users")
+}
+
+model Technician {
+  id             String        @id @default(cuid())
+  userId         String?       @unique
+  name           String
+  baseCity       String
+  baseAddress    String
+  specialties    String[]
+  color          String        @default("#3b82f6")
+  active         Boolean       @default(true)
+  user           User?         @relation(fields: [userId], references: [id])
+  appointments   Appointment[]
+  statusLogs     StatusLog[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([name])
+  @@index([active])
+  @@map("technicians")
+}
+
+model Client {
+  id            String        @id @default(cuid())
+  name          String
+  cnpj          String?
+  city          String
+  address       String
+  phone         String?
+  email         String?
+  latitude      Float?
+  longitude     Float?
+  appointments  Appointment[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([name])
+  @@index([city])
+  @@map("clients")
+}
+
+model Appointment {
+  id                String             @id @default(cuid())
+  clientId          String
+  technicianId      String?
+  city              String
+  fullAddress       String
+  serviceType       String
+  problemDescription String?
+  date              DateTime
+  startTime         DateTime
+  endTime           DateTime
+  status            AppointmentStatus  @default(WAITING)
+  osNumber          String?
+  notes             String?
+  latitude          Float?
+  longitude         Float?
+  daysOut           Int                @default(1)
+  client            Client             @relation(fields: [clientId], references: [id])
+  technician        Technician?        @relation(fields: [technicianId], references: [id])
+  expenses          Expense[]
+  attachments       Attachment[]
+  statusLogs        StatusLog[]
+  finalValidation   FinalValidation?
+  routeSuggestionsA RouteSuggestion[]  @relation("origin")
+  routeSuggestionsB RouteSuggestion[]  @relation("nearby")
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([status, date])
+  @@index([technicianId, date])
+  @@index([clientId, date])
+  @@map("appointments")
+}
+
+model Hotel {
+  id          String   @id @default(cuid())
+  name        String
+  city        String
+  address     String
+  dailyRate   Decimal  @db.Decimal(10,2)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([city, active])
+  @@map("hotels")
+}
+
+model Vehicle {
+  id          String   @id @default(cuid())
+  name        String
+  plate       String   @unique
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active])
+  @@map("vehicles")
+}
+
+model Expense {
+  id             String      @id @default(cuid())
+  appointmentId  String
+  type           String
+  plannedAmount  Decimal?    @db.Decimal(10,2)
+  realAmount     Decimal?    @db.Decimal(10,2)
+  notes          String?
+  appointment    Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([appointmentId])
+  @@map("expenses")
+}
+
+model Attachment {
+  id               String      @id @default(cuid())
+  appointmentId    String
+  driveFileId      String
+  driveFolderPath  String
+  originalName     String
+  mimeType         String
+  size             Int
+  publicUrl        String?
+  appointment      Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  createdAt        DateTime    @default(now())
+
+  @@index([appointmentId, createdAt])
+  @@map("attachments")
+}
+
+model Notification {
+  id            String   @id @default(cuid())
+  userId        String?
+  title         String
+  message       String
+  readAt        DateTime?
+  user          User?    @relation(fields: [userId], references: [id])
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model StatusLog {
+  id            String      @id @default(cuid())
+  appointmentId String
+  technicianId  String?
+  status        String
+  observation   String?
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  technician    Technician? @relation(fields: [technicianId], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@index([appointmentId, createdAt])
+  @@map("status_logs")
+}
+
+model RouteSuggestion {
+  id                  String      @id @default(cuid())
+  originAppointmentId String
+  nearbyAppointmentId String
+  distanceKm          Float
+  durationMinutes     Int
+  score               Int
+  status              String      @default("OPEN")
+  originAppointment   Appointment @relation("origin", fields: [originAppointmentId], references: [id], onDelete: Cascade)
+  nearbyAppointment   Appointment @relation("nearby", fields: [nearbyAppointmentId], references: [id], onDelete: Cascade)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@unique([originAppointmentId, nearbyAppointmentId])
+  @@index([status, score])
+  @@map("route_suggestions")
+}
+
+model FinalValidation {
+  id             String      @id @default(cuid())
+  appointmentId  String      @unique
+  validatorName  String
+  approved       Boolean     @default(false)
+  notes          String?
+  appointment    Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@map("final_validations")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  entity     String
+  entityId   String?
+  action     String
+  metadata   Json?
+  user       User?    @relation(fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@index([entity, entityId, createdAt])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}

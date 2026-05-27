@@ -1,13 +1,12 @@
 FROM node:20-bookworm-slim AS deps
 WORKDIR /app/apps/frontend
-COPY apps/frontend/package*.json ./
+COPY package*.json ./
 RUN npm install
 
 FROM node:20-bookworm-slim AS builder
 WORKDIR /app/apps/frontend
 COPY --from=deps /app/apps/frontend/node_modules ./node_modules
-COPY apps/frontend ./
-COPY tsconfig.base.json /app/tsconfig.base.json
+COPY . ./
 RUN npm run build
 
 FROM node:20-bookworm-slim AS runner

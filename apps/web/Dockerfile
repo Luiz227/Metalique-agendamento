@@ -4,15 +4,12 @@ ARG VITE_API_URL
 ARG VITE_GOOGLE_MAPS_API_KEY
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_GOOGLE_MAPS_API_KEY=$VITE_GOOGLE_MAPS_API_KEY
-COPY package*.json ./
-COPY apps/web/package.json apps/web/package.json
-COPY apps/api/package.json apps/api/package.json
-COPY packages/shared/package.json packages/shared/package.json
-RUN npm ci
-COPY . .
-RUN npm run build --workspace apps/web
+COPY apps/web/package*.json ./
+RUN npm install
+COPY apps/web/. ./
+RUN npm run build
 
 FROM nginx:1.27-alpine
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/apps/web/dist /usr/share/nginx/html
+COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80

@@ -7,4 +7,4 @@ COPY . .
 RUN npx prisma generate --schema prisma/schema.prisma
 RUN npm run build
 EXPOSE 3333
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]

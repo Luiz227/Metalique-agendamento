@@ -6,6 +6,7 @@ import { Calendar, ChevronLeft, ChevronRight, Clock, Filter, MapPin, Navigation,
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Input } from '../components/ui/input';
 import { api } from '../services/api';
 import type { Appointment, Suggestion } from '../services/types';
 import { formatDate, formatTime } from '../services/types';
@@ -13,6 +14,13 @@ import { formatDate, formatTime } from '../services/types';
 type MapMarker = Appointment & {
   lat: number;
   lng: number;
+};
+
+type SearchPoint = {
+  query: string;
+  lat: number;
+  lng: number;
+  formattedAddress: string | null;
 };
 
 const COMPANY_BASE = {
@@ -42,6 +50,10 @@ export default function MapView() {
   const [filterTechnician, setFilterTechnician] = useState<string>('all');
   const [period, setPeriod] = useState<'week' | 'month'>('week');
   const [referenceDate, setReferenceDate] = useState(() => new Date());
+  const [searchAddress, setSearchAddress] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchedPoint, setSearchedPoint] = useState<SearchPoint | null>(null);
+  const [resolvedCoordsById, setResolvedCoordsById] = useState<Record<string, { lat: number; lng: number }>>({});
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -101,20 +113,57 @@ export default function MapView() {
     });
   }, [appointments, filterTechnician, period, referenceDate]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function resolveMissingCoords() {
+      const candidates = filteredAppointments.filter(
+        (appointment) =>
+          appointment.status === 'READY' &&
+          !resolvedCoordsById[appointment.id] &&
+          (appointment.latitude == null || appointment.longitude == null) &&
+          (appointment.fullAddress || appointment.client?.address)
+      );
+
+      if (candidates.length === 0) return;
+
+      for (const appointment of candidates.slice(0, 10)) {
+        const query = appointment.fullAddress || appointment.client?.address || '';
+        if (!query) continue;
+        try {
+          const geo = await api<{ ok: boolean; lat: number | null; lng: number | null }>('/maps/geocode?q=' + encodeURIComponent(query));
+          if (cancelled) return;
+          if (geo.ok && geo.lat != null && geo.lng != null) {
+            setResolvedCoordsById((prev) => ({ ...prev, [appointment.id]: { lat: geo.lat as number, lng: geo.lng as number } }));
+          }
+        } catch {
+          // ignora falhas de geocode por item para não travar a tela
+        }
+      }
+    }
+
+    resolveMissingCoords();
+    return () => {
+      cancelled = true;
+    };
+  }, [filteredAppointments, resolvedCoordsById]);
+
   const markers = useMemo<MapMarker[]>(() => {
     return filteredAppointments
+      .filter((appointment) => appointment.status === 'READY' || appointment.status === 'CRITICAL')
       .filter((appointment) => {
-        const lat = appointment.latitude ?? appointment.client?.latitude ?? appointment.technician?.latitude;
-        const lng = appointment.longitude ?? appointment.client?.longitude ?? appointment.technician?.longitude;
+        const resolved = resolvedCoordsById[appointment.id];
+        const lat = resolved?.lat ?? appointment.latitude ?? appointment.client?.latitude ?? appointment.technician?.latitude;
+        const lng = resolved?.lng ?? appointment.longitude ?? appointment.client?.longitude ?? appointment.technician?.longitude;
         return lat !== null && lat !== undefined && lng !== null && lng !== undefined;
       })
       .map((appointment) => ({
         ...appointment,
-        lat: Number(appointment.latitude ?? appointment.client?.latitude ?? appointment.technician?.latitude),
-        lng: Number(appointment.longitude ?? appointment.client?.longitude ?? appointment.technician?.longitude)
+        lat: Number(resolvedCoordsById[appointment.id]?.lat ?? appointment.latitude ?? appointment.client?.latitude ?? appointment.technician?.latitude),
+        lng: Number(resolvedCoordsById[appointment.id]?.lng ?? appointment.longitude ?? appointment.client?.longitude ?? appointment.technician?.longitude)
       }))
       .filter((appointment) => Number.isFinite(appointment.lat) && Number.isFinite(appointment.lng));
-  }, [filteredAppointments]);
+  }, [filteredAppointments, resolvedCoordsById]);
 
   const selectedData = selectedMarker ? markers.find((marker) => marker.id === selectedMarker) : null;
   const technicians = Array.from(new Set(filteredAppointments.map((appointment) => appointment.technician?.name).filter(Boolean))) as string[];
@@ -139,8 +188,8 @@ export default function MapView() {
   const periodAppointmentsWithDistance = useMemo(
     () =>
       periodAppointments.map((appointment) => {
-        const lat = appointment.latitude ?? appointment.client?.latitude ?? appointment.technician?.latitude;
-        const lng = appointment.longitude ?? appointment.client?.longitude ?? appointment.technician?.longitude;
+        const lat = resolvedCoordsById[appointment.id]?.lat ?? appointment.latitude ?? appointment.client?.latitude ?? appointment.technician?.latitude;
+        const lng = resolvedCoordsById[appointment.id]?.lng ?? appointment.longitude ?? appointment.client?.longitude ?? appointment.technician?.longitude;
         if (lat == null || lng == null) {
           return { ...appointment, distanceFromBaseKm: null as number | null, estimatedMinutesFromBase: null as number | null };
         }
@@ -148,7 +197,7 @@ export default function MapView() {
         const estimatedMinutesFromBase = Math.round((distanceFromBaseKm / 60) * 60);
         return { ...appointment, distanceFromBaseKm, estimatedMinutesFromBase };
       }),
-    [periodAppointments]
+    [periodAppointments, resolvedCoordsById]
   );
 
   const visibleSuggestions = useMemo(
@@ -241,6 +290,48 @@ export default function MapView() {
     if (bounds.isValid()) map.fitBounds(bounds.pad(0.35));
   }, [markers, visibleSuggestions]);
 
+  async function handleSearchAddress() {
+    const query = searchAddress.trim();
+    if (!query) return;
+    setSearchLoading(true);
+    try {
+      const geo = await api<{ ok: boolean; lat: number | null; lng: number | null; formattedAddress: string | null }>(
+        '/maps/geocode?q=' + encodeURIComponent(query)
+      );
+      if (!geo.ok || geo.lat == null || geo.lng == null) {
+        setSearchedPoint(null);
+        return;
+      }
+
+      const point = { query, lat: geo.lat, lng: geo.lng, formattedAddress: geo.formattedAddress };
+      setSearchedPoint(point);
+
+      const map = mapRef.current;
+      const layer = layerRef.current;
+      if (map && layer) {
+        const icon = L.divIcon({
+          html: markerHtml('#f43f5e'),
+          className: '',
+          iconSize: [18, 18],
+          iconAnchor: [9, 9]
+        });
+        const marker = L.marker([point.lat, point.lng], { icon })
+          .bindPopup(`<strong>Busca</strong><br/>${point.formattedAddress ?? point.query}`)
+          .addTo(layer);
+        marker.openPopup();
+        map.setView([point.lat, point.lng], 13);
+      }
+    } finally {
+      setSearchLoading(false);
+    }
+  }
+
+  const searchedDistance = useMemo(() => {
+    if (!searchedPoint) return null;
+    const km = haversineKm(COMPANY_BASE, { lat: searchedPoint.lat, lng: searchedPoint.lng });
+    return { km, min: Math.round((km / 60) * 60) };
+  }, [searchedPoint]);
+
   return (
     <div className="h-[calc(100vh-4rem)] flex">
       <div className="w-80 bg-zinc-900/50 border-r border-zinc-800 p-4 space-y-4 overflow-y-auto">
@@ -284,6 +375,27 @@ export default function MapView() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div>
+            <label className="text-sm text-zinc-400 mb-1.5 block">Pesquisar endereço</label>
+            <div className="flex gap-2">
+              <Input
+                value={searchAddress}
+                onChange={(e) => setSearchAddress(e.target.value)}
+                placeholder="Rua, número, cidade"
+                className="bg-zinc-800/50 border-zinc-700"
+              />
+              <Button onClick={handleSearchAddress} disabled={searchLoading} className="bg-blue-500 hover:bg-blue-600">
+                {searchLoading ? '...' : 'Buscar'}
+              </Button>
+            </div>
+            {searchedPoint && (
+              <p className="text-xs text-zinc-400 mt-2">
+                {searchedPoint.formattedAddress ?? searchedPoint.query}
+                {searchedDistance ? ` • ${searchedDistance.km.toFixed(1)} km (~${searchedDistance.min} min)` : ''}
+              </p>
+            )}
           </div>
         </div>
 

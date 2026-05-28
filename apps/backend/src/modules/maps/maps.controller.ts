@@ -1,4 +1,4 @@
-﻿import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { MapsService } from './maps.service';
 
 @Controller('maps')
@@ -8,5 +8,10 @@ export class MapsController {
   @Get('health')
   health() {
     return this.service.health();
+  }
+
+  @Get('geocode')
+  geocode(@Query('q') q?: string) {
+    return this.service.geocode(q ?? '');
   }
 }

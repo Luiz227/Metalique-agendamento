@@ -1,0 +1,137 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Req,
+  Sse,
+  UploadedFile,
+  UseInterceptors
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { interval, map } from 'rxjs';
+import { Request } from 'express';
+import { LegacyService } from './legacy.service';
+
+@Controller()
+export class LegacyController {
+  constructor(private readonly service: LegacyService) {}
+
+  @Get('resources/vehicles')
+  vehicles() {
+    return this.service.resourcesVehicles();
+  }
+
+  @Get('resources/hotels')
+  hotels() {
+    return this.service.resourcesHotels();
+  }
+
+  @Get('finance/expenses')
+  expenses() {
+    return this.service.financeExpenses();
+  }
+
+  @Get('settings')
+  getSettings() {
+    return this.service.getSettings();
+  }
+
+  @Put('settings')
+  putSettings(@Body() body: Record<string, unknown>) {
+    return this.service.putSettings(body);
+  }
+
+  @Get('settings/sla')
+  getSla() {
+    return this.service.getSla();
+  }
+
+  @Put('settings/sla')
+  putSla(@Body() body: Record<string, unknown>) {
+    return this.service.putSla(body);
+  }
+
+  @Get('suggestions')
+  suggestions(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.service.listSuggestions({ from, to });
+  }
+
+  @Patch('suggestions/:id')
+  patchSuggestion(@Param('id') id: string, @Body() body: { status?: string }) {
+    return this.service.updateSuggestion(id, body);
+  }
+
+  @Get('validations')
+  validations() {
+    return this.service.listValidations();
+  }
+
+  @Post('validations')
+  createValidation(@Body() body: Record<string, unknown>) {
+    return this.service.createValidation(body);
+  }
+
+  @Get('reports')
+  reportsSummary() {
+    return this.service.reportsSummary();
+  }
+
+  @Get('reports/technical')
+  reportsTechnical() {
+    return this.service.reportsTechnical();
+  }
+
+  @Get('technician/appointments')
+  technicianAppointments(@Headers('authorization') authorization?: string) {
+    return this.service.technicianAppointments(this.extractUserId(authorization ?? null));
+  }
+
+  @Post('technician/appointments/:id/status')
+  technicianStatus(@Param('id') id: string, @Body() body: { status?: string; observation?: string }) {
+    return this.service.technicianSetStatus(id, String(body?.status ?? 'TRAVELING'), body?.observation);
+  }
+
+  @Post('technician/appointments/:id/reports')
+  technicianReport(@Param('id') id: string, @Body() body: { summary?: string }) {
+    return this.service.technicianReport(id, body?.summary);
+  }
+
+  @Post('attachments/appointments/:id')
+  @UseInterceptors(FileInterceptor('file'))
+  attachment(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body('type') type?: string
+  ) {
+    return this.service.attachFile(id, file, type);
+  }
+
+  @Sse('events/stream')
+  stream(@Req() _req: Request, @Query('token') _token?: string) {
+    return interval(10000).pipe(
+      map(() => ({
+        type: 'appointments_changed',
+        data: { ts: Date.now() }
+      }))
+    );
+  }
+
+  private extractUserId(authorization: string | null): string | null {
+    if (!authorization?.startsWith('Bearer ')) return null;
+    const token = authorization.replace('Bearer ', '');
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    try {
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as { sub?: string };
+      return payload.sub ?? null;
+    } catch {
+      return null;
+    }
+  }
+}

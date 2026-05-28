@@ -1,4 +1,4 @@
-﻿import { Controller, Get } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 
 @Controller('dashboard')
@@ -8,5 +8,10 @@ export class DashboardController {
   @Get('health')
   health() {
     return this.service.health();
+  }
+
+  @Get()
+  data() {
+    return this.service.data();
   }
 }

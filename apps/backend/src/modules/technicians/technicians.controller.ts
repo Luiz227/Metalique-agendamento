@@ -1,4 +1,4 @@
-﻿import { Controller, Get } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import { TechniciansService } from './technicians.service';
 
 @Controller('technicians')
@@ -8,5 +8,10 @@ export class TechniciansController {
   @Get('health')
   health() {
     return this.service.health();
+  }
+
+  @Get()
+  list() {
+    return this.service.list();
   }
 }

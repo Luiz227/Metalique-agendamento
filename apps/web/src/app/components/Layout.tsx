@@ -44,6 +44,7 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>(() => (localStorage.getItem('sp-theme') as 'dark' | 'light') || 'light');
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isMobileWeb, setIsMobileWeb] = useState(false);
   const user = getUser();
 
   useEffect(() => {
@@ -59,6 +60,14 @@ export default function Layout() {
     html.classList.toggle('dark', next === 'dark');
     localStorage.setItem('sp-theme', next);
   }
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1024px)');
+    const update = () => setIsMobileWeb(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
 
   useEffect(() => {
     const handler = (evt: Event) => {
@@ -166,7 +175,7 @@ export default function Layout() {
           </div>
 
           <div className="flex items-center gap-3">
-            {installPrompt && (
+            {installPrompt && isMobileWeb && (
               <Button variant="outline" size="sm" onClick={installApp}>
                 Instalar app
               </Button>

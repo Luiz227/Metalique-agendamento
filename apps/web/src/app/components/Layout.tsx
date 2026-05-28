@@ -175,7 +175,7 @@ export default function Layout() {
           </div>
 
           <div className="flex items-center gap-3">
-            {installPrompt && isMobileWeb && (
+            {installPrompt && isMobileWeb && user?.role === 'TECHNICIAN' && (
               <Button variant="outline" size="sm" onClick={installApp}>
                 Instalar app
               </Button>

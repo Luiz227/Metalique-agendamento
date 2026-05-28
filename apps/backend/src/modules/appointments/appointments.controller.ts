@@ -35,6 +35,11 @@ export class AppointmentsController {
     return this.service.patchChecklist(id, body);
   }
 
+  @Post(':id/checklist')
+  checklistPost(@Param('id') id: string, @Body() body: Record<string, unknown>) {
+    return this.service.patchChecklist(id, body);
+  }
+
   @Post(':id/remind-missing')
   remind(@Param('id') id: string) {
     return this.service.remindMissing(id);

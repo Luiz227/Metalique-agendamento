@@ -61,12 +61,14 @@ export default function MapView() {
   const [mapError, setMapError] = useState('');
   const [searchedPoint, setSearchedPoint] = useState<SearchPoint | null>(null);
   const [resolvedCoordsById, setResolvedCoordsById] = useState<Record<string, { lat: number; lng: number }>>({});
+  const [routeInfo, setRouteInfo] = useState<{ distanceText: string; durationText: string } | null>(null);
 
   const mapElementRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
   const polylinesRef = useRef<google.maps.Polyline[]>([]);
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
+  const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
 
   useEffect(() => {
     const start = new Date(referenceDate);
@@ -222,6 +224,11 @@ export default function MapView() {
           streetViewControl: false
         });
         infoWindowRef.current = new google.maps.InfoWindow();
+        directionsRendererRef.current = new google.maps.DirectionsRenderer({
+          suppressMarkers: true,
+          polylineOptions: { strokeColor: '#22c55e', strokeOpacity: 0.9, strokeWeight: 4 }
+        });
+        directionsRendererRef.current.setMap(mapRef.current);
         setMapError('');
       })
       .catch((err: Error) => {
@@ -245,7 +252,7 @@ export default function MapView() {
       const pin = new google.maps.Marker({
         position: { lat: marker.lat, lng: marker.lng },
         map,
-        title: marker.client?.name ?? 'Cliente'
+        title: `${marker.client?.name ?? 'Cliente'} - ${marker.technician?.name ?? 'Sem técnico'}`
       });
       pin.addListener('click', () => {
         setSelectedMarker(marker.id);
@@ -280,6 +287,38 @@ export default function MapView() {
     if (!bounds.isEmpty()) map.fitBounds(bounds, 80);
   }, [markers, visibleSuggestions]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !window.google?.maps || markers.length > 0 || filteredAppointments.length === 0) return;
+
+    const geocoder = new google.maps.Geocoder();
+    const candidates = filteredAppointments.slice(0, 10);
+    let cancelled = false;
+
+    (async () => {
+      for (const appointment of candidates) {
+        if (cancelled) return;
+        if (resolvedCoordsById[appointment.id]) continue;
+        const query = [appointment.fullAddress || appointment.client?.address || '', appointment.city, 'Brasil']
+          .filter(Boolean)
+          .join(', ');
+        if (!query) continue;
+        try {
+          const result = await geocoder.geocode({ address: query });
+          const loc = result.results?.[0]?.geometry?.location;
+          if (!loc) continue;
+          setResolvedCoordsById((prev) => ({ ...prev, [appointment.id]: { lat: loc.lat(), lng: loc.lng() } }));
+        } catch {
+          // ignora erro individual
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filteredAppointments, markers.length, resolvedCoordsById]);
+
   async function handleSearchAddress() {
     const query = searchAddress.trim();
     if (!query) return;
@@ -304,8 +343,26 @@ export default function MapView() {
         map.setCenter({ lat: point.lat, lng: point.lng });
         map.setZoom(13);
       }
+      await drawRouteTo(point.lat, point.lng);
     } finally {
       setSearchLoading(false);
+    }
+  }
+
+  async function drawRouteTo(lat: number, lng: number) {
+    if (!window.google?.maps || !directionsRendererRef.current) return;
+    const service = new google.maps.DirectionsService();
+    const response = await service.route({
+      origin: { lat: COMPANY_BASE.lat, lng: COMPANY_BASE.lng },
+      destination: { lat, lng },
+      travelMode: google.maps.TravelMode.DRIVING
+    });
+    directionsRendererRef.current.setDirections(response);
+    const leg = response.routes?.[0]?.legs?.[0];
+    if (leg?.distance?.text && leg?.duration?.text) {
+      setRouteInfo({ distanceText: leg.distance.text, durationText: leg.duration.text });
+    } else {
+      setRouteInfo(null);
     }
   }
 
@@ -371,6 +428,7 @@ export default function MapView() {
             </div>
             {searchedPoint && <p className="text-xs text-zinc-400 mt-2">{searchedPoint.formattedAddress ?? searchedPoint.query}{searchedDistance ? ` • ${searchedDistance.km.toFixed(1)} km (~${searchedDistance.min} min)` : ''}</p>}
             {searchError && <p className="text-xs text-red-400 mt-2">{searchError}</p>}
+            {routeInfo && <p className="text-xs text-green-400 mt-2">Rota: {routeInfo.distanceText} • {routeInfo.durationText}</p>}
           </div>
         </div>
         <Card className="bg-zinc-800/30 border-zinc-700">

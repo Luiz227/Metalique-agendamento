@@ -58,6 +58,7 @@ export default function MapView() {
   const [searchAddress, setSearchAddress] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
+  const [mapError, setMapError] = useState('');
   const [searchedPoint, setSearchedPoint] = useState<SearchPoint | null>(null);
   const [resolvedCoordsById, setResolvedCoordsById] = useState<Record<string, { lat: number; lng: number }>>({});
 
@@ -206,7 +207,11 @@ export default function MapView() {
   useEffect(() => {
     let disposed = false;
     const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
-    if (!mapElementRef.current || mapRef.current || !key) return;
+    if (!mapElementRef.current || mapRef.current) return;
+    if (!key) {
+      setMapError('VITE_GOOGLE_MAPS_API_KEY não configurada no frontend.');
+      return;
+    }
     loadGoogleMapsScript(key)
       .then(() => {
         if (disposed || !mapElementRef.current) return;
@@ -217,8 +222,11 @@ export default function MapView() {
           streetViewControl: false
         });
         infoWindowRef.current = new google.maps.InfoWindow();
+        setMapError('');
       })
-      .catch(() => undefined);
+      .catch((err: Error) => {
+        setMapError(err.message || 'Falha ao carregar Google Maps.');
+      });
     return () => {
       disposed = true;
     };
@@ -382,6 +390,16 @@ export default function MapView() {
       </div>
       <div className="flex-1 relative bg-zinc-950">
         <div ref={mapElementRef} className="absolute inset-0 z-0" />
+        {mapError && (
+          <div className="absolute top-4 right-4 z-[600] max-w-md rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-300">
+            {mapError}
+            <div className="mt-2 text-red-200/90">
+              Verifique restrição da chave no Google Cloud (HTTP referrer) para:
+              <br />
+              <code className="text-red-100">https://sistema-metalique-agenda-frontend.eweu2u.easypanel.host/*</code>
+            </div>
+          </div>
+        )}
         {selectedData && (
           <div className="absolute bottom-4 right-4 w-96 z-[500]">
             <Card className="bg-zinc-900/95 backdrop-blur border-zinc-800">

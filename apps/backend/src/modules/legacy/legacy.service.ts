@@ -191,7 +191,11 @@ export class LegacyService {
     return { ok: true };
   }
 
-  async attachFile(appointmentId: string, file?: Express.Multer.File, type?: string) {
+  async attachFile(
+    appointmentId: string,
+    file?: { originalname?: string; mimetype?: string; size?: number },
+    type?: string
+  ) {
     const exists = await this.prisma.appointment.findUnique({ where: { id: appointmentId }, select: { id: true } });
     if (!exists) throw new NotFoundException('Agendamento não encontrado');
     const originalName = file?.originalname ?? 'arquivo.bin';

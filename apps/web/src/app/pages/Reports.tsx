@@ -39,7 +39,7 @@ type TechnicalReportItem = {
 };
 
 function mediaUrl(path: string) {
-  const apiUrl = '/api';
+  const apiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
   const origin = apiUrl.replace(/\/api\/?$/, '');
   return `${origin}${path}`;
 }

@@ -14,7 +14,7 @@ export class ApiError extends Error {
   }
 }
 
-const API_URL = '/api';
+const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
 const TOKEN_KEY = 'servicePlannerToken';
 const USER_KEY = 'servicePlannerUser';
 
@@ -41,7 +41,7 @@ export function connectRealtime(onAppointmentsChanged: () => void) {
   const token = getToken();
   if (!token) return () => undefined;
 
-  const source = new EventSource(`/api/events/stream?token=${encodeURIComponent(token)}`);
+  const source = new EventSource(`${API_URL}/events/stream?token=${encodeURIComponent(token)}`);
   const handler = () => onAppointmentsChanged();
   source.addEventListener('appointments_changed', handler);
 

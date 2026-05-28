@@ -134,7 +134,8 @@ export default function TechnicianMobile() {
     const data = new FormData();
     data.append('file', file);
     data.append('type', type);
-    await fetch(`/api/attachments/appointments/${current.id}`, {
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
+    await fetch(`${apiBase}/attachments/appointments/${current.id}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${getToken()}` },
       body: data

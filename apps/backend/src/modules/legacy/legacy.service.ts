@@ -426,6 +426,7 @@ export class LegacyService {
         mimeType: params.mimeType,
         body: Readable.from(params.buffer)
       },
+      supportsAllDrives: true,
       fields: 'id,webViewLink,webContentLink'
     });
 
@@ -450,6 +451,8 @@ export class LegacyService {
 
     const found = await drive.files.list({
       q: query,
+      includeItemsFromAllDrives: true,
+      supportsAllDrives: true,
       fields: 'files(id,name)',
       pageSize: 1
     });
@@ -462,6 +465,7 @@ export class LegacyService {
         mimeType: 'application/vnd.google-apps.folder',
         parents: [parentId]
       },
+      supportsAllDrives: true,
       fields: 'id'
     });
     if (!created.data.id) throw new Error(`Falha ao criar pasta no Google Drive: ${folderName}`);

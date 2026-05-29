@@ -14,6 +14,7 @@ import {
   UseInterceptors
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { interval, map } from 'rxjs';
 import { Request } from 'express';
 import { LegacyService } from './legacy.service';
@@ -103,7 +104,11 @@ export class LegacyController {
   }
 
   @Post('attachments/appointments/:id')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage()
+    })
+  )
   attachment(
     @Param('id') id: string,
     @UploadedFile() file: { originalname?: string; mimetype?: string; size?: number; buffer?: Buffer } | undefined,

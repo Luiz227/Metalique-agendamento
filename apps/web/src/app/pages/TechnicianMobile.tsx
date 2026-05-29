@@ -35,6 +35,7 @@ export default function TechnicianMobile() {
   const [report, setReport] = useState({ summary: '', diagnosis: '', solution: '', pendingItems: '' });
   const [message, setMessage] = useState('');
   const [activeTripsView, setActiveTripsView] = useState<'WEEK' | 'FINISHED'>('WEEK');
+  const [activeSection, setActiveSection] = useState<'LIST' | 'DETAILS' | 'CALENDAR'>('LIST');
   const [monthCursor, setMonthCursor] = useState(() => new Date());
   const knownIdsRef = useRef<Set<string>>(new Set());
 
@@ -135,11 +136,15 @@ export default function TechnicianMobile() {
     data.append('file', file);
     data.append('type', type);
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
-    await fetch(`${apiBase}/attachments/appointments/${current.id}`, {
+    const response = await fetch(`${apiBase}/attachments/appointments/${current.id}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${getToken()}` },
       body: data
     });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new Error(payload?.message ?? 'Falha ao enviar arquivo');
+    }
     setMessage('Arquivo enviado com sucesso.');
     await load();
   }
@@ -160,6 +165,30 @@ export default function TechnicianMobile() {
         <div className="rounded-2xl bg-gradient-to-r from-[#c8142f] to-[#e3273e] px-4 py-5 sm:px-6">
           <h1 className="text-xl font-bold text-white sm:text-2xl">Ola, {user?.name ?? current.technician?.name ?? 'Tecnico'}</h1>
           <p className="mt-1 text-sm text-red-100 sm:text-base">Voce tem {appointments.length} atendimento(s) vinculado(s)</p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveSection('LIST')}
+            className={`rounded-xl border p-3 text-center text-sm ${activeSection === 'LIST' ? 'border-[#c8142f] bg-[#c8142f]/10' : 'border-border bg-card'}`}
+          >
+            Atendimentos
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSection('DETAILS')}
+            className={`rounded-xl border p-3 text-center text-sm ${activeSection === 'DETAILS' ? 'border-blue-500 bg-blue-500/10' : 'border-border bg-card'}`}
+          >
+            Detalhes
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSection('CALENDAR')}
+            className={`rounded-xl border p-3 text-center text-sm ${activeSection === 'CALENDAR' ? 'border-green-500 bg-green-500/10' : 'border-border bg-card'}`}
+          >
+            Calendário
+          </button>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -196,7 +225,7 @@ export default function TechnicianMobile() {
             {visibleTrips
               .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
               .map((apt) => (
-                <button key={apt.id} onClick={() => setSelectedId(apt.id)} className="w-full rounded-xl border bg-card p-3 text-left">
+                <button key={apt.id} onClick={() => { setSelectedId(apt.id); setActiveSection('DETAILS'); }} className="w-full rounded-xl border bg-card p-3 text-left">
                   <p className="text-sm font-semibold sm:text-base">{apt.client?.name ?? 'Cliente'}</p>
                   <p className="mt-1 text-xs text-muted-foreground sm:text-sm break-words">{apt.city} - {formatDate(apt.date)} as {formatTime(apt.startTime)}</p>
                 </button>
@@ -204,6 +233,7 @@ export default function TechnicianMobile() {
           </CardContent>
         </Card>
 
+        {activeSection === 'DETAILS' && (
         <Card className="rounded-2xl">
           <CardHeader>
             <div className="flex items-center justify-between gap-2">
@@ -259,7 +289,9 @@ export default function TechnicianMobile() {
             </div>
           </CardContent>
         </Card>
+        )}
 
+        {activeSection === 'CALENDAR' && (
         <Card className="rounded-2xl">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -291,7 +323,9 @@ export default function TechnicianMobile() {
             </div>
           </CardContent>
         </Card>
+        )}
 
+        {activeSection === 'DETAILS' && (
         <Card className="rounded-2xl">
           <CardHeader><CardTitle className="text-base sm:text-lg">Relatorio Tecnico</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -304,7 +338,9 @@ export default function TechnicianMobile() {
             </Button>
           </CardContent>
         </Card>
+        )}
 
+        {activeSection === 'DETAILS' && (
         <Card className="rounded-2xl">
           <CardHeader><CardTitle className="text-base sm:text-lg">Fotos, Videos e Documentos</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-2 gap-3">
@@ -325,9 +361,11 @@ export default function TechnicianMobile() {
             </label>
           </CardContent>
         </Card>
+        )}
 
         {message && <p className="text-center text-sm text-green-600 dark:text-green-400">{message}</p>}
 
+        {activeSection === 'DETAILS' && (
         <Card className="rounded-2xl">
           <CardHeader><CardTitle className="text-base sm:text-lg">Proximos Atendimentos</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -345,11 +383,14 @@ export default function TechnicianMobile() {
             ))}
           </CardContent>
         </Card>
+        )}
 
+        {activeSection === 'DETAILS' && (
         <Button className="h-12 w-full rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 text-base hover:from-green-700 hover:to-emerald-700" onClick={() => updateStatus('COMPLETED_SUCCESS')}>
           <CheckCircle className="mr-2 h-5 w-5" />
           Finalizar atendimento
         </Button>
+        )}
       </div>
     </div>
   );

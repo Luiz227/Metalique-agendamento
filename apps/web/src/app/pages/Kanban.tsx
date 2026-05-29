@@ -17,7 +17,7 @@ const columns: KanbanColumn[] = [
   { key: 'draft', title: 'Em preenchimento', tone: 'border-zinc-500' },
   { key: 'pending', title: 'Pendente de confirmacao', tone: 'border-amber-500' },
   { key: 'ready', title: 'Pronto', tone: 'border-green-500' },
-  { key: 'critical', title: 'Critico', tone: 'border-red-500' }
+  { key: 'critical', title: 'Finalizados', tone: 'border-red-500' }
 ];
 
 const checklistLabels: Record<string, string> = {

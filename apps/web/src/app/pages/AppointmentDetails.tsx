@@ -25,6 +25,8 @@ type ChecklistKey =
   | 'osChecked'
   | 'clientChecklistChecked';
 
+const COMPANY_BASE_ADDRESS = 'R. Reinaldo Raulino dos Santos, 107 - Éden, Sorocaba - SP, 18086-796';
+
 const checklistLabels: Record<ChecklistKey, string> = {
   clientConfirmed: 'Cliente confirmado',
   contactConfirmed: 'Contato confirmado',
@@ -85,6 +87,8 @@ export default function AppointmentDetails() {
     osChecked: false,
     clientChecklistChecked: false
   });
+  const [travelEstimate, setTravelEstimate] = useState<{ distanceText: string; durationText: string } | null>(null);
+  const [travelLoading, setTravelLoading] = useState(false);
 
   async function load(showLoading = true) {
     if (!id) {
@@ -166,6 +170,34 @@ export default function AppointmentDetails() {
       clientChecklistChecked: appointment.schedulingChecklist?.clientChecklistChecked ?? false
     });
   }, [appointment, editing]);
+
+  useEffect(() => {
+    const destination = [form.fullAddress, form.city].filter(Boolean).join(', ').trim();
+    if (!editing || destination.length < 6) {
+      setTravelEstimate(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setTravelLoading(true);
+        const route = await api<{ ok: boolean; distanceText: string | null; durationText: string | null }>(
+          `/maps/travel-time?origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(destination)}`
+        );
+        if (route.ok && route.distanceText && route.durationText) {
+          setTravelEstimate({ distanceText: route.distanceText, durationText: route.durationText });
+        } else {
+          setTravelEstimate(null);
+        }
+      } catch {
+        setTravelEstimate(null);
+      } finally {
+        setTravelLoading(false);
+      }
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [editing, form.fullAddress, form.city]);
 
   const checklist = useMemo(
     () =>
@@ -537,6 +569,17 @@ export default function AppointmentDetails() {
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Endereco</p>
                 {editing ? <Input value={form.fullAddress} onChange={(e) => setForm({ ...form, fullAddress: e.target.value })} /> : <p className="text-sm">{appointment.fullAddress}</p>}
+                {editing && (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-[11px] text-muted-foreground">Base fixa de saída: {COMPANY_BASE_ADDRESS}</p>
+                    {travelLoading && <p className="text-xs text-muted-foreground">Calculando tempo de viagem...</p>}
+                    {travelEstimate && (
+                      <p className="text-xs text-emerald-500">
+                        Tempo estimado: {travelEstimate.durationText} • Distância: {travelEstimate.distanceText}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

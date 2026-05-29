@@ -112,14 +112,20 @@ export class AppointmentsService {
   }
 
   async cancel(id: string, reason?: string) {
-    const row = await this.prisma.appointment.update({
-      where: { id },
-      data: { status: AppointmentStatus.CRITICAL, notes: reason ? `Cancelado: ${reason}` : 'Cancelado' }
+    await this.prisma.appointment.findUniqueOrThrow({ where: { id }, select: { id: true } });
+    await this.prisma.appointment.delete({ where: { id } });
+    await this.prisma.auditLog.create({
+      data: {
+        entity: 'appointment',
+        entityId: id,
+        action: 'DELETE',
+        metadata: {
+          reason: reason ?? null,
+          origin: 'cancel_endpoint'
+        }
+      }
     });
-    await this.prisma.statusLog.create({
-      data: { appointmentId: row.id, status: 'CANCELED', observation: reason ?? null }
-    });
-    return { ok: true };
+    return { ok: true, deleted: true, id };
   }
 
   async reschedule(id: string, date: string, startTime: string, endTime: string) {

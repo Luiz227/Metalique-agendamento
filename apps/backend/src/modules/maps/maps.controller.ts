@@ -14,4 +14,9 @@ export class MapsController {
   geocode(@Query('q') q?: string) {
     return this.service.geocode(q ?? '');
   }
+
+  @Get('travel-time')
+  travelTime(@Query('origin') origin?: string, @Query('destination') destination?: string) {
+    return this.service.travelTime(origin ?? '', destination ?? '');
+  }
 }

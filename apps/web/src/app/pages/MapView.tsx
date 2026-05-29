@@ -18,6 +18,27 @@ const COMPANY_BASE = {
   lng: -47.50594
 };
 
+function normalizeColor(value?: string | null) {
+  if (!value) return '#3b82f6';
+  return value.startsWith('#') ? value : `#${value}`;
+}
+
+function markerIcon(color: string, label: string): google.maps.Icon {
+  const safeLabel = (label || 'T').slice(0, 1).toUpperCase();
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+      <circle cx="20" cy="20" r="18" fill="${color}" stroke="#0b0f19" stroke-width="2" />
+      <text x="20" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff">${safeLabel}</text>
+    </svg>
+  `;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(34, 34),
+    anchor: new google.maps.Point(17, 17)
+  };
+}
+
+
 function loadGoogleMapsScript(apiKey: string): Promise<void> {
   return new Promise((resolve, reject) => {
     if ((window as unknown as { google?: unknown }).google) return resolve();
@@ -249,15 +270,18 @@ export default function MapView() {
 
     const bounds = new google.maps.LatLngBounds();
     markers.forEach((marker) => {
+      const techName = marker.technician?.name ?? 'Sem t?cnico';
+      const techColor = normalizeColor(marker.technician?.color);
       const pin = new google.maps.Marker({
         position: { lat: marker.lat, lng: marker.lng },
         map,
-        title: `${marker.client?.name ?? 'Cliente'} - ${marker.technician?.name ?? 'Sem técnico'}`
+        icon: markerIcon(techColor, techName),
+        title: `${marker.client?.name ?? 'Cliente'} - ${techName}`
       });
       pin.addListener('click', () => {
         setSelectedMarker(marker.id);
         infoWindowRef.current?.setContent(
-          `<strong>${marker.client?.name ?? 'Cliente'}</strong><br/>${marker.city}<br/>${marker.technician?.name ?? 'Sem técnico'} - ${formatTime(marker.startTime)}`
+          `<strong>${marker.client?.name ?? 'Cliente'}</strong><br/>${marker.city}<br/>${techName} - ${formatTime(marker.startTime)}`
         );
         infoWindowRef.current?.open({ map, anchor: pin });
       });

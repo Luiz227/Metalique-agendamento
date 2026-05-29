@@ -20,6 +20,7 @@ const steps = [
   'Confirmação'
 ];
 const DRAFT_KEY = 'agenda-metalique:new-appointment-draft:v1';
+const COMPANY_BASE_ADDRESS = 'R. Reinaldo Raulino dos Santos, 107 - ?den, Sorocaba - SP, 18086-796';
 
 function localDateTimeIso(date: string, time: string) {
   return new Date(`${date}T${time}:00`).toISOString();
@@ -43,6 +44,8 @@ export default function NewAppointment() {
   const [hotels, setHotels] = useState<Hotel[]>([]);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [travelEstimate, setTravelEstimate] = useState<{ distanceText: string; durationText: string } | null>(null);
+  const [travelLoading, setTravelLoading] = useState(false);
   const [checklist, setChecklist] = useState({
     clientConfirmed: false,
     contactConfirmed: false,
@@ -122,6 +125,34 @@ export default function NewAppointment() {
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Erro ao carregar dados'));
   }, []);
+
+  useEffect(() => {
+    const destination = [formData.address, formData.city].filter(Boolean).join(', ').trim();
+    if (currentStep !== 0 || destination.length < 6) {
+      setTravelEstimate(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setTravelLoading(true);
+        const route = await api<{ ok: boolean; distanceText: string | null; durationText: string | null }>(
+          `/maps/travel-time?origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(destination)}`
+        );
+        if (route.ok && route.distanceText && route.durationText) {
+          setTravelEstimate({ distanceText: route.distanceText, durationText: route.durationText });
+        } else {
+          setTravelEstimate(null);
+        }
+      } catch {
+        setTravelEstimate(null);
+      } finally {
+        setTravelLoading(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [currentStep, formData.address, formData.city]);
 
   const canContinue = useMemo(() => {
     if (currentStep === 0) return Boolean(formData.companyName && formData.cnpj && formData.address);
@@ -318,6 +349,13 @@ export default function NewAppointment() {
               <div>
                 <Label>Endereço completo</Label>
                 <Input required value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                <p className="text-[11px] text-zinc-500 mt-1">Base fixa de sa?da: {COMPANY_BASE_ADDRESS}</p>
+                {travelLoading && <p className="text-xs text-zinc-400 mt-1">Calculando tempo de viagem...</p>}
+                {travelEstimate && (
+                  <p className="text-xs text-emerald-400 mt-1">
+                    Tempo estimado: {travelEstimate.durationText} ? Dist?ncia: {travelEstimate.distanceText}
+                  </p>
+                )}
               </div>
             </div>
           )}

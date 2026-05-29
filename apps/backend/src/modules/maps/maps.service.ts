@@ -9,6 +9,16 @@ type GeocodeResult = {
   provider?: 'google' | 'nominatim';
 };
 
+type TravelTimeResult = {
+  ok: boolean;
+  origin: string;
+  destination: string;
+  distanceMeters: number | null;
+  distanceText: string | null;
+  durationSeconds: number | null;
+  durationText: string | null;
+};
+
 @Injectable()
 export class MapsService {
   health() {
@@ -28,6 +38,54 @@ export class MapsService {
     const nominatim = await this.tryNominatim(trimmed);
     if (!nominatim.ok) return { ok: false, query: trimmed, lat: null, lng: null, formattedAddress: null };
     return nominatim;
+  }
+
+  async travelTime(originInput: string, destinationInput: string): Promise<TravelTimeResult> {
+    const origin = this.normalizeQuery(originInput);
+    const destination = this.normalizeQuery(destinationInput);
+    if (!origin || !destination) {
+      return {
+        ok: false,
+        origin,
+        destination,
+        distanceMeters: null,
+        distanceText: null,
+        durationSeconds: null,
+        durationText: null
+      };
+    }
+
+    const key = process.env.GOOGLE_MAPS_API_KEY;
+    if (key) {
+      const googleRoute = await this.tryGoogleRoute(origin, destination, key);
+      if (googleRoute.ok) return googleRoute;
+    }
+
+    const from = await this.geocode(origin);
+    const to = await this.geocode(destination);
+    if (!from.ok || !to.ok || from.lat == null || from.lng == null || to.lat == null || to.lng == null) {
+      return {
+        ok: false,
+        origin,
+        destination,
+        distanceMeters: null,
+        distanceText: null,
+        durationSeconds: null,
+        durationText: null
+      };
+    }
+
+    const meters = this.haversineKm(from.lat, from.lng, to.lat, to.lng) * 1000;
+    const minutes = Math.max(1, Math.round((meters / 1000) * 1.4));
+    return {
+      ok: true,
+      origin,
+      destination,
+      distanceMeters: Math.round(meters),
+      distanceText: `${(meters / 1000).toFixed(1)} km`,
+      durationSeconds: minutes * 60,
+      durationText: `${minutes} min`
+    };
   }
 
   private async tryGoogle(query: string, key: string): Promise<GeocodeResult> {
@@ -76,6 +134,70 @@ export class MapsService {
       formattedAddress: first?.display_name ?? null,
       provider: 'nominatim'
     };
+  }
+
+  private async tryGoogleRoute(origin: string, destination: string, key: string): Promise<TravelTimeResult> {
+    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=driving&key=${encodeURIComponent(key)}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      return {
+        ok: false,
+        origin,
+        destination,
+        distanceMeters: null,
+        distanceText: null,
+        durationSeconds: null,
+        durationText: null
+      };
+    }
+
+    const payload = (await response.json()) as {
+      status?: string;
+      routes?: Array<{
+        legs?: Array<{
+          distance?: { value?: number; text?: string };
+          duration?: { value?: number; text?: string };
+        }>;
+      }>;
+    };
+
+    if (payload.status !== 'OK') {
+      return {
+        ok: false,
+        origin,
+        destination,
+        distanceMeters: null,
+        distanceText: null,
+        durationSeconds: null,
+        durationText: null
+      };
+    }
+
+    const leg = payload.routes?.[0]?.legs?.[0];
+    const distanceMeters = leg?.distance?.value ?? null;
+    const distanceText = leg?.distance?.text ?? null;
+    const durationSeconds = leg?.duration?.value ?? null;
+    const durationText = leg?.duration?.text ?? null;
+
+    return {
+      ok: distanceMeters != null && durationSeconds != null,
+      origin,
+      destination,
+      distanceMeters,
+      distanceText,
+      durationSeconds,
+      durationText
+    };
+  }
+
+  private haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
   private normalizeQuery(input: string): string {

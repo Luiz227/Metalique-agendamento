@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { AppointmentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import { google } from 'googleapis';
+import { Readable } from 'stream';
 
 @Injectable()
 export class LegacyService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private driveClient: ReturnType<typeof google.drive> | null = null;
 
   async resourcesVehicles() {
     return this.prisma.vehicle.findMany({ orderBy: { name: 'asc' } });
@@ -45,6 +49,8 @@ export class LegacyService {
   }
 
   async listSuggestions(query: { from?: string; to?: string }) {
+    await this.rebuildSuggestionsFromAppointments();
+
     const where: Prisma.RouteSuggestionWhereInput = {};
     if (query.from || query.to) {
       where.createdAt = {};
@@ -70,6 +76,82 @@ export class LegacyService {
       originAppointment: this.toSimpleAppointment(row.originAppointment),
       nearbyAppointment: this.toSimpleAppointment(row.nearbyAppointment)
     }));
+  }
+
+  private async rebuildSuggestionsFromAppointments() {
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        status: { in: [AppointmentStatus.WAITING, AppointmentStatus.READY] }
+      },
+      include: { client: true, technician: true, statusLogs: true },
+      orderBy: [{ date: 'asc' }, { startTime: 'asc' }]
+    });
+
+    const keepPairs = new Set<string>();
+
+    for (let i = 0; i < appointments.length; i += 1) {
+      for (let j = i + 1; j < appointments.length; j += 1) {
+        const a = appointments[i];
+        const b = appointments[j];
+        if (!this.isSameDay(a.date, b.date)) continue;
+
+        const pointA = this.resolvePoint(a);
+        const pointB = this.resolvePoint(b);
+        if (!pointA || !pointB) continue;
+
+        const distanceKm = this.haversineKm(pointA, pointB);
+        if (!Number.isFinite(distanceKm) || distanceKm > 30) continue;
+
+        const durationMinutes = Math.max(5, Math.round((distanceKm / 50) * 60));
+        const score = Math.max(45, Math.min(100, Math.round(100 - distanceKm * 2)));
+        const [originId, nearbyId] = [a.id, b.id].sort();
+        const pairKey = `${originId}:${nearbyId}`;
+        keepPairs.add(pairKey);
+
+        const existing = await this.prisma.routeSuggestion.findFirst({
+          where: {
+            OR: [
+              { originAppointmentId: originId, nearbyAppointmentId: nearbyId },
+              { originAppointmentId: nearbyId, nearbyAppointmentId: originId }
+            ]
+          }
+        });
+
+        const payload: Prisma.RouteSuggestionUncheckedCreateInput = {
+          originAppointmentId: originId,
+          nearbyAppointmentId: nearbyId,
+          distanceKm,
+          durationMinutes,
+          score
+        };
+
+        if (existing) {
+          await this.prisma.routeSuggestion.update({
+            where: { id: existing.id },
+            data: {
+              distanceKm,
+              durationMinutes,
+              score
+            }
+          });
+        } else {
+          await this.prisma.routeSuggestion.create({ data: payload });
+        }
+      }
+    }
+
+    const allOpen = await this.prisma.routeSuggestion.findMany({
+      where: { status: 'OPEN' },
+      select: { id: true, originAppointmentId: true, nearbyAppointmentId: true }
+    });
+
+    const staleOpenIds = allOpen
+      .filter((item) => !keepPairs.has([item.originAppointmentId, item.nearbyAppointmentId].sort().join(':')))
+      .map((item) => item.id);
+
+    if (staleOpenIds.length) {
+      await this.prisma.routeSuggestion.deleteMany({ where: { id: { in: staleOpenIds } } });
+    }
   }
 
   async updateSuggestion(id: string, body: { status?: string }) {
@@ -188,31 +270,64 @@ export class LegacyService {
       data: { appointmentId: id, status: 'COMPLETED_SUCCESS', observation: summary ?? 'Atendimento finalizado pelo técnico' }
     });
     await this.prisma.appointment.update({ where: { id }, data: { status: AppointmentStatus.CRITICAL } });
+
+    if (summary?.trim()) {
+      const reportBytes = Buffer.from(summary.trim(), 'utf8');
+      await this.attachFile(
+        id,
+        {
+          originalname: `relato-tecnico-${new Date().toISOString().slice(0, 10)}.txt`,
+          mimetype: 'text/plain',
+          size: reportBytes.length,
+          buffer: reportBytes
+        },
+        'relato-tecnico'
+      );
+    }
+
     return { ok: true };
   }
 
   async attachFile(
     appointmentId: string,
-    file?: { originalname?: string; mimetype?: string; size?: number },
+    file?: { originalname?: string; mimetype?: string; size?: number; buffer?: Buffer },
     type?: string
   ) {
-    const exists = await this.prisma.appointment.findUnique({ where: { id: appointmentId }, select: { id: true } });
-    if (!exists) throw new NotFoundException('Agendamento não encontrado');
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      include: { client: true }
+    });
+    if (!appointment) throw new NotFoundException('Agendamento não encontrado');
+
     const originalName = file?.originalname ?? 'arquivo.bin';
     const mimeType = file?.mimetype ?? 'application/octet-stream';
     const size = file?.size ?? 0;
+    const uploadResult = await this.uploadToDrive({
+      appointmentId,
+      clientName: appointment.client.name,
+      osNumber: appointment.osNumber || appointment.id,
+      fileName: originalName,
+      mimeType,
+      buffer: file?.buffer
+    });
+
     await this.prisma.attachment.create({
       data: {
         appointmentId,
-        driveFileId: `local-${Date.now()}`,
-        driveFolderPath: 'temporario',
+        driveFileId: uploadResult.fileId,
+        driveFolderPath: uploadResult.folderPath,
         originalName,
         mimeType,
         size,
-        publicUrl: ''
+        publicUrl: uploadResult.publicUrl
       }
     });
-    return { ok: true, type: type ?? 'midia-tecnica' };
+    return {
+      ok: true,
+      type: type ?? 'midia-tecnica',
+      fileId: uploadResult.fileId,
+      folder: uploadResult.folderPath
+    };
   }
 
   private toSimpleAppointment(row: {
@@ -282,5 +397,135 @@ export class LegacyService {
         observation: log.observation
       }))
     };
+  }
+
+  private async uploadToDrive(params: {
+    appointmentId: string;
+    clientName: string;
+    osNumber: string;
+    fileName: string;
+    mimeType: string;
+    buffer?: Buffer;
+  }) {
+    const drive = this.getDriveClient();
+    const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    if (!rootFolderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID não configurado');
+    if (!params.buffer || !params.buffer.length) throw new Error('Arquivo inválido para upload');
+
+    const safeClient = this.sanitizeFolderName(params.clientName || 'Cliente');
+    const safeOs = this.sanitizeFolderName(params.osNumber || params.appointmentId);
+    const clientFolderId = await this.findOrCreateFolder(drive, safeClient, rootFolderId);
+    const osFolderId = await this.findOrCreateFolder(drive, safeOs, clientFolderId);
+
+    const created = await drive.files.create({
+      requestBody: {
+        name: params.fileName,
+        parents: [osFolderId]
+      },
+      media: {
+        mimeType: params.mimeType,
+        body: Readable.from(params.buffer)
+      },
+      fields: 'id,webViewLink,webContentLink'
+    });
+
+    const fileId = created.data.id;
+    if (!fileId) throw new Error('Falha ao criar arquivo no Google Drive');
+
+    return {
+      fileId,
+      folderPath: `${safeClient}/${safeOs}`,
+      publicUrl: created.data.webViewLink || created.data.webContentLink || null
+    };
+  }
+
+  private async findOrCreateFolder(drive: ReturnType<typeof google.drive>, folderName: string, parentId: string) {
+    const escaped = folderName.replace(/'/g, "\\'");
+    const query = [
+      `mimeType = 'application/vnd.google-apps.folder'`,
+      `name = '${escaped}'`,
+      `'${parentId}' in parents`,
+      `trashed = false`
+    ].join(' and ');
+
+    const found = await drive.files.list({
+      q: query,
+      fields: 'files(id,name)',
+      pageSize: 1
+    });
+    const existingId = found.data.files?.[0]?.id;
+    if (existingId) return existingId;
+
+    const created = await drive.files.create({
+      requestBody: {
+        name: folderName,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: [parentId]
+      },
+      fields: 'id'
+    });
+    if (!created.data.id) throw new Error(`Falha ao criar pasta no Google Drive: ${folderName}`);
+    return created.data.id;
+  }
+
+  private getDriveClient() {
+    if (this.driveClient) return this.driveClient;
+
+    const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+    const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
+    if (!clientEmail || !privateKeyRaw) {
+      throw new Error('GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY não configurados');
+    }
+    const privateKey = privateKeyRaw.replace(/\\n/g, '\n');
+
+    const auth = new google.auth.JWT({
+      email: clientEmail,
+      key: privateKey,
+      scopes: ['https://www.googleapis.com/auth/drive.file']
+    });
+
+    this.driveClient = google.drive({ version: 'v3', auth });
+    return this.driveClient;
+  }
+
+  private sanitizeFolderName(value: string) {
+    return (
+      value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[\\/:*?"<>|#]/g, '-')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 120) || 'Pasta'
+    );
+  }
+
+  private isSameDay(a: Date, b: Date) {
+    return (
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate()
+    );
+  }
+
+  private resolvePoint(appointment: {
+    latitude: number | null;
+    longitude: number | null;
+    client: { latitude: number | null; longitude: number | null };
+  }) {
+    const lat = appointment.latitude ?? appointment.client?.latitude;
+    const lng = appointment.longitude ?? appointment.client?.longitude;
+    if (lat == null || lng == null) return null;
+    return { lat: Number(lat), lng: Number(lng) };
+  }
+
+  private haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+    const radius = 6371;
+    const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+    const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+    const lat1 = (a.lat * Math.PI) / 180;
+    const lat2 = (b.lat * Math.PI) / 180;
+    const x = Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+    return 2 * radius * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
   }
 }

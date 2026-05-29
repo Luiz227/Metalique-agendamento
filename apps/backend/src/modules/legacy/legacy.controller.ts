@@ -106,7 +106,7 @@ export class LegacyController {
   @UseInterceptors(FileInterceptor('file'))
   attachment(
     @Param('id') id: string,
-    @UploadedFile() file: { originalname?: string; mimetype?: string; size?: number } | undefined,
+    @UploadedFile() file: { originalname?: string; mimetype?: string; size?: number; buffer?: Buffer } | undefined,
     @Body('type') type?: string
   ) {
     return this.service.attachFile(id, file, type);

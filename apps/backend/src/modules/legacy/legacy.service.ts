@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { AppointmentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { google } from 'googleapis';
@@ -336,14 +336,25 @@ export class LegacyService {
     const originalName = file?.originalname ?? 'arquivo.bin';
     const mimeType = file?.mimetype ?? 'application/octet-stream';
     const size = file?.size ?? 0;
-    const uploadResult = await this.uploadToDrive({
-      appointmentId,
-      clientName: appointment.client.name,
-      osNumber: appointment.osNumber || appointment.id,
-      fileName: originalName,
-      mimeType,
-      buffer: file?.buffer
-    });
+    let uploadResult: { fileId: string; folderPath: string; publicUrl: string | null };
+    try {
+      uploadResult = await this.uploadToDrive({
+        appointmentId,
+        clientName: appointment.client.name,
+        osNumber: appointment.osNumber || appointment.id,
+        fileName: originalName,
+        mimeType,
+        buffer: file?.buffer
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha ao enviar arquivo para o Google Drive';
+      if (message.includes('Service Accounts do not have storage quota')) {
+        throw new InternalServerErrorException(
+          'Google Drive bloqueou o upload para Service Account sem cota. Compartilhe uma Unidade Compartilhada com esta Service Account ou use delegacao OAuth de usuario.'
+        );
+      }
+      throw new InternalServerErrorException(message);
+    }
 
     await this.prisma.attachment.create({
       data: {
@@ -519,7 +530,7 @@ export class LegacyService {
     const auth = new google.auth.JWT({
       email: clientEmail,
       key: privateKey,
-      scopes: ['https://www.googleapis.com/auth/drive.file']
+      scopes: ['https://www.googleapis.com/auth/drive']
     });
 
     this.driveClient = google.drive({ version: 'v3', auth });

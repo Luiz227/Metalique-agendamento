@@ -520,10 +520,28 @@ export class LegacyService {
   private getDriveClient() {
     if (this.driveClient) return this.driveClient;
 
+    const oauthClientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+    const oauthClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+    const oauthRefreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
+
+    if (oauthClientId && oauthClientSecret && oauthRefreshToken) {
+      const oauth2Client = new google.auth.OAuth2({
+        clientId: oauthClientId,
+        clientSecret: oauthClientSecret
+      });
+      oauth2Client.setCredentials({
+        refresh_token: oauthRefreshToken
+      });
+      this.driveClient = google.drive({ version: 'v3', auth: oauth2Client });
+      return this.driveClient;
+    }
+
     const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
     const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
     if (!clientEmail || !privateKeyRaw) {
-      throw new Error('GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY não configurados');
+      throw new Error(
+        'Credenciais do Google Drive nao configuradas. Defina GOOGLE_OAUTH_CLIENT_ID/GOOGLE_OAUTH_CLIENT_SECRET/GOOGLE_OAUTH_REFRESH_TOKEN ou GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY.'
+      );
     }
     const privateKey = privateKeyRaw.replace(/\\n/g, '\n');
 
@@ -578,3 +596,4 @@ export class LegacyService {
     return 2 * radius * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
   }
 }
+

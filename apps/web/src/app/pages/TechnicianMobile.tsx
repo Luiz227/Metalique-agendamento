@@ -10,6 +10,13 @@ import { api, connectRealtime, getToken, getUser } from '../services/api';
 import type { Appointment } from '../services/types';
 import { formatDate, formatTime, statusLabel, statusTone } from '../services/types';
 
+type PendingAttachment = {
+  id: string;
+  file: File;
+  type: 'midia-tecnica' | 'documento-tecnico';
+  previewUrl?: string;
+};
+
 function isInCurrentWeek(dateValue: string) {
   const date = new Date(dateValue);
   const now = new Date();
@@ -34,6 +41,9 @@ export default function TechnicianMobile() {
   const [selectedId, setSelectedId] = useState<string>('');
   const [report, setReport] = useState({ summary: '', diagnosis: '', solution: '', pendingItems: '' });
   const [message, setMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [savingReport, setSavingReport] = useState(false);
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [activeTripsView, setActiveTripsView] = useState<'WEEK' | 'FINISHED'>('WEEK');
   const [activeSection, setActiveSection] = useState<'LIST' | 'DETAILS' | 'CALENDAR'>('LIST');
   const [monthCursor, setMonthCursor] = useState(() => new Date());
@@ -77,6 +87,14 @@ export default function TechnicianMobile() {
     return () => disconnect();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      pendingAttachments.forEach((item) => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
+    };
+  }, [pendingAttachments]);
+
   const current = useMemo(() => appointments.find((item) => item.id === selectedId) ?? appointments[0], [appointments, selectedId]);
   const upcoming = appointments.filter((item) => item.id !== current?.id && !wasFinishedByTechnician(item));
   const weeklyTrips = useMemo(
@@ -111,6 +129,7 @@ export default function TechnicianMobile() {
 
   async function updateStatus(status: string) {
     if (!current) return;
+    setErrorMessage('');
     await api(`/technician/appointments/${current.id}/status`, {
       method: 'POST',
       body: JSON.stringify({ status, observation: report.summary || undefined })
@@ -121,16 +140,34 @@ export default function TechnicianMobile() {
 
   async function saveReport() {
     if (!current) return;
-    await api(`/technician/appointments/${current.id}/reports`, {
-      method: 'POST',
-      body: JSON.stringify({ ...report, finishedAt: new Date().toISOString() })
-    });
-    setReport({ summary: '', diagnosis: '', solution: '', pendingItems: '' });
-    setMessage('Relatorio tecnico enviado com sucesso.');
-    await load();
+    setSavingReport(true);
+    setMessage('');
+    setErrorMessage('');
+    try {
+      await api(`/technician/appointments/${current.id}/reports`, {
+        method: 'POST',
+        body: JSON.stringify({ ...report, finishedAt: new Date().toISOString() })
+      });
+
+      for (const attachment of pendingAttachments) {
+        await uploadFileNow(attachment.file, attachment.type);
+      }
+
+      pendingAttachments.forEach((item) => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
+      setPendingAttachments([]);
+      setReport({ summary: '', diagnosis: '', solution: '', pendingItems: '' });
+      setMessage('Relatório e anexos enviados com sucesso.');
+      await load();
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Erro ao enviar relatório/anexos');
+    } finally {
+      setSavingReport(false);
+    }
   }
 
-  async function uploadFile(file: File | undefined, type: string) {
+  async function uploadFileNow(file: File | undefined, type: string) {
     if (!current || !file) return;
     const data = new FormData();
     data.append('file', file);
@@ -145,8 +182,29 @@ export default function TechnicianMobile() {
       const payload = await response.json().catch(() => null);
       throw new Error(payload?.message ?? 'Falha ao enviar arquivo');
     }
-    setMessage('Arquivo enviado com sucesso.');
-    await load();
+  }
+
+  function addAttachment(file: File | undefined, type: 'midia-tecnica' | 'documento-tecnico') {
+    if (!file) return;
+    setMessage('');
+    setErrorMessage('');
+    const isImage = file.type.startsWith('image/');
+    const previewUrl = isImage ? URL.createObjectURL(file) : undefined;
+    const item: PendingAttachment = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      file,
+      type,
+      previewUrl
+    };
+    setPendingAttachments((prev) => [...prev, item]);
+  }
+
+  function removeAttachment(id: string) {
+    setPendingAttachments((prev) => {
+      const found = prev.find((x) => x.id === id);
+      if (found?.previewUrl) URL.revokeObjectURL(found.previewUrl);
+      return prev.filter((x) => x.id !== id);
+    });
   }
 
   if (!current) {
@@ -333,8 +391,8 @@ export default function TechnicianMobile() {
             <Textarea placeholder="Diagnostico" value={report.diagnosis} onChange={(e) => setReport({ ...report, diagnosis: e.target.value })} />
             <Textarea placeholder="Solucao aplicada" value={report.solution} onChange={(e) => setReport({ ...report, solution: e.target.value })} />
             <Textarea placeholder="Pendencias ou retorno necessario" value={report.pendingItems} onChange={(e) => setReport({ ...report, pendingItems: e.target.value })} />
-            <Button className="h-11 w-full bg-[#c8142f] hover:bg-[#a81027]" disabled={!report.summary} onClick={saveReport}>
-              Enviar relatorio tecnico
+            <Button className="h-11 w-full bg-[#c8142f] hover:bg-[#a81027]" disabled={!report.summary || savingReport} onClick={saveReport}>
+              {savingReport ? 'Enviando...' : `Enviar relatório técnico${pendingAttachments.length ? ` + ${pendingAttachments.length} anexo(s)` : ''}`}
             </Button>
           </CardContent>
         </Card>
@@ -343,27 +401,54 @@ export default function TechnicianMobile() {
         {activeSection === 'DETAILS' && (
         <Card className="rounded-2xl">
           <CardHeader><CardTitle className="text-base sm:text-lg">Fotos, Videos e Documentos</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3">
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
               <Camera className="h-5 w-5" />
               <span className="text-xs">Camera</span>
-              <Input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => uploadFile(e.target.files?.[0], 'midia-tecnica')} />
+              <Input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addAttachment(e.target.files?.[0], 'midia-tecnica'); e.currentTarget.value = ''; }} />
             </label>
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
               <Camera className="h-5 w-5" />
               <span className="text-xs">Galeria</span>
-              <Input type="file" accept="image/*,video/*" className="hidden" onChange={(e) => uploadFile(e.target.files?.[0], 'midia-tecnica')} />
+              <Input type="file" accept="image/*,video/*" className="hidden" onChange={(e) => { addAttachment(e.target.files?.[0], 'midia-tecnica'); e.currentTarget.value = ''; }} />
             </label>
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
               <FileText className="h-5 w-5" />
               <span className="text-xs">Documento</span>
-              <Input type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => uploadFile(e.target.files?.[0], 'documento-tecnico')} />
+              <Input type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => { addAttachment(e.target.files?.[0], 'documento-tecnico'); e.currentTarget.value = ''; }} />
             </label>
+            </div>
+            <div className="rounded-xl border bg-card p-3">
+              <p className="text-xs text-muted-foreground mb-2">Arquivos anexados para envio:</p>
+              {pendingAttachments.length === 0 && <p className="text-xs text-muted-foreground">Nenhum arquivo selecionado.</p>}
+              <div className="space-y-2">
+                {pendingAttachments.map((item) => (
+                  <div key={item.id} className="flex items-center gap-2 rounded-lg border p-2">
+                    {item.previewUrl ? (
+                      <img src={item.previewUrl} alt={item.file.name} className="h-12 w-12 rounded object-cover" />
+                    ) : (
+                      <div className="h-12 w-12 rounded bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center">
+                        <FileText className="h-4 w-4" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-medium">{item.file.name}</p>
+                      <p className="text-[11px] text-muted-foreground">{Math.max(1, Math.round(item.file.size / 1024))} KB</p>
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={() => removeAttachment(item.id)}>
+                      Remover
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
         )}
 
         {message && <p className="text-center text-sm text-green-600 dark:text-green-400">{message}</p>}
+        {errorMessage && <p className="text-center text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
 
         {activeSection === 'DETAILS' && (
         <Card className="rounded-2xl">

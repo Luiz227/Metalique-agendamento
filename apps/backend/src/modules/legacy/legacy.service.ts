@@ -248,9 +248,43 @@ export class LegacyService {
     }));
   }
 
-  async technicianAppointments(userId: string | null) {
-    if (!userId) return [];
-    const technician = await this.prisma.technician.findFirst({ where: { userId } });
+  async technicianAppointments(identity: { userId: string | null; email: string | null; name: string | null } | null) {
+    if (!identity) return [];
+
+    let technician =
+      identity.userId
+        ? await this.prisma.technician.findFirst({
+            where: { userId: identity.userId }
+          })
+        : null;
+
+    if (!technician && identity.email) {
+      const userByEmail = await this.prisma.user.findUnique({
+        where: { email: identity.email }
+      });
+
+      if (userByEmail) {
+        technician = await this.prisma.technician.findFirst({
+          where: {
+            OR: [{ userId: userByEmail.id }]
+          }
+        });
+
+        if (!technician && identity.name?.trim()) {
+          technician = await this.prisma.technician.findFirst({
+            where: { name: { equals: identity.name.trim(), mode: 'insensitive' } }
+          });
+        }
+
+        if (technician && !technician.userId) {
+          technician = await this.prisma.technician.update({
+            where: { id: technician.id },
+            data: { userId: userByEmail.id }
+          });
+        }
+      }
+    }
+
     if (!technician) return [];
     const rows = await this.prisma.appointment.findMany({
       where: { technicianId: technician.id, status: { in: [AppointmentStatus.READY, AppointmentStatus.CRITICAL, AppointmentStatus.WAITING] } },

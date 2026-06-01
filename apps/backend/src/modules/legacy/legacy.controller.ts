@@ -90,7 +90,7 @@ export class LegacyController {
 
   @Get('technician/appointments')
   technicianAppointments(@Headers('authorization') authorization?: string) {
-    return this.service.technicianAppointments(this.extractUserId(authorization ?? null));
+    return this.service.technicianAppointments(this.extractAuthIdentity(authorization ?? null));
   }
 
   @Post('technician/appointments/:id/status')
@@ -127,16 +127,20 @@ export class LegacyController {
     );
   }
 
-  private extractUserId(authorization: string | null): string | null {
+  private extractAuthIdentity(authorization: string | null): { userId: string | null; email: string | null; name: string | null } | null {
     if (!authorization?.startsWith('Bearer ')) return null;
     const token = authorization.replace('Bearer ', '');
     const parts = token.split('.');
-    if (parts.length < 2) return null;
+    if (parts.length < 2) return { userId: null, email: null, name: null };
     try {
-      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as { sub?: string };
-      return payload.sub ?? null;
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as { sub?: string; email?: string; name?: string };
+      return {
+        userId: payload.sub ?? null,
+        email: payload.email?.toLowerCase?.() ?? null,
+        name: payload.name ?? null
+      };
     } catch {
-      return null;
+      return { userId: null, email: null, name: null };
     }
   }
 }

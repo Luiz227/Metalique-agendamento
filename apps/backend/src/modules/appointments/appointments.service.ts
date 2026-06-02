@@ -36,7 +36,8 @@ export class AppointmentsService {
       orderBy: { date: 'desc' }
     });
 
-    return rows.map((row) => this.toApiAppointment(row));
+    const checklistById = await this.getChecklistOverrides(rows.map((row) => row.id));
+    return rows.map((row) => this.toApiAppointment(row, checklistById.get(row.id)));
   }
 
   async findById(id: string) {
@@ -49,7 +50,8 @@ export class AppointmentsService {
       }
     });
     if (!row) throw new NotFoundException('Agendamento não encontrado');
-    return this.toApiAppointment(row);
+    const checklist = await this.getLatestChecklist(id);
+    return this.toApiAppointment(row, checklist);
   }
 
   async create(body: Record<string, unknown>) {
@@ -76,7 +78,17 @@ export class AppointmentsService {
       },
       include: { client: true, technician: true, statusLogs: true }
     });
-    return this.toApiAppointment(row);
+    if (body.schedulingChecklist && typeof body.schedulingChecklist === 'object') {
+      await this.prisma.auditLog.create({
+        data: {
+          entity: 'appointment_checklist',
+          entityId: row.id,
+          action: 'UPDATE',
+          metadata: body.schedulingChecklist as Prisma.InputJsonValue
+        }
+      });
+    }
+    return this.toApiAppointment(row, this.parseChecklist(body.schedulingChecklist));
   }
 
   async update(id: string, body: Record<string, unknown>) {
@@ -164,7 +176,22 @@ export class AppointmentsService {
     return AppointmentStatus.WAITING;
   }
 
-  private toApiAppointment(row: AppointmentRow) {
+  private toApiAppointment(row: AppointmentRow, checklistOverride?: Partial<Record<ChecklistKey, boolean>>) {
+    const derivedChecklist: Record<ChecklistKey, boolean> = {
+      clientConfirmed: row.status !== AppointmentStatus.DRAFT,
+      contactConfirmed: row.status === AppointmentStatus.READY,
+      addressConfirmed: !!row.fullAddress,
+      serviceTypeConfirmed: !!row.serviceType && row.serviceType !== 'Pendente definicao',
+      technicianSelected: !!row.technicianId,
+      technicianAvailability: !!row.technicianId,
+      dateTimeConfirmed: !!row.startTime,
+      hotelNeedChecked: true,
+      transportNeedChecked: true,
+      osChecked: !!row.osNumber,
+      clientChecklistChecked: !!row.notes
+    };
+    const schedulingChecklist = { ...derivedChecklist, ...(checklistOverride ?? {}) };
+
     return {
       id: row.id,
       clientId: row.clientId,
@@ -188,19 +215,7 @@ export class AppointmentsService {
       needsHotel: Boolean(row.hotelName || row.hotelAddress || row.hotelCheckIn || row.hotelCheckOut),
       needsTransport: false,
       clientChecklist: row.notes,
-      schedulingChecklist: {
-        clientConfirmed: row.status !== AppointmentStatus.DRAFT,
-        contactConfirmed: row.status === AppointmentStatus.READY,
-        addressConfirmed: !!row.fullAddress,
-        serviceTypeConfirmed: !!row.serviceType && row.serviceType !== 'Pendente definicao',
-        technicianSelected: !!row.technicianId,
-        technicianAvailability: !!row.technicianId,
-        dateTimeConfirmed: !!row.startTime,
-        hotelNeedChecked: true,
-        transportNeedChecked: true,
-        osChecked: !!row.osNumber,
-        clientChecklistChecked: !!row.notes
-      },
+      schedulingChecklist,
       client: {
         id: row.client.id,
         name: row.client.name,
@@ -240,4 +255,63 @@ export class AppointmentsService {
     if (status === AppointmentStatus.CRITICAL) return 'CRITICAL';
     return 'WAITING';
   }
+
+  private async getChecklistOverrides(appointmentIds: string[]) {
+    const map = new Map<string, Partial<Record<ChecklistKey, boolean>>>();
+    if (!appointmentIds.length) return map;
+
+    const logs = await this.prisma.auditLog.findMany({
+      where: {
+        entity: 'appointment_checklist',
+        action: 'UPDATE',
+        entityId: { in: appointmentIds }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    for (const log of logs) {
+      if (!log.entityId || map.has(log.entityId)) continue;
+      map.set(log.entityId, this.parseChecklist(log.metadata));
+    }
+
+    return map;
+  }
+
+  private async getLatestChecklist(appointmentId: string) {
+    const log = await this.prisma.auditLog.findFirst({
+      where: {
+        entity: 'appointment_checklist',
+        action: 'UPDATE',
+        entityId: appointmentId
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    return this.parseChecklist(log?.metadata);
+  }
+
+  private parseChecklist(input: unknown): Partial<Record<ChecklistKey, boolean>> {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+    const source = input as Record<string, unknown>;
+    const result: Partial<Record<ChecklistKey, boolean>> = {};
+    for (const key of CHECKLIST_KEYS) {
+      if (source[key] !== undefined) result[key] = Boolean(source[key]);
+    }
+    return result;
+  }
 }
+
+const CHECKLIST_KEYS = [
+  'clientConfirmed',
+  'contactConfirmed',
+  'addressConfirmed',
+  'serviceTypeConfirmed',
+  'technicianSelected',
+  'technicianAvailability',
+  'dateTimeConfirmed',
+  'hotelNeedChecked',
+  'transportNeedChecked',
+  'osChecked',
+  'clientChecklistChecked'
+] as const;
+
+type ChecklistKey = (typeof CHECKLIST_KEYS)[number];

@@ -17,8 +17,12 @@ type PendingAttachment = {
   previewUrl?: string;
 };
 
+function isImageFile(file: File) {
+  return file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name);
+}
+
 async function compressImageForUpload(file: File) {
-  if (!file.type.startsWith('image/')) return file;
+  if (!isImageFile(file)) return file;
 
   const imageUrl = URL.createObjectURL(file);
   try {
@@ -248,7 +252,7 @@ export default function TechnicianMobile() {
     if (!file) return;
     setMessage('');
     setErrorMessage('');
-    const isImage = file.type.startsWith('image/');
+    const isImage = isImageFile(file);
     const previewUrl = isImage ? URL.createObjectURL(file) : undefined;
     const item: PendingAttachment = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
@@ -471,7 +475,7 @@ export default function TechnicianMobile() {
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
               <Camera className="h-5 w-5" />
               <span className="text-xs">Galeria</span>
-              <Input type="file" accept="image/*,video/*" className="hidden" onChange={(e) => { addAttachment(e.target.files?.[0], 'midia-tecnica'); e.currentTarget.value = ''; }} />
+              <Input type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" className="hidden" onChange={(e) => { addAttachment(e.target.files?.[0], 'midia-tecnica'); e.currentTarget.value = ''; }} />
             </label>
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
               <FileText className="h-5 w-5" />

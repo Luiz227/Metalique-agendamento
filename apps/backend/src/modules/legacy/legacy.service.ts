@@ -301,7 +301,7 @@ export class LegacyService {
 
   async technicianReport(
     id: string,
-    report?: { summary?: string; diagnosis?: string; solution?: string; pendingItems?: string; finishedAt?: string }
+    report?: { summary?: string; diagnosis?: string; solution?: string; pendingItems?: string; finishedAt?: string; signatureDataUrl?: string }
   ) {
     const summary = report?.summary?.trim();
     const diagnosis = report?.diagnosis?.trim();
@@ -325,7 +325,8 @@ export class LegacyService {
         diagnosis,
         solution,
         pendingItems,
-        finishedAt: report?.finishedAt
+        finishedAt: report?.finishedAt,
+        signatureDataUrl: report?.signatureDataUrl
       });
       const reportBytes = Buffer.from(reportText, 'utf8');
       await this.attachFile(
@@ -355,10 +356,24 @@ export class LegacyService {
       startTime: Date;
       endTime: Date;
       notes: string | null;
+      machineName: string | null;
+      machineModel: string | null;
+      machineSerial: string | null;
+      hasHotel: boolean;
+      hotelName: string | null;
+      hotelAddress: string | null;
+      hotelCheckIn: Date | null;
+      hotelCheckOut: Date | null;
+      hotelDailyRate: Prisma.Decimal | null;
+      hotelNotes: string | null;
+      transportMode: string | null;
+      flightAirport: string | null;
+      flightDepartureAt: Date | null;
+      flightReturnAt: Date | null;
       client: { name: string; phone: string | null; email: string | null; cnpj: string | null };
       technician: { name: string; baseCity: string; baseAddress: string } | null;
     },
-    report: { summary?: string; diagnosis?: string; solution?: string; pendingItems?: string; finishedAt?: string }
+    report: { summary?: string; diagnosis?: string; solution?: string; pendingItems?: string; finishedAt?: string; signatureDataUrl?: string }
   ) {
     const company = this.resolveServiceOrderCompany(appointment.serviceType);
     const isStart = this.isStartOrTraining(appointment.serviceType);
@@ -368,6 +383,16 @@ export class LegacyService {
       ? 'INSTALACAO (START / OU TREINAMENTO) TODAS AS MAQUINAS'
       : 'MANUTENCAO CORRETIVA LASER F OU DOBRADEIRA';
     const technicianNotes = [report.summary, report.diagnosis, report.solution, report.pendingItems].filter(Boolean).join('\n\n');
+    const hasHotelInfo = Boolean(appointment.hasHotel || appointment.hotelName || appointment.hotelAddress || appointment.hotelCheckIn || appointment.hotelCheckOut || appointment.hotelDailyRate || appointment.hotelNotes);
+    const travelLabel =
+      appointment.transportMode === 'AIR'
+        ? 'Viagem aerea'
+        : appointment.transportMode === 'CAR'
+          ? 'Viagem de carro'
+          : 'Nao informado';
+    const signatureImage = report.signatureDataUrl
+      ? `<img class="signature-image" src="${this.escapeHtml(report.signatureDataUrl)}" alt="Assinatura do cliente" />`
+      : '';
 
     return `<!doctype html>
 <html lang="pt-BR">
@@ -393,6 +418,7 @@ export class LegacyService {
     .notes { min-height: 150px; white-space: pre-wrap; font-size: 13px; line-height: 1.55; }
     .signature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin-top: 36px; font-size: 11px; text-align: center; }
     .signature-line { border-top: 1px solid #111827; padding-top: 7px; }
+    .signature-image { display: block; max-width: 100%; height: 70px; object-fit: contain; margin: 0 auto 8px; }
     .footer { margin-top: 22px; font-size: 10px; text-align: center; color: #374151; }
     @media print { body { background: #fff; } .page { margin: 0; box-shadow: none; width: auto; min-height: auto; } }
   </style>
@@ -452,11 +478,38 @@ export class LegacyService {
         <th>Fabricante</th>
       </tr>
       <tr>
-        <td class="center">${this.escapeHtml(osNumber)}</td>
-        <td class="center">${this.escapeHtml(appointment.serviceType || 'Nao informado')}</td>
-        <td class="center">Nao informado</td>
-        <td></td>
+        <td class="center">${this.escapeHtml(appointment.machineSerial || osNumber)}</td>
+        <td class="center">${this.escapeHtml(appointment.machineName || appointment.serviceType || 'Nao informado')}</td>
+        <td class="center">${this.escapeHtml(appointment.machineModel || 'Nao informado')}</td>
+        <td>${this.escapeHtml(appointment.notes || '')}</td>
         <td class="center">${this.escapeHtml(company.logoText)}</td>
+      </tr>
+    </table>
+
+    <div class="section-title">LOGISTICA</div>
+    <table>
+      <tr>
+        <td><strong>Tipo de viagem:</strong> ${this.escapeHtml(travelLabel)}</td>
+        <td><strong>Aeroporto:</strong> ${this.escapeHtml(appointment.flightAirport || 'Nao informado')}</td>
+      </tr>
+      <tr>
+        <td><strong>Ida:</strong> ${appointment.flightDepartureAt ? this.formatDateTime(appointment.flightDepartureAt) : 'Nao informado'}</td>
+        <td><strong>Volta:</strong> ${appointment.flightReturnAt ? this.formatDateTime(appointment.flightReturnAt) : 'Nao informado'}</td>
+      </tr>
+      <tr>
+        <td><strong>Hospedagem:</strong> ${hasHotelInfo ? 'Sim' : 'Nao'}</td>
+        <td><strong>Valor:</strong> ${appointment.hotelDailyRate ? `R$ ${this.escapeHtml(appointment.hotelDailyRate.toString())}` : 'Nao informado'}</td>
+      </tr>
+      <tr>
+        <td><strong>Hotel:</strong> ${this.escapeHtml(appointment.hotelName || 'Nao informado')}</td>
+        <td><strong>Endereco hotel:</strong> ${this.escapeHtml(appointment.hotelAddress || 'Nao informado')}</td>
+      </tr>
+      <tr>
+        <td><strong>Check-in:</strong> ${appointment.hotelCheckIn ? this.formatDateTime(appointment.hotelCheckIn) : 'Nao informado'}</td>
+        <td><strong>Check-out:</strong> ${appointment.hotelCheckOut ? this.formatDateTime(appointment.hotelCheckOut) : 'Nao informado'}</td>
+      </tr>
+      <tr>
+        <td colspan="2"><strong>Observacoes hospedagem:</strong> ${this.escapeHtml(appointment.hotelNotes || 'Nao informado')}</td>
       </tr>
     </table>
 
@@ -480,7 +533,7 @@ export class LegacyService {
     </div>
     <div class="signature-grid">
       <div class="signature-line">Assinatura do Técnico<br />${this.escapeHtml(appointment.technician?.name || '')}</div>
-      <div class="signature-line">Assinatura do Cliente</div>
+      <div>${signatureImage}<div class="signature-line">Assinatura do Cliente</div></div>
     </div>
   </main>
 </body>
@@ -834,4 +887,3 @@ export class LegacyService {
     return 2 * radius * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
   }
 }
-

@@ -83,11 +83,20 @@ export type Appointment = {
   needsTransport: boolean;
   daysOut?: number;
   osNumber?: string | null;
+  machineName?: string | null;
+  machineModel?: string | null;
+  machineSerial?: string | null;
+  hasHotel?: boolean;
   hotelName?: string | null;
   hotelAddress?: string | null;
   hotelCheckIn?: string | null;
   hotelCheckOut?: string | null;
+  hotelDailyRate?: string | null;
   hotelNotes?: string | null;
+  transportMode?: string | null;
+  flightAirport?: string | null;
+  flightDepartureAt?: string | null;
+  flightReturnAt?: string | null;
   clientChecklist?: string | null;
   notes?: string | null;
   schedulingChecklist?: {

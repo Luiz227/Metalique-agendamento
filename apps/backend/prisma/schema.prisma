@@ -96,11 +96,20 @@ model Appointment {
   latitude          Float?
   longitude         Float?
   daysOut           Int                @default(1)
+  machineName       String?
+  machineModel      String?
+  machineSerial     String?
+  hasHotel          Boolean            @default(false)
   hotelName         String?
   hotelAddress      String?
   hotelCheckIn      DateTime?
   hotelCheckOut     DateTime?
+  hotelDailyRate    Decimal?           @db.Decimal(10,2)
   hotelNotes        String?
+  transportMode     String?
+  flightAirport     String?
+  flightDepartureAt DateTime?
+  flightReturnAt    DateTime?
   client            Client             @relation(fields: [clientId], references: [id])
   technician        Technician?        @relation(fields: [technicianId], references: [id])
   expenses          Expense[]

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Calendar, Camera, CheckCircle, Clock, FileText, MapPin, Navigation, Phone, Play } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -13,6 +13,7 @@ import { formatDate, formatTime, statusLabel, statusTone } from '../services/typ
 type PendingAttachment = {
   id: string;
   file: File;
+  displayName: string;
   type: 'midia-tecnica' | 'documento-tecnico';
   previewUrl?: string;
 };
@@ -68,6 +69,13 @@ async function compressImageForUpload(file: File) {
   }
 }
 
+function dataUrlToFile(dataUrl: string, fileName: string) {
+  const [meta, base64] = dataUrl.split(',');
+  const mimeType = meta.match(/data:(.*?);base64/)?.[1] ?? 'image/png';
+  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+  return new File([bytes], fileName, { type: mimeType });
+}
+
 function isInCurrentWeek(dateValue: string) {
   const date = new Date(dateValue);
   const now = new Date();
@@ -95,10 +103,13 @@ export default function TechnicianMobile() {
   const [errorMessage, setErrorMessage] = useState('');
   const [savingReport, setSavingReport] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const [signatureDataUrl, setSignatureDataUrl] = useState('');
   const [activeTripsView, setActiveTripsView] = useState<'WEEK' | 'FINISHED'>('WEEK');
   const [activeSection, setActiveSection] = useState<'LIST' | 'DETAILS' | 'CALENDAR'>('LIST');
   const [monthCursor, setMonthCursor] = useState(() => new Date());
   const knownIdsRef = useRef<Set<string>>(new Set());
+  const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingSignatureRef = useRef(false);
 
   async function load() {
     const rows = await api<Appointment[]>('/technician/appointments');
@@ -197,22 +208,27 @@ export default function TechnicianMobile() {
     try {
       await api(`/technician/appointments/${current.id}/reports`, {
         method: 'POST',
-        body: JSON.stringify({ ...report, finishedAt: new Date().toISOString() })
+        body: JSON.stringify({ ...report, signatureDataUrl, finishedAt: new Date().toISOString() })
       });
 
       for (const attachment of pendingAttachments) {
         try {
-          await uploadFileNow(attachment.file, attachment.type);
+          await uploadFileNow(attachment.file, attachment.type, attachment.displayName);
         } catch (err) {
           const reason = err instanceof Error ? err.message : String(err || 'Falha ao enviar arquivo');
           throw new Error(`Falha ao enviar ${attachment.file.name}: ${reason}`);
         }
       }
 
+      if (signatureDataUrl) {
+        await uploadFileNow(dataUrlToFile(signatureDataUrl, 'assinatura-cliente.png'), 'documento-tecnico', 'assinatura-cliente.png');
+      }
+
       pendingAttachments.forEach((item) => {
         if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
       });
       setPendingAttachments([]);
+      clearSignature();
       setReport({ summary: '', diagnosis: '', solution: '', pendingItems: '' });
       setMessage('Relatório e anexos enviados com sucesso.');
       await load();
@@ -223,11 +239,11 @@ export default function TechnicianMobile() {
     }
   }
 
-  async function uploadFileNow(file: File | undefined, type: string) {
+  async function uploadFileNow(file: File | undefined, type: string, displayName?: string) {
     if (!current || !file) return;
     const uploadFile = await compressImageForUpload(file);
     const data = new FormData();
-    data.append('file', uploadFile, uploadFile.name);
+    data.append('file', uploadFile, normalizeAttachmentName(displayName || uploadFile.name, uploadFile.name));
     data.append('type', type);
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
     const response = await fetch(`${apiBase}/attachments/appointments/${current.id}`, {
@@ -257,10 +273,61 @@ export default function TechnicianMobile() {
     const item: PendingAttachment = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       file,
+      displayName: file.name,
       type,
       previewUrl
     };
     setPendingAttachments((prev) => [...prev, item]);
+  }
+
+  function renameAttachment(id: string, displayName: string) {
+    setPendingAttachments((prev) => prev.map((item) => (item.id === id ? { ...item, displayName } : item)));
+  }
+
+  function normalizeAttachmentName(name: string, fallback: string) {
+    const cleanName = name.trim() || fallback;
+    const hasExtension = /\.[a-z0-9]{2,8}$/i.test(cleanName);
+    if (hasExtension) return cleanName;
+    const extension = fallback.match(/(\.[a-z0-9]{2,8})$/i)?.[1] ?? '';
+    return `${cleanName}${extension}`;
+  }
+
+  function drawSignature(event: PointerEvent<HTMLCanvasElement>) {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas || !drawingSignatureRef.current) return;
+    const rect = canvas.getBoundingClientRect();
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    context.lineWidth = 3;
+    context.lineCap = 'round';
+    context.strokeStyle = '#f8fafc';
+    context.lineTo(event.clientX - rect.left, event.clientY - rect.top);
+    context.stroke();
+    setSignatureDataUrl(canvas.toDataURL('image/png'));
+  }
+
+  function startSignature(event: PointerEvent<HTMLCanvasElement>) {
+    const canvas = signatureCanvasRef.current;
+    const context = canvas?.getContext('2d');
+    if (!canvas || !context) return;
+    const rect = canvas.getBoundingClientRect();
+    drawingSignatureRef.current = true;
+    context.beginPath();
+    context.moveTo(event.clientX - rect.left, event.clientY - rect.top);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function stopSignature() {
+    drawingSignatureRef.current = false;
+    const canvas = signatureCanvasRef.current;
+    if (canvas) setSignatureDataUrl(canvas.toDataURL('image/png'));
+  }
+
+  function clearSignature() {
+    const canvas = signatureCanvasRef.current;
+    const context = canvas?.getContext('2d');
+    if (canvas && context) context.clearRect(0, 0, canvas.width, canvas.height);
+    setSignatureDataUrl('');
   }
 
   function removeAttachment(id: string) {
@@ -455,9 +522,6 @@ export default function TechnicianMobile() {
             <Textarea placeholder="Diagnostico" value={report.diagnosis} onChange={(e) => setReport({ ...report, diagnosis: e.target.value })} />
             <Textarea placeholder="Solucao aplicada" value={report.solution} onChange={(e) => setReport({ ...report, solution: e.target.value })} />
             <Textarea placeholder="Pendencias ou retorno necessario" value={report.pendingItems} onChange={(e) => setReport({ ...report, pendingItems: e.target.value })} />
-            <Button className="h-11 w-full bg-[#c8142f] hover:bg-[#a81027]" disabled={!report.summary || savingReport} onClick={saveReport}>
-              {savingReport ? 'Enviando...' : `Enviar relatório técnico${pendingAttachments.length ? ` + ${pendingAttachments.length} anexo(s)` : ''}`}
-            </Button>
           </CardContent>
         </Card>
         )}
@@ -488,27 +552,64 @@ export default function TechnicianMobile() {
               {pendingAttachments.length === 0 && <p className="text-xs text-muted-foreground">Nenhum arquivo selecionado.</p>}
               <div className="space-y-2">
                 {pendingAttachments.map((item) => (
-                  <div key={item.id} className="flex items-center gap-2 rounded-lg border p-2">
-                    {item.previewUrl ? (
-                      <img src={item.previewUrl} alt={item.file.name} className="h-12 w-12 rounded object-cover" />
-                    ) : (
-                      <div className="h-12 w-12 rounded bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center">
-                        <FileText className="h-4 w-4" />
+                  <div key={item.id} className="rounded-lg border p-2">
+                    <div className="flex items-center gap-2">
+                      {item.previewUrl ? (
+                        <img src={item.previewUrl} alt={item.file.name} className="h-12 w-12 rounded object-cover" />
+                      ) : (
+                        <div className="h-12 w-12 rounded bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center">
+                          <FileText className="h-4 w-4" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium">{item.file.name}</p>
+                        <p className="text-[11px] text-muted-foreground">{Math.max(1, Math.round(item.file.size / 1024))} KB</p>
                       </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-medium">{item.file.name}</p>
-                      <p className="text-[11px] text-muted-foreground">{Math.max(1, Math.round(item.file.size / 1024))} KB</p>
+                      <Button type="button" variant="outline" size="sm" onClick={() => removeAttachment(item.id)}>
+                        Remover
+                      </Button>
                     </div>
-                    <Button type="button" variant="outline" size="sm" onClick={() => removeAttachment(item.id)}>
-                      Remover
-                    </Button>
+                    <Input
+                      className="mt-2 h-9 text-xs"
+                      placeholder="Nome do arquivo no Drive"
+                      value={item.displayName}
+                      onChange={(event) => renameAttachment(item.id, event.target.value)}
+                    />
                   </div>
                 ))}
               </div>
             </div>
           </CardContent>
         </Card>
+        )}
+
+
+        {activeSection === 'DETAILS' && (
+        <Card className="rounded-2xl">
+          <CardHeader><CardTitle className="text-base sm:text-lg">Assinatura do cliente</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <canvas
+              ref={signatureCanvasRef}
+              width={640}
+              height={180}
+              className="h-36 w-full touch-none rounded-xl border bg-zinc-950"
+              onPointerDown={startSignature}
+              onPointerMove={drawSignature}
+              onPointerUp={stopSignature}
+              onPointerCancel={stopSignature}
+              onPointerLeave={stopSignature}
+            />
+            <Button type="button" variant="outline" className="w-full" onClick={clearSignature}>
+              Limpar assinatura
+            </Button>
+          </CardContent>
+        </Card>
+        )}
+
+        {activeSection === 'DETAILS' && (
+        <Button className="h-12 w-full rounded-xl bg-[#c8142f] hover:bg-[#a81027]" disabled={!report.summary || savingReport} onClick={saveReport}>
+          {savingReport ? 'Enviando...' : `Enviar relatório técnico${pendingAttachments.length ? ` + ${pendingAttachments.length} anexo(s)` : ''}`}
+        </Button>
         )}
 
         {message && <p className="text-center text-sm text-green-600 dark:text-green-400">{message}</p>}

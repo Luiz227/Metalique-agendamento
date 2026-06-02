@@ -20,7 +20,7 @@ const steps = [
   'Confirmação'
 ];
 const DRAFT_KEY = 'agenda-metalique:new-appointment-draft:v1';
-const COMPANY_BASE_ADDRESS = 'R. Reinaldo Raulino dos Santos, 107 - ?den, Sorocaba - SP, 18086-796';
+const COMPANY_BASE_ADDRESS = 'R. Reinaldo Raulino dos Santos, 107 - Éden, Sorocaba - SP, 18086-796';
 
 function localDateTimeIso(date: string, time: string) {
   return new Date(`${date}T${time}:00`).toISOString();
@@ -68,15 +68,24 @@ export default function NewAppointment() {
     address: '',
     serviceType: '',
     serviceDescription: '',
+    machineName: '',
+    machineModel: '',
+    machineSerial: '',
     serviceDate: '',
     serviceTime: '',
     daysOut: '1',
     technicianId: '',
+    hasHotel: false,
     vehicleId: '',
+    transportMode: 'CAR',
+    flightAirport: '',
+    flightDepartureAt: '',
+    flightReturnAt: '',
     hotelName: '',
     hotelAddress: '',
     hotelCheckIn: '',
     hotelCheckOut: '',
+    hotelDailyRate: '',
     hotelNotes: '',
     attentionPoints: ''
   });
@@ -159,7 +168,7 @@ export default function NewAppointment() {
     if (currentStep === 0) return Boolean(formData.companyName && formData.cnpj && formData.address);
     if (currentStep === 1) return Boolean(formData.serviceType && formData.serviceDescription && formData.serviceDate && formData.serviceTime && Number(formData.daysOut) > 0);
     if (currentStep === 2) return Boolean(formData.technicianId);
-    if (currentStep === 3) return Boolean(formData.vehicleId && formData.attentionPoints);
+    if (currentStep === 3) return Boolean(formData.transportMode && formData.attentionPoints);
     if (currentStep === 4) return requiredChecklistDone && !saving;
     return true;
   }, [currentStep, formData, requiredChecklistDone, saving]);
@@ -198,13 +207,22 @@ export default function NewAppointment() {
           : new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
         daysOut: Number(formData.daysOut || '1'),
         status: 'WAITING',
-        needsHotel: Boolean(formData.hotelName || formData.hotelAddress || formData.hotelCheckIn || formData.hotelCheckOut),
-        needsTransport: formData.vehicleId !== 'NO_TRANSPORT',
-        vehicleId: formData.vehicleId === 'NO_TRANSPORT' ? null : formData.vehicleId,
+        machineName: formData.machineName || null,
+        machineModel: formData.machineModel || null,
+        machineSerial: formData.machineSerial || null,
+        hasHotel: formData.hasHotel,
+        needsHotel: formData.hasHotel,
+        needsTransport: formData.transportMode !== 'NONE',
+        vehicleId: formData.transportMode === 'CAR' && formData.vehicleId !== 'NO_TRANSPORT' ? formData.vehicleId : null,
+        transportMode: formData.transportMode,
+        flightAirport: formData.transportMode === 'AIR' ? formData.flightAirport || null : null,
+        flightDepartureAt: formData.transportMode === 'AIR' && formData.flightDepartureAt ? new Date(formData.flightDepartureAt).toISOString() : null,
+        flightReturnAt: formData.transportMode === 'AIR' && formData.flightReturnAt ? new Date(formData.flightReturnAt).toISOString() : null,
         hotelName: formData.hotelName || null,
         hotelAddress: formData.hotelAddress || null,
         hotelCheckIn: formData.hotelCheckIn ? new Date(formData.hotelCheckIn).toISOString() : null,
         hotelCheckOut: formData.hotelCheckOut ? new Date(formData.hotelCheckOut).toISOString() : null,
+        hotelDailyRate: formData.hotelDailyRate || null,
         hotelNotes: formData.hotelNotes || null,
         osNumber: '',
         clientChecklist: formData.cnpj ? `CNPJ: ${formData.cnpj}` : '',
@@ -397,6 +415,20 @@ export default function NewAppointment() {
                 <Label>Serviço (obrigatório)</Label>
                 <Textarea placeholder="Descreva o motivo e o serviço a executar." value={formData.serviceDescription} onChange={(e) => setFormData({ ...formData, serviceDescription: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
               </div>
+              <div className="grid md:grid-cols-3 gap-3">
+                <div>
+                  <Label>Nome da maquina</Label>
+                  <Input placeholder="Ex.: Mesa / corte de metais" value={formData.machineName} onChange={(e) => setFormData({ ...formData, machineName: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                </div>
+                <div>
+                  <Label>Modelo da maquina</Label>
+                  <Input placeholder="Ex.: ML5030 tubo laser" value={formData.machineModel} onChange={(e) => setFormData({ ...formData, machineModel: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                </div>
+                <div>
+                  <Label>Numero de serie</Label>
+                  <Input placeholder="Ex.: 1250/1709" value={formData.machineSerial} onChange={(e) => setFormData({ ...formData, machineSerial: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                </div>
+              </div>
             </div>
           )}
 
@@ -431,21 +463,60 @@ export default function NewAppointment() {
           {currentStep === 3 && (
             <div className="space-y-4">
               <div>
-                <Label>Veículo</Label>
-                <Select value={formData.vehicleId} onValueChange={(value) => setFormData({ ...formData, vehicleId: value })}>
-                  <SelectTrigger className="bg-zinc-800/50 border-zinc-700"><SelectValue placeholder="Selecione o veículo" /></SelectTrigger>
+                <Label>Tipo de viagem</Label>
+                <Select value={formData.transportMode} onValueChange={(value) => setFormData({ ...formData, transportMode: value })}>
+                  <SelectTrigger className="bg-zinc-800/50 border-zinc-700"><SelectValue placeholder="Selecione o tipo de viagem" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="NO_TRANSPORT">Não precisa de transporte</SelectItem>
+                    <SelectItem value="NONE">Nao precisa de viagem</SelectItem>
+                    <SelectItem value="CAR">Viagem de carro</SelectItem>
+                    <SelectItem value="AIR">Viagem aerea</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {formData.transportMode === 'CAR' && (
+              <div>
+                <Label>Veiculo</Label>
+                <Select value={formData.vehicleId} onValueChange={(value) => setFormData({ ...formData, vehicleId: value })}>
+                  <SelectTrigger className="bg-zinc-800/50 border-zinc-700"><SelectValue placeholder="Selecione o veiculo" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NO_TRANSPORT">Nao informado</SelectItem>
                     {vehicles.map((vehicle) => (
                       <SelectItem key={vehicle.id} value={vehicle.id}>{vehicle.name} - {vehicle.plate}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+              )}
+              {formData.transportMode === 'AIR' && (
+              <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-800/20 p-3">
+                <Label>Dados do voo</Label>
+                <Input placeholder="Aeroporto" value={formData.flightAirport} onChange={(e) => setFormData({ ...formData, flightAirport: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                <div className="grid md:grid-cols-2 gap-3">
+                  <div>
+                    <Label>Ida - data e hora</Label>
+                    <Input type="datetime-local" value={formData.flightDepartureAt} onChange={(e) => setFormData({ ...formData, flightDepartureAt: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                  </div>
+                  <div>
+                    <Label>Volta - data e hora</Label>
+                    <Input type="datetime-local" value={formData.flightReturnAt} onChange={(e) => setFormData({ ...formData, flightReturnAt: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                  </div>
+                </div>
+              </div>
+              )}
               <div className="space-y-3">
-                <Label>Hotel</Label>
+                <Label>Hospedagem</Label>
+                <Select value={formData.hasHotel ? 'YES' : 'NO'} onValueChange={(value) => setFormData({ ...formData, hasHotel: value === 'YES' })}>
+                  <SelectTrigger className="bg-zinc-800/50 border-zinc-700"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NO">Nao tem hospedagem</SelectItem>
+                    <SelectItem value="YES">Tem hospedagem</SelectItem>
+                  </SelectContent>
+                </Select>
+                {formData.hasHotel && (
+                <>
                 <Input placeholder="Nome do hotel" value={formData.hotelName} onChange={(e) => setFormData({ ...formData, hotelName: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
                 <Input placeholder="Endereco do hotel" value={formData.hotelAddress} onChange={(e) => setFormData({ ...formData, hotelAddress: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                <Input type="number" step="0.01" min="0" placeholder="Valor da hospedagem" value={formData.hotelDailyRate} onChange={(e) => setFormData({ ...formData, hotelDailyRate: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
                 <div className="grid md:grid-cols-2 gap-3">
                   <div>
                     <Label>Check-in</Label>
@@ -457,9 +528,11 @@ export default function NewAppointment() {
                   </div>
                 </div>
                 <Textarea placeholder="Informacoes sobre reserva, horario, observacoes ou regras do hotel." value={formData.hotelNotes} onChange={(e) => setFormData({ ...formData, hotelNotes: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                </>
+                )}
               </div>
               <div>
-                <Label>Ponto de atenção (obrigatório)</Label>
+                <Label>Ponto de atencao (obrigatorio)</Label>
                 <Textarea placeholder="Ex.: levar cabo X, validar checklist Y." value={formData.attentionPoints} onChange={(e) => setFormData({ ...formData, attentionPoints: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
               </div>
             </div>

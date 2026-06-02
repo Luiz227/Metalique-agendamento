@@ -390,6 +390,11 @@ export class LegacyService {
     notes: string | null;
     osNumber: string | null;
     daysOut: number;
+    hotelName: string | null;
+    hotelAddress: string | null;
+    hotelCheckIn: Date | null;
+    hotelCheckOut: Date | null;
+    hotelNotes: string | null;
     client: { id: string; name: string; city: string; address: string; phone: string | null; email: string | null };
     technician: { id: string; name: string; baseCity: string; baseAddress: string; specialties: string[]; active: boolean; color: string } | null;
     statusLogs: { id: string; status: string; createdAt: Date; observation: string | null }[];
@@ -409,7 +414,12 @@ export class LegacyService {
       notes: row.notes,
       osNumber: row.osNumber,
       daysOut: row.daysOut,
-      needsHotel: false,
+      hotelName: row.hotelName,
+      hotelAddress: row.hotelAddress,
+      hotelCheckIn: row.hotelCheckIn?.toISOString() ?? null,
+      hotelCheckOut: row.hotelCheckOut?.toISOString() ?? null,
+      hotelNotes: row.hotelNotes,
+      needsHotel: Boolean(row.hotelName || row.hotelAddress || row.hotelCheckIn || row.hotelCheckOut),
       needsTransport: false,
       clientChecklist: row.notes,
       schedulingChecklist: {

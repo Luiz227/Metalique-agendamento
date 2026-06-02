@@ -76,30 +76,30 @@ export default function Kanban() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  async function load() {
-    setLoading(true);
+  async function load(showLoading = false) {
+    if (showLoading) setLoading(true);
     setError('');
     try {
       const data = await api<Appointment[]>('/appointments');
-      setItems(data);
+      setItems((current) => (JSON.stringify(current) === JSON.stringify(data) ? current : data));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Erro ao carregar kanban');
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
+    load(true);
   }, []);
 
   useEffect(() => {
-    const timer = setInterval(load, 4000);
+    const timer = setInterval(() => load(false), 15000);
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
-    const disconnect = connectRealtime(() => load());
+    const disconnect = connectRealtime(() => load(false));
     return () => disconnect();
   }, []);
 
@@ -131,7 +131,7 @@ export default function Kanban() {
           <h1 className="text-2xl font-bold">Kanban de Agendamentos</h1>
           <p className="text-muted-foreground">Acompanhe status, pendencias e lembretes para finalizacao.</p>
         </div>
-        <Button variant="outline" onClick={load}>Atualizar</Button>
+        <Button variant="outline" onClick={() => load(true)}>Atualizar</Button>
       </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}

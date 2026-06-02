@@ -96,6 +96,11 @@ model Appointment {
   latitude          Float?
   longitude         Float?
   daysOut           Int                @default(1)
+  hotelName         String?
+  hotelAddress      String?
+  hotelCheckIn      DateTime?
+  hotelCheckOut     DateTime?
+  hotelNotes        String?
   client            Client             @relation(fields: [clientId], references: [id])
   technician        Technician?        @relation(fields: [technicianId], references: [id])
   expenses          Expense[]

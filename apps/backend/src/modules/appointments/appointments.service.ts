@@ -67,7 +67,12 @@ export class AppointmentsService {
         status: this.parseStatus(body.status),
         osNumber: body.osNumber ? String(body.osNumber) : null,
         notes: body.notes ? String(body.notes) : null,
-        daysOut: Number(body.daysOut ?? 1)
+        daysOut: Number(body.daysOut ?? 1),
+        hotelName: body.hotelName ? String(body.hotelName) : null,
+        hotelAddress: body.hotelAddress ? String(body.hotelAddress) : null,
+        hotelCheckIn: body.hotelCheckIn ? new Date(String(body.hotelCheckIn)) : null,
+        hotelCheckOut: body.hotelCheckOut ? new Date(String(body.hotelCheckOut)) : null,
+        hotelNotes: body.hotelNotes ? String(body.hotelNotes) : null
       },
       include: { client: true, technician: true, statusLogs: true }
     });
@@ -89,7 +94,12 @@ export class AppointmentsService {
         status: body.status !== undefined ? this.parseStatus(body.status) : undefined,
         osNumber: body.osNumber !== undefined ? (body.osNumber ? String(body.osNumber) : null) : undefined,
         notes: body.notes !== undefined ? (body.notes ? String(body.notes) : null) : undefined,
-        daysOut: body.daysOut !== undefined ? Number(body.daysOut) : undefined
+        daysOut: body.daysOut !== undefined ? Number(body.daysOut) : undefined,
+        hotelName: body.hotelName !== undefined ? (body.hotelName ? String(body.hotelName) : null) : undefined,
+        hotelAddress: body.hotelAddress !== undefined ? (body.hotelAddress ? String(body.hotelAddress) : null) : undefined,
+        hotelCheckIn: body.hotelCheckIn !== undefined ? (body.hotelCheckIn ? new Date(String(body.hotelCheckIn)) : null) : undefined,
+        hotelCheckOut: body.hotelCheckOut !== undefined ? (body.hotelCheckOut ? new Date(String(body.hotelCheckOut)) : null) : undefined,
+        hotelNotes: body.hotelNotes !== undefined ? (body.hotelNotes ? String(body.hotelNotes) : null) : undefined
       },
       include: { client: true, technician: true, statusLogs: { orderBy: { createdAt: 'desc' } } }
     });
@@ -170,7 +180,12 @@ export class AppointmentsService {
       notes: row.notes,
       osNumber: row.osNumber,
       daysOut: row.daysOut,
-      needsHotel: false,
+      hotelName: row.hotelName,
+      hotelAddress: row.hotelAddress,
+      hotelCheckIn: row.hotelCheckIn?.toISOString() ?? null,
+      hotelCheckOut: row.hotelCheckOut?.toISOString() ?? null,
+      hotelNotes: row.hotelNotes,
+      needsHotel: Boolean(row.hotelName || row.hotelAddress || row.hotelCheckIn || row.hotelCheckOut),
       needsTransport: false,
       clientChecklist: row.notes,
       schedulingChecklist: {

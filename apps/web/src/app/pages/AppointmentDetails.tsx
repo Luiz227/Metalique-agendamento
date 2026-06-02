@@ -9,7 +9,7 @@ import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { ApiError, api, connectRealtime } from '../services/api';
-import type { Appointment, Hotel as HotelType, Technician, Vehicle } from '../services/types';
+import type { Appointment, Technician, Vehicle } from '../services/types';
 import { formatDate, formatTime, statusLabel, statusTone } from '../services/types';
 
 type ChecklistKey =
@@ -47,7 +47,6 @@ export default function AppointmentDetails() {
   const [appointment, setAppointment] = useState<Appointment | null>(null);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [hotels, setHotels] = useState<HotelType[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -72,7 +71,11 @@ export default function AppointmentDetails() {
     startTime: '',
     technicianId: '',
     vehicleId: '',
-    hotelId: ''
+    hotelName: '',
+    hotelAddress: '',
+    hotelCheckIn: '',
+    hotelCheckOut: '',
+    hotelNotes: ''
   });
   const [checkForm, setCheckForm] = useState<Record<ChecklistKey, boolean>>({
     clientConfirmed: false,
@@ -97,16 +100,14 @@ export default function AppointmentDetails() {
     }
     if (showLoading) setLoading(true);
     try {
-      const [item, techs, cars, inns] = await Promise.all([
+      const [item, techs, cars] = await Promise.all([
         api<Appointment>(`/appointments/${id}`),
         api<Technician[]>('/technicians'),
-        api<Vehicle[]>('/resources/vehicles'),
-        api<HotelType[]>('/resources/hotels')
+        api<Vehicle[]>('/resources/vehicles')
       ]);
       setAppointment(item);
       setTechnicians(techs.filter((t) => t.active));
       setVehicles(cars);
-      setHotels(inns);
     } catch (err) {
       if (showLoading || !appointment) {
         setError(err instanceof ApiError ? err.message : 'Erro ao carregar atendimento');
@@ -154,7 +155,11 @@ export default function AppointmentDetails() {
       startTime: new Date(appointment.startTime).toTimeString().slice(0, 5),
       technicianId: appointment.technicianId ?? '',
       vehicleId: appointment.vehicle?.id ?? '',
-      hotelId: appointment.hotel?.id ?? ''
+      hotelName: appointment.hotelName ?? '',
+      hotelAddress: appointment.hotelAddress ?? '',
+      hotelCheckIn: appointment.hotelCheckIn ? new Date(appointment.hotelCheckIn).toISOString().slice(0, 16) : '',
+      hotelCheckOut: appointment.hotelCheckOut ? new Date(appointment.hotelCheckOut).toISOString().slice(0, 16) : '',
+      hotelNotes: appointment.hotelNotes ?? ''
     });
     setCheckForm({
       clientConfirmed: appointment.schedulingChecklist?.clientConfirmed ?? false,
@@ -308,14 +313,18 @@ export default function AppointmentDetails() {
           body: JSON.stringify({
             technicianId: form.technicianId || null,
             vehicleId: form.vehicleId || null,
-            hotelId: form.hotelId || null,
+            hotelName: form.hotelName || null,
+            hotelAddress: form.hotelAddress || null,
+            hotelCheckIn: form.hotelCheckIn ? new Date(form.hotelCheckIn).toISOString() : null,
+            hotelCheckOut: form.hotelCheckOut ? new Date(form.hotelCheckOut).toISOString() : null,
+            hotelNotes: form.hotelNotes || null,
             city: form.city,
             fullAddress: form.fullAddress,
             serviceType: form.serviceType || 'Pendente definicao',
             problemDescription: form.problemDescription || 'Pendente descricao do servico',
             notes: form.notes,
             osNumber: form.osNumber || null,
-            needsHotel: Boolean(form.hotelId),
+            needsHotel: Boolean(form.hotelName || form.hotelAddress || form.hotelCheckIn || form.hotelCheckOut),
             needsTransport: Boolean(form.vehicleId),
             date: new Date(`${form.date}T12:00:00`).toISOString(),
             startTime: start.toISOString(),
@@ -567,16 +576,29 @@ export default function AppointmentDetails() {
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Hotel</p>
                 {editing ? (
-                  <select className="w-full h-9 rounded-md border bg-background px-3 text-sm" value={form.hotelId} onChange={(e) => setForm({ ...form, hotelId: e.target.value })}>
-                    <option value="">Nao informado</option>
-                    {hotels.map((hotel) => (
-                      <option key={hotel.id} value={hotel.id}>
-                        {hotel.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="space-y-2">
+                    <Input placeholder="Nome do hotel" value={form.hotelName} onChange={(e) => setForm({ ...form, hotelName: e.target.value })} />
+                    <Input placeholder="Endereco do hotel" value={form.hotelAddress} onChange={(e) => setForm({ ...form, hotelAddress: e.target.value })} />
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div>
+                        <p className="mb-1 text-[11px] text-muted-foreground">Check-in</p>
+                        <Input type="datetime-local" value={form.hotelCheckIn} onChange={(e) => setForm({ ...form, hotelCheckIn: e.target.value })} />
+                      </div>
+                      <div>
+                        <p className="mb-1 text-[11px] text-muted-foreground">Check-out</p>
+                        <Input type="datetime-local" value={form.hotelCheckOut} onChange={(e) => setForm({ ...form, hotelCheckOut: e.target.value })} />
+                      </div>
+                    </div>
+                    <Textarea placeholder="Informacoes do hotel, reserva, observacoes ou regras do agendamento" value={form.hotelNotes} onChange={(e) => setForm({ ...form, hotelNotes: e.target.value })} />
+                  </div>
                 ) : (
-                  <p className="text-sm">{appointment.hotel?.name ?? 'Nao informado'}</p>
+                  <div className="space-y-1 text-sm">
+                    <p>{appointment.hotelName || "Nao informado"}</p>
+                    {appointment.hotelAddress && <p className="text-muted-foreground">{appointment.hotelAddress}</p>}
+                    {appointment.hotelCheckIn && <p className="text-muted-foreground">Check-in: {new Date(appointment.hotelCheckIn).toLocaleString("pt-BR")}</p>}
+                    {appointment.hotelCheckOut && <p className="text-muted-foreground">Check-out: {new Date(appointment.hotelCheckOut).toLocaleString("pt-BR")}</p>}
+                    {appointment.hotelNotes && <p className="text-muted-foreground">{appointment.hotelNotes}</p>}
+                  </div>
                 )}
               </div>
               <div>

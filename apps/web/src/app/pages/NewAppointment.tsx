@@ -10,7 +10,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Progress } from '../components/ui/progress';
 import { ApiError, api } from '../services/api';
-import type { Client, Hotel, Technician, Vehicle } from '../services/types';
+import type { Client, Technician, Vehicle } from '../services/types';
 
 const steps = [
   'Cliente',
@@ -41,7 +41,6 @@ export default function NewAppointment() {
   const [currentStep, setCurrentStep] = useState(0);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [hotels, setHotels] = useState<Hotel[]>([]);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [travelEstimate, setTravelEstimate] = useState<{ distanceText: string; durationText: string } | null>(null);
@@ -74,7 +73,11 @@ export default function NewAppointment() {
     daysOut: '1',
     technicianId: '',
     vehicleId: '',
-    hotelId: '',
+    hotelName: '',
+    hotelAddress: '',
+    hotelCheckIn: '',
+    hotelCheckOut: '',
+    hotelNotes: '',
     attentionPoints: ''
   });
 
@@ -115,13 +118,11 @@ export default function NewAppointment() {
   useEffect(() => {
     Promise.all([
       api<Technician[]>('/technicians'),
-      api<Vehicle[]>('/resources/vehicles'),
-      api<Hotel[]>('/resources/hotels')
+      api<Vehicle[]>('/resources/vehicles')
     ])
-      .then(([techs, vehs, hots]) => {
+      .then(([techs, vehs]) => {
         setTechnicians(techs);
         setVehicles(vehs);
-        setHotels(hots);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Erro ao carregar dados'));
   }, []);
@@ -158,7 +159,7 @@ export default function NewAppointment() {
     if (currentStep === 0) return Boolean(formData.companyName && formData.cnpj && formData.address);
     if (currentStep === 1) return Boolean(formData.serviceType && formData.serviceDescription && formData.serviceDate && formData.serviceTime && Number(formData.daysOut) > 0);
     if (currentStep === 2) return Boolean(formData.technicianId);
-    if (currentStep === 3) return Boolean(formData.vehicleId && formData.hotelId && formData.attentionPoints);
+    if (currentStep === 3) return Boolean(formData.vehicleId && formData.attentionPoints);
     if (currentStep === 4) return requiredChecklistDone && !saving;
     return true;
   }, [currentStep, formData, requiredChecklistDone, saving]);
@@ -197,10 +198,14 @@ export default function NewAppointment() {
           : new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
         daysOut: Number(formData.daysOut || '1'),
         status: 'WAITING',
-        needsHotel: formData.hotelId !== 'NO_HOTEL',
+        needsHotel: Boolean(formData.hotelName || formData.hotelAddress || formData.hotelCheckIn || formData.hotelCheckOut),
         needsTransport: formData.vehicleId !== 'NO_TRANSPORT',
         vehicleId: formData.vehicleId === 'NO_TRANSPORT' ? null : formData.vehicleId,
-        hotelId: formData.hotelId === 'NO_HOTEL' ? null : formData.hotelId,
+        hotelName: formData.hotelName || null,
+        hotelAddress: formData.hotelAddress || null,
+        hotelCheckIn: formData.hotelCheckIn ? new Date(formData.hotelCheckIn).toISOString() : null,
+        hotelCheckOut: formData.hotelCheckOut ? new Date(formData.hotelCheckOut).toISOString() : null,
+        hotelNotes: formData.hotelNotes || null,
         osNumber: '',
         clientChecklist: formData.cnpj ? `CNPJ: ${formData.cnpj}` : '',
         notes: formData.attentionPoints,
@@ -437,17 +442,21 @@ export default function NewAppointment() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
+              <div className="space-y-3">
                 <Label>Hotel</Label>
-                <Select value={formData.hotelId} onValueChange={(value) => setFormData({ ...formData, hotelId: value })}>
-                  <SelectTrigger className="bg-zinc-800/50 border-zinc-700"><SelectValue placeholder="Selecione o hotel" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="NO_HOTEL">Não precisa de hotel</SelectItem>
-                    {hotels.map((hotel) => (
-                      <SelectItem key={hotel.id} value={hotel.id}>{hotel.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input placeholder="Nome do hotel" value={formData.hotelName} onChange={(e) => setFormData({ ...formData, hotelName: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                <Input placeholder="Endereco do hotel" value={formData.hotelAddress} onChange={(e) => setFormData({ ...formData, hotelAddress: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                <div className="grid md:grid-cols-2 gap-3">
+                  <div>
+                    <Label>Check-in</Label>
+                    <Input type="datetime-local" value={formData.hotelCheckIn} onChange={(e) => setFormData({ ...formData, hotelCheckIn: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                  </div>
+                  <div>
+                    <Label>Check-out</Label>
+                    <Input type="datetime-local" value={formData.hotelCheckOut} onChange={(e) => setFormData({ ...formData, hotelCheckOut: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                  </div>
+                </div>
+                <Textarea placeholder="Informacoes sobre reserva, horario, observacoes ou regras do hotel." value={formData.hotelNotes} onChange={(e) => setFormData({ ...formData, hotelNotes: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
               </div>
               <div>
                 <Label>Ponto de atenção (obrigatório)</Label>

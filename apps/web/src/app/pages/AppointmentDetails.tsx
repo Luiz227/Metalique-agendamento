@@ -65,16 +65,25 @@ export default function AppointmentDetails() {
     fullAddress: '',
     serviceType: '',
     problemDescription: '',
+    machineName: '',
+    machineModel: '',
+    machineSerial: '',
     notes: '',
     osNumber: '',
     date: '',
     startTime: '',
     technicianId: '',
+    transportMode: 'CAR',
     vehicleId: '',
+    flightAirport: '',
+    flightDepartureAt: '',
+    flightReturnAt: '',
+    hasHotel: false,
     hotelName: '',
     hotelAddress: '',
     hotelCheckIn: '',
     hotelCheckOut: '',
+    hotelDailyRate: '',
     hotelNotes: ''
   });
   const [checkForm, setCheckForm] = useState<Record<ChecklistKey, boolean>>({
@@ -149,16 +158,25 @@ export default function AppointmentDetails() {
       fullAddress: appointment.fullAddress ?? '',
       serviceType: appointment.serviceType ?? '',
       problemDescription: appointment.problemDescription ?? '',
+      machineName: appointment.machineName ?? '',
+      machineModel: appointment.machineModel ?? '',
+      machineSerial: appointment.machineSerial ?? '',
       notes: appointment.notes ?? '',
       osNumber: appointment.osNumber ?? '',
       date: new Date(appointment.date).toISOString().slice(0, 10),
       startTime: new Date(appointment.startTime).toTimeString().slice(0, 5),
       technicianId: appointment.technicianId ?? '',
+      transportMode: appointment.transportMode ?? (appointment.vehicle ? 'CAR' : 'NONE'),
       vehicleId: appointment.vehicle?.id ?? '',
+      flightAirport: appointment.flightAirport ?? '',
+      flightDepartureAt: appointment.flightDepartureAt ? new Date(appointment.flightDepartureAt).toISOString().slice(0, 16) : '',
+      flightReturnAt: appointment.flightReturnAt ? new Date(appointment.flightReturnAt).toISOString().slice(0, 16) : '',
+      hasHotel: Boolean(appointment.hasHotel || appointment.hotelName || appointment.hotelAddress || appointment.hotelCheckIn || appointment.hotelCheckOut),
       hotelName: appointment.hotelName ?? '',
       hotelAddress: appointment.hotelAddress ?? '',
       hotelCheckIn: appointment.hotelCheckIn ? new Date(appointment.hotelCheckIn).toISOString().slice(0, 16) : '',
       hotelCheckOut: appointment.hotelCheckOut ? new Date(appointment.hotelCheckOut).toISOString().slice(0, 16) : '',
+      hotelDailyRate: appointment.hotelDailyRate ?? '',
       hotelNotes: appointment.hotelNotes ?? ''
     });
     setCheckForm({
@@ -312,20 +330,29 @@ export default function AppointmentDetails() {
           method: 'PUT',
           body: JSON.stringify({
             technicianId: form.technicianId || null,
-            vehicleId: form.vehicleId || null,
-            hotelName: form.hotelName || null,
-            hotelAddress: form.hotelAddress || null,
-            hotelCheckIn: form.hotelCheckIn ? new Date(form.hotelCheckIn).toISOString() : null,
-            hotelCheckOut: form.hotelCheckOut ? new Date(form.hotelCheckOut).toISOString() : null,
-            hotelNotes: form.hotelNotes || null,
+            vehicleId: form.transportMode === 'CAR' ? form.vehicleId || null : null,
+            machineName: form.machineName || null,
+            machineModel: form.machineModel || null,
+            machineSerial: form.machineSerial || null,
+            transportMode: form.transportMode || null,
+            flightAirport: form.transportMode === 'AIR' ? form.flightAirport || null : null,
+            flightDepartureAt: form.transportMode === 'AIR' && form.flightDepartureAt ? new Date(form.flightDepartureAt).toISOString() : null,
+            flightReturnAt: form.transportMode === 'AIR' && form.flightReturnAt ? new Date(form.flightReturnAt).toISOString() : null,
+            hasHotel: form.hasHotel,
+            hotelName: form.hasHotel ? form.hotelName || null : null,
+            hotelAddress: form.hasHotel ? form.hotelAddress || null : null,
+            hotelCheckIn: form.hasHotel && form.hotelCheckIn ? new Date(form.hotelCheckIn).toISOString() : null,
+            hotelCheckOut: form.hasHotel && form.hotelCheckOut ? new Date(form.hotelCheckOut).toISOString() : null,
+            hotelDailyRate: form.hasHotel ? form.hotelDailyRate || null : null,
+            hotelNotes: form.hasHotel ? form.hotelNotes || null : null,
             city: form.city,
             fullAddress: form.fullAddress,
             serviceType: form.serviceType || 'Pendente definicao',
             problemDescription: form.problemDescription || 'Pendente descricao do servico',
             notes: form.notes,
             osNumber: form.osNumber || null,
-            needsHotel: Boolean(form.hotelName || form.hotelAddress || form.hotelCheckIn || form.hotelCheckOut),
-            needsTransport: Boolean(form.vehicleId),
+            needsHotel: form.hasHotel,
+            needsTransport: form.transportMode !== 'NONE',
             date: new Date(`${form.date}T12:00:00`).toISOString(),
             startTime: start.toISOString(),
             endTime: end.toISOString()
@@ -559,6 +586,19 @@ export default function AppointmentDetails() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
+                <p className="text-xs text-muted-foreground mb-1">Tipo de viagem</p>
+                {editing ? (
+                  <select className="w-full h-9 rounded-md border bg-background px-3 text-sm" value={form.transportMode} onChange={(e) => setForm({ ...form, transportMode: e.target.value })}>
+                    <option value="NONE">Nao precisa de viagem</option>
+                    <option value="CAR">Viagem de carro</option>
+                    <option value="AIR">Viagem aerea</option>
+                  </select>
+                ) : (
+                  <p className="text-sm">{appointment.transportMode === 'AIR' ? 'Viagem aerea' : appointment.transportMode === 'CAR' ? 'Viagem de carro' : 'Nao informado'}</p>
+                )}
+              </div>
+              {((editing && form.transportMode === 'CAR') || (!editing && appointment.transportMode === 'CAR')) && (
+              <div>
                 <p className="text-xs text-muted-foreground mb-1">Veiculo</p>
                 {editing ? (
                   <select className="w-full h-9 rounded-md border bg-background px-3 text-sm" value={form.vehicleId} onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}>
@@ -573,12 +613,46 @@ export default function AppointmentDetails() {
                   <p className="text-sm">{appointment.vehicle ? `${appointment.vehicle.name} - ${appointment.vehicle.plate}` : 'Nao informado'}</p>
                 )}
               </div>
+              )}
+              {((editing && form.transportMode === 'AIR') || (!editing && appointment.transportMode === 'AIR')) && (
+              <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+                <p className="text-xs text-muted-foreground">Dados do voo</p>
+                {editing ? (
+                  <>
+                    <Input placeholder="Aeroporto" value={form.flightAirport} onChange={(e) => setForm({ ...form, flightAirport: e.target.value })} />
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div>
+                        <p className="mb-1 text-[11px] text-muted-foreground">Ida - data e hora</p>
+                        <Input type="datetime-local" value={form.flightDepartureAt} onChange={(e) => setForm({ ...form, flightDepartureAt: e.target.value })} />
+                      </div>
+                      <div>
+                        <p className="mb-1 text-[11px] text-muted-foreground">Volta - data e hora</p>
+                        <Input type="datetime-local" value={form.flightReturnAt} onChange={(e) => setForm({ ...form, flightReturnAt: e.target.value })} />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-1 text-sm">
+                    <p>Aeroporto: {appointment.flightAirport || 'Nao informado'}</p>
+                    <p className="text-muted-foreground">Ida: {appointment.flightDepartureAt ? new Date(appointment.flightDepartureAt).toLocaleString('pt-BR') : 'Nao informado'}</p>
+                    <p className="text-muted-foreground">Volta: {appointment.flightReturnAt ? new Date(appointment.flightReturnAt).toLocaleString('pt-BR') : 'Nao informado'}</p>
+                  </div>
+                )}
+              </div>
+              )}
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Hotel</p>
+                <p className="text-xs text-muted-foreground mb-1">Hospedagem</p>
                 {editing ? (
                   <div className="space-y-2">
+                    <select className="w-full h-9 rounded-md border bg-background px-3 text-sm" value={form.hasHotel ? 'YES' : 'NO'} onChange={(e) => setForm({ ...form, hasHotel: e.target.value === 'YES' })}>
+                      <option value="NO">Nao tem hospedagem</option>
+                      <option value="YES">Tem hospedagem</option>
+                    </select>
+                    {form.hasHotel && (
+                    <>
                     <Input placeholder="Nome do hotel" value={form.hotelName} onChange={(e) => setForm({ ...form, hotelName: e.target.value })} />
                     <Input placeholder="Endereco do hotel" value={form.hotelAddress} onChange={(e) => setForm({ ...form, hotelAddress: e.target.value })} />
+                    <Input type="number" min="0" step="0.01" placeholder="Valor da hospedagem" value={form.hotelDailyRate} onChange={(e) => setForm({ ...form, hotelDailyRate: e.target.value })} />
                     <div className="grid gap-2 sm:grid-cols-2">
                       <div>
                         <p className="mb-1 text-[11px] text-muted-foreground">Check-in</p>
@@ -590,11 +664,15 @@ export default function AppointmentDetails() {
                       </div>
                     </div>
                     <Textarea placeholder="Informacoes do hotel, reserva, observacoes ou regras do agendamento" value={form.hotelNotes} onChange={(e) => setForm({ ...form, hotelNotes: e.target.value })} />
+                    </>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-1 text-sm">
-                    <p>{appointment.hotelName || "Nao informado"}</p>
+                    <p>{appointment.hasHotel || appointment.hotelName ? 'Tem hospedagem' : 'Nao tem hospedagem'}</p>
+                    {(appointment.hasHotel || appointment.hotelName) && <p>{appointment.hotelName || "Nao informado"}</p>}
                     {appointment.hotelAddress && <p className="text-muted-foreground">{appointment.hotelAddress}</p>}
+                    {appointment.hotelDailyRate && <p className="text-muted-foreground">Valor: R$ {appointment.hotelDailyRate}</p>}
                     {appointment.hotelCheckIn && <p className="text-muted-foreground">Check-in: {new Date(appointment.hotelCheckIn).toLocaleString("pt-BR")}</p>}
                     {appointment.hotelCheckOut && <p className="text-muted-foreground">Check-out: {new Date(appointment.hotelCheckOut).toLocaleString("pt-BR")}</p>}
                     {appointment.hotelNotes && <p className="text-muted-foreground">{appointment.hotelNotes}</p>}
@@ -698,6 +776,20 @@ export default function AppointmentDetails() {
                 <Input value={form.serviceType} onChange={(e) => setForm({ ...form, serviceType: e.target.value })} disabled={!editing} />
                 <Textarea value={form.problemDescription} onChange={(e) => setForm({ ...form, problemDescription: e.target.value })} disabled={!editing} />
                 <Input value={form.osNumber} placeholder="OS" onChange={(e) => setForm({ ...form, osNumber: e.target.value })} disabled={!editing} />
+                <div className="grid gap-2 md:grid-cols-3">
+                  <div>
+                    <p className="mb-1 text-[11px] text-muted-foreground">Nome da maquina</p>
+                    <Input value={form.machineName} placeholder="Nome da maquina" onChange={(e) => setForm({ ...form, machineName: e.target.value })} disabled={!editing} />
+                  </div>
+                  <div>
+                    <p className="mb-1 text-[11px] text-muted-foreground">Modelo da maquina</p>
+                    <Input value={form.machineModel} placeholder="Modelo" onChange={(e) => setForm({ ...form, machineModel: e.target.value })} disabled={!editing} />
+                  </div>
+                  <div>
+                    <p className="mb-1 text-[11px] text-muted-foreground">Numero de serie</p>
+                    <Input value={form.machineSerial} placeholder="Numero de serie" onChange={(e) => setForm({ ...form, machineSerial: e.target.value })} disabled={!editing} />
+                  </div>
+                </div>
               </div>
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
                 <p className="text-xs text-amber-300 font-medium mb-1">Ponto de atencao</p>

@@ -475,7 +475,7 @@ export default function TechnicianMobile() {
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
               <Camera className="h-5 w-5" />
               <span className="text-xs">Galeria</span>
-              <Input type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" className="hidden" onChange={(e) => { addAttachment(e.target.files?.[0], 'midia-tecnica'); e.currentTarget.value = ''; }} />
+              <Input type="file" accept="image/*,video/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.mp4,.mov,.webm" className="hidden" onChange={(e) => { addAttachment(e.target.files?.[0], 'midia-tecnica'); e.currentTarget.value = ''; }} />
             </label>
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
               <FileText className="h-5 w-5" />

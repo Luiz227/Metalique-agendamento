@@ -423,7 +423,7 @@ export class LegacyService {
   ) {
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
-      include: { client: true }
+      include: { client: true, technician: true }
     });
     if (!appointment) throw new NotFoundException('Agendamento não encontrado');
 
@@ -436,6 +436,7 @@ export class LegacyService {
         appointmentId,
         clientName: appointment.client.name,
         osNumber: appointment.osNumber || appointment.id,
+        technicianName: appointment.technician?.name || 'Sem tecnico',
         fileName: originalName,
         mimeType,
         buffer: file?.buffer
@@ -552,6 +553,7 @@ export class LegacyService {
     appointmentId: string;
     clientName: string;
     osNumber: string;
+    technicianName: string;
     fileName: string;
     mimeType: string;
     buffer?: Buffer;
@@ -562,7 +564,7 @@ export class LegacyService {
     if (!params.buffer || !params.buffer.length) throw new Error('Arquivo inválido para upload');
 
     const safeClient = this.sanitizeFolderName(params.clientName || 'Cliente');
-    const safeOs = this.sanitizeFolderName(params.osNumber || params.appointmentId);
+    const safeOs = this.sanitizeFolderName('OS ' + (params.osNumber || params.appointmentId) + ' - ' + params.technicianName);
     const clientFolderId = await this.findOrCreateFolder(drive, safeClient, rootFolderId);
     const osFolderId = await this.findOrCreateFolder(drive, safeOs, clientFolderId);
 

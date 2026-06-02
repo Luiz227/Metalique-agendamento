@@ -17,6 +17,39 @@ type PendingAttachment = {
   previewUrl?: string;
 };
 
+async function compressImageForUpload(file: File) {
+  if (!file.type.startsWith('image/')) return file;
+
+  const imageUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = imageUrl;
+    });
+
+    const maxSize = 1600;
+    const ratio = Math.min(1, maxSize / Math.max(image.width, image.height));
+    const width = Math.max(1, Math.round(image.width * ratio));
+    const height = Math.max(1, Math.round(image.height * ratio));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) return file;
+
+    context.drawImage(image, 0, 0, width, height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.72));
+    if (!blob || blob.size >= file.size) return file;
+
+    const cleanName = file.name.replace(/\.[^.]+$/, '') || 'foto-tecnica';
+    return new File([blob], `${cleanName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+  } finally {
+    URL.revokeObjectURL(imageUrl);
+  }
+}
+
 function isInCurrentWeek(dateValue: string) {
   const date = new Date(dateValue);
   const now = new Date();
@@ -169,8 +202,9 @@ export default function TechnicianMobile() {
 
   async function uploadFileNow(file: File | undefined, type: string) {
     if (!current || !file) return;
+    const uploadFile = await compressImageForUpload(file);
     const data = new FormData();
-    data.append('file', file);
+    data.append('file', uploadFile, uploadFile.name);
     data.append('type', type);
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
     const response = await fetch(`${apiBase}/attachments/appointments/${current.id}`, {

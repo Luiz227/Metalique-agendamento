@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, Car, CheckCircle, FileText, Hotel, MapPin, Navigation, User } from 'lucide-react';
+import { ArrowLeft, Calendar, Car, CheckCircle, Clock, FileText, Hotel, MapPin, Navigation, Route, User } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -25,7 +25,7 @@ type ChecklistKey =
   | 'osChecked'
   | 'clientChecklistChecked';
 
-const COMPANY_BASE_ADDRESS = 'R. Reinaldo Raulino dos Santos, 107 - Éden, Sorocaba - SP, 18086-796';
+const COMPANY_BASE_ADDRESS = 'R. Reinaldo Raulino dos Santos, 107 - Eden, Sorocaba - SP, 18086-796';
 
 const checklistLabels: Record<ChecklistKey, string> = {
   clientConfirmed: 'Cliente confirmado',
@@ -172,8 +172,10 @@ export default function AppointmentDetails() {
   }, [appointment, editing]);
 
   useEffect(() => {
-    const destination = [form.fullAddress, form.city].filter(Boolean).join(', ').trim();
-    if (!editing || destination.length < 6) {
+    const fullAddress = editing ? form.fullAddress : appointment?.fullAddress;
+    const city = editing ? form.city : appointment?.city;
+    const destination = [fullAddress, city].filter(Boolean).join(' ').trim();
+    if (destination.length < 6) {
       setTravelEstimate(null);
       return;
     }
@@ -197,8 +199,19 @@ export default function AppointmentDetails() {
     }, 450);
 
     return () => clearTimeout(timer);
-  }, [editing, form.fullAddress, form.city]);
+  }, [editing, form.fullAddress, form.city, appointment?.fullAddress, appointment?.city]);
 
+  const logisticsDestination = [editing ? form.fullAddress : appointment?.fullAddress, editing ? form.city : appointment?.city]
+    .filter(Boolean)
+    .join(', ')
+    .trim();
+  const routeExternalUrl = logisticsDestination
+    ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(logisticsDestination)}&travelmode=driving`
+    : '';
+  const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
+  const routeEmbedUrl = logisticsDestination && googleMapsKey
+    ? `https://www.google.com/maps/embed/v1/directions?key=${encodeURIComponent(googleMapsKey)}&origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(logisticsDestination)}&mode=driving`
+    : '';
   const checklist = useMemo(
     () =>
       Object.entries(checklistLabels).map(([key, label]) => ({
@@ -569,17 +582,50 @@ export default function AppointmentDetails() {
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Endereco</p>
                 {editing ? <Input value={form.fullAddress} onChange={(e) => setForm({ ...form, fullAddress: e.target.value })} /> : <p className="text-sm">{appointment.fullAddress}</p>}
-                {editing && (
-                  <div className="mt-2 space-y-1">
-                    <p className="text-[11px] text-muted-foreground">Base fixa de saída: {COMPANY_BASE_ADDRESS}</p>
-                    {travelLoading && <p className="text-xs text-muted-foreground">Calculando tempo de viagem...</p>}
-                    {travelEstimate && (
-                      <p className="text-xs text-emerald-500">
-                        Tempo estimado: {travelEstimate.durationText} • Distância: {travelEstimate.distanceText}
-                      </p>
-                    )}
-                  </div>
-                )}
+                <div className="mt-3 space-y-3">
+                  <p className="text-[11px] text-muted-foreground">Base fixa de saida: {COMPANY_BASE_ADDRESS}</p>
+                  {travelLoading && <p className="text-xs text-muted-foreground">Calculando tempo de viagem...</p>}
+                  {travelEstimate && (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-md border bg-muted/30 p-3">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Clock className="h-4 w-4" />
+                          Tempo de carro
+                        </div>
+                        <p className="mt-1 text-sm font-semibold">{travelEstimate.durationText}</p>
+                      </div>
+                      <div className="rounded-md border bg-muted/30 p-3">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Route className="h-4 w-4" />
+                          Distancia da Metalique
+                        </div>
+                        <p className="mt-1 text-sm font-semibold">{travelEstimate.distanceText}</p>
+                      </div>
+                    </div>
+                  )}
+                  {routeExternalUrl && (
+                    <a href={routeExternalUrl} target="_blank" rel="noreferrer">
+                      <Button type="button" variant="outline" className="w-full">
+                        <Navigation className="mr-2 h-4 w-4" />
+                        Abrir rota no Google Maps
+                      </Button>
+                    </a>
+                  )}
+                  {routeEmbedUrl && (
+                    <div className="overflow-hidden rounded-md border">
+                      <iframe
+                        title="Rota da Metalique ate o atendimento"
+                        src={routeEmbedUrl}
+                        className="h-56 w-full"
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                      />
+                    </div>
+                  )}
+                  {!routeEmbedUrl && logisticsDestination && (
+                    <p className="text-xs text-muted-foreground">Mini mapa indisponivel: configure VITE_GOOGLE_MAPS_API_KEY no frontend.</p>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>

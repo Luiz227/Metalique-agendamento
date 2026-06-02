@@ -301,19 +301,16 @@ export class LegacyService {
 
   async technicianReport(
     id: string,
-    report?: { summary?: string; diagnosis?: string; solution?: string; pendingItems?: string; finishedAt?: string; signatureDataUrl?: string }
+    report?: { summary?: string; finishedAt?: string; signatureDataUrl?: string }
   ) {
     const summary = report?.summary?.trim();
-    const diagnosis = report?.diagnosis?.trim();
-    const solution = report?.solution?.trim();
-    const pendingItems = report?.pendingItems?.trim();
 
     await this.prisma.statusLog.create({
       data: { appointmentId: id, status: 'COMPLETED_SUCCESS', observation: summary ?? 'Atendimento finalizado pelo técnico' }
     });
     await this.prisma.appointment.update({ where: { id }, data: { status: AppointmentStatus.CRITICAL } });
 
-    if (summary || diagnosis || solution || pendingItems) {
+    if (summary || report?.signatureDataUrl) {
       const appointment = await this.prisma.appointment.findUnique({
         where: { id },
         include: { client: true, technician: true }
@@ -322,9 +319,6 @@ export class LegacyService {
 
       const reportText = this.buildServiceOrderHtml(appointment, {
         summary,
-        diagnosis,
-        solution,
-        pendingItems,
         finishedAt: report?.finishedAt,
         signatureDataUrl: report?.signatureDataUrl
       });
@@ -373,7 +367,7 @@ export class LegacyService {
       client: { name: string; phone: string | null; email: string | null; cnpj: string | null };
       technician: { name: string; baseCity: string; baseAddress: string } | null;
     },
-    report: { summary?: string; diagnosis?: string; solution?: string; pendingItems?: string; finishedAt?: string; signatureDataUrl?: string }
+    report: { summary?: string; finishedAt?: string; signatureDataUrl?: string }
   ) {
     const company = this.resolveServiceOrderCompany(appointment.serviceType);
     const isStart = this.isStartOrTraining(appointment.serviceType);
@@ -382,14 +376,7 @@ export class LegacyService {
     const serviceDescription = isStart
       ? 'INSTALACAO (START / OU TREINAMENTO) TODAS AS MAQUINAS'
       : 'MANUTENCAO CORRETIVA LASER F OU DOBRADEIRA';
-    const technicianNotes = [report.summary, report.diagnosis, report.solution, report.pendingItems].filter(Boolean).join('\n\n');
-    const hasHotelInfo = Boolean(appointment.hasHotel || appointment.hotelName || appointment.hotelAddress || appointment.hotelCheckIn || appointment.hotelCheckOut || appointment.hotelDailyRate || appointment.hotelNotes);
-    const travelLabel =
-      appointment.transportMode === 'AIR'
-        ? 'Viagem aerea'
-        : appointment.transportMode === 'CAR'
-          ? 'Viagem de carro'
-          : 'Nao informado';
+    const technicianNotes = report.summary || '';
     const signatureImage = report.signatureDataUrl
       ? `<img class="signature-image" src="${this.escapeHtml(report.signatureDataUrl)}" alt="Assinatura do cliente" />`
       : '';
@@ -402,7 +389,7 @@ export class LegacyService {
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; background: #f3f4f6; color: #111827; font-family: Arial, Helvetica, sans-serif; }
-    .page { width: 210mm; min-height: 297mm; margin: 16px auto; padding: 18mm; background: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.12); }
+    .page { width: 210mm; min-height: 297mm; margin: 16px auto; padding: 16mm 18mm; background: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.12); }
     .top { display: grid; grid-template-columns: 1fr 150px; gap: 16px; align-items: start; }
     .brand { font-size: 28px; font-weight: 800; letter-spacing: .5px; text-align: right; }
     .brand-box { display: inline-flex; min-width: 92px; min-height: 48px; align-items: center; justify-content: center; background: #222; color: #fff; border-radius: 2px; padding: 8px 12px; }
@@ -415,10 +402,11 @@ export class LegacyService {
     th, td { border: 1px solid #6b7280; padding: 7px; vertical-align: top; }
     th { background: #f9fafb; text-align: center; font-weight: 700; }
     .center { text-align: center; }
-    .notes { min-height: 150px; white-space: pre-wrap; font-size: 13px; line-height: 1.55; }
-    .signature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin-top: 36px; font-size: 11px; text-align: center; }
-    .signature-line { border-top: 1px solid #111827; padding-top: 7px; }
-    .signature-image { display: block; max-width: 100%; height: 70px; object-fit: contain; margin: 0 auto 8px; }
+    .notes-cell { height: 155px; white-space: pre-wrap; font-size: 13px; line-height: 1.55; }
+    .signature-table { margin-top: 22px; table-layout: fixed; }
+    .signature-table td { height: 118px; text-align: center; vertical-align: bottom; }
+    .signature-line { border-top: 1px solid #111827; padding-top: 7px; min-height: 24px; }
+    .signature-image { display: block; width: 100%; max-width: 280px; height: 96px; object-fit: contain; margin: 0 auto 8px; background: #fff; }
     .footer { margin-top: 22px; font-size: 10px; text-align: center; color: #374151; }
     @media print { body { background: #fff; } .page { margin: 0; box-shadow: none; width: auto; min-height: auto; } }
   </style>
@@ -486,33 +474,6 @@ export class LegacyService {
       </tr>
     </table>
 
-    <div class="section-title">LOGISTICA</div>
-    <table>
-      <tr>
-        <td><strong>Tipo de viagem:</strong> ${this.escapeHtml(travelLabel)}</td>
-        <td><strong>Aeroporto:</strong> ${this.escapeHtml(appointment.flightAirport || 'Nao informado')}</td>
-      </tr>
-      <tr>
-        <td><strong>Ida:</strong> ${appointment.flightDepartureAt ? this.formatDateTime(appointment.flightDepartureAt) : 'Nao informado'}</td>
-        <td><strong>Volta:</strong> ${appointment.flightReturnAt ? this.formatDateTime(appointment.flightReturnAt) : 'Nao informado'}</td>
-      </tr>
-      <tr>
-        <td><strong>Hospedagem:</strong> ${hasHotelInfo ? 'Sim' : 'Nao'}</td>
-        <td><strong>Valor:</strong> ${appointment.hotelDailyRate ? `R$ ${this.escapeHtml(appointment.hotelDailyRate.toString())}` : 'Nao informado'}</td>
-      </tr>
-      <tr>
-        <td><strong>Hotel:</strong> ${this.escapeHtml(appointment.hotelName || 'Nao informado')}</td>
-        <td><strong>Endereco hotel:</strong> ${this.escapeHtml(appointment.hotelAddress || 'Nao informado')}</td>
-      </tr>
-      <tr>
-        <td><strong>Check-in:</strong> ${appointment.hotelCheckIn ? this.formatDateTime(appointment.hotelCheckIn) : 'Nao informado'}</td>
-        <td><strong>Check-out:</strong> ${appointment.hotelCheckOut ? this.formatDateTime(appointment.hotelCheckOut) : 'Nao informado'}</td>
-      </tr>
-      <tr>
-        <td colspan="2"><strong>Observacoes hospedagem:</strong> ${this.escapeHtml(appointment.hotelNotes || 'Nao informado')}</td>
-      </tr>
-    </table>
-
     <div class="section-title">PRODUTOS / SERVIÇOS:</div>
     <table>
       <tr>
@@ -525,16 +486,24 @@ export class LegacyService {
       </tr>
     </table>
 
-    <div class="section-title">CONSIDERAÇÕES DO TÉCNICO</div>
-    <div class="box notes">${this.escapeHtml(technicianNotes || 'Nao informado')}</div>
+    <table style="margin-top: 14px;">
+      <tr>
+        <th>CONSIDERAÇÕES DO TÉCNICO</th>
+      </tr>
+      <tr>
+        <td class="notes-cell">${this.escapeHtml(technicianNotes || 'Nao informado')}</td>
+      </tr>
+    </table>
 
     <div class="footer">
       Declaro que os serviços descritos neste relatório foram prestados e dados como aceitos por mim nesta data.
     </div>
-    <div class="signature-grid">
-      <div class="signature-line">Assinatura do Técnico<br />${this.escapeHtml(appointment.technician?.name || '')}</div>
-      <div>${signatureImage}<div class="signature-line">Assinatura do Cliente</div></div>
-    </div>
+    <table class="signature-table">
+      <tr>
+        <td>${signatureImage}<div class="signature-line">Assinatura do Cliente</div></td>
+        <td><div class="signature-line">Assinatura do Técnico<br />${this.escapeHtml(appointment.technician?.name || '')}</div></td>
+      </tr>
+    </table>
   </main>
 </body>
 </html>`;
@@ -750,8 +719,8 @@ export class LegacyService {
     const clientFolderId = await this.findOrCreateFolder(drive, safeClient, rootFolderId);
     const osFolderId = await this.findOrCreateFolder(drive, safeOs, clientFolderId);
 
-    const shouldConvertToGoogleDoc = params.mimeType === 'text/html';
-    const driveFileName = shouldConvertToGoogleDoc ? params.fileName.replace(/\.html?$/i, '') : params.fileName;
+    const shouldConvertToGoogleDoc = false;
+    const driveFileName = params.fileName;
     const created = await drive.files.create({
       requestBody: {
         name: driveFileName,

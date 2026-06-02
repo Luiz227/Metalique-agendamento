@@ -98,7 +98,7 @@ export default function TechnicianMobile() {
   const user = getUser();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
-  const [report, setReport] = useState({ summary: '', diagnosis: '', solution: '', pendingItems: '' });
+  const [report, setReport] = useState({ summary: '' });
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [savingReport, setSavingReport] = useState(false);
@@ -229,7 +229,7 @@ export default function TechnicianMobile() {
       });
       setPendingAttachments([]);
       clearSignature();
-      setReport({ summary: '', diagnosis: '', solution: '', pendingItems: '' });
+      setReport({ summary: '' });
       setMessage('Relatório e anexos enviados com sucesso.');
       await load();
     } catch (err) {
@@ -280,6 +280,11 @@ export default function TechnicianMobile() {
     setPendingAttachments((prev) => [...prev, item]);
   }
 
+  function addAttachments(files: FileList | null, type: 'midia-tecnica' | 'documento-tecnico') {
+    if (!files?.length) return;
+    Array.from(files).forEach((file) => addAttachment(file, type));
+  }
+
   function renameAttachment(id: string, displayName: string) {
     setPendingAttachments((prev) => prev.map((item) => (item.id === id ? { ...item, displayName } : item)));
   }
@@ -298,10 +303,12 @@ export default function TechnicianMobile() {
     const rect = canvas.getBoundingClientRect();
     const context = canvas.getContext('2d');
     if (!context) return;
-    context.lineWidth = 3;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    context.lineWidth = 5;
     context.lineCap = 'round';
-    context.strokeStyle = '#f8fafc';
-    context.lineTo(event.clientX - rect.left, event.clientY - rect.top);
+    context.strokeStyle = '#111827';
+    context.lineTo((event.clientX - rect.left) * scaleX, (event.clientY - rect.top) * scaleY);
     context.stroke();
     setSignatureDataUrl(canvas.toDataURL('image/png'));
   }
@@ -311,9 +318,15 @@ export default function TechnicianMobile() {
     const context = canvas?.getContext('2d');
     if (!canvas || !context) return;
     const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    if (!signatureDataUrl) {
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+    }
     drawingSignatureRef.current = true;
     context.beginPath();
-    context.moveTo(event.clientX - rect.left, event.clientY - rect.top);
+    context.moveTo((event.clientX - rect.left) * scaleX, (event.clientY - rect.top) * scaleY);
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
@@ -326,7 +339,10 @@ export default function TechnicianMobile() {
   function clearSignature() {
     const canvas = signatureCanvasRef.current;
     const context = canvas?.getContext('2d');
-    if (canvas && context) context.clearRect(0, 0, canvas.width, canvas.height);
+    if (canvas && context) {
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+    }
     setSignatureDataUrl('');
   }
 
@@ -518,10 +534,12 @@ export default function TechnicianMobile() {
         <Card className="rounded-2xl">
           <CardHeader><CardTitle className="text-base sm:text-lg">Relatorio Tecnico</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <Textarea placeholder="Resumo do atendimento" value={report.summary} onChange={(e) => setReport({ ...report, summary: e.target.value })} />
-            <Textarea placeholder="Diagnostico" value={report.diagnosis} onChange={(e) => setReport({ ...report, diagnosis: e.target.value })} />
-            <Textarea placeholder="Solucao aplicada" value={report.solution} onChange={(e) => setReport({ ...report, solution: e.target.value })} />
-            <Textarea placeholder="Pendencias ou retorno necessario" value={report.pendingItems} onChange={(e) => setReport({ ...report, pendingItems: e.target.value })} />
+            <Textarea
+              className="min-h-36 text-base"
+              placeholder="Consideracoes do tecnico"
+              value={report.summary}
+              onChange={(e) => setReport({ summary: e.target.value })}
+            />
           </CardContent>
         </Card>
         )}
@@ -539,12 +557,12 @@ export default function TechnicianMobile() {
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
               <Camera className="h-5 w-5" />
               <span className="text-xs">Galeria</span>
-              <Input type="file" accept="image/*,video/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.mp4,.mov,.webm" className="hidden" onChange={(e) => { addAttachment(e.target.files?.[0], 'midia-tecnica'); e.currentTarget.value = ''; }} />
+              <Input type="file" multiple accept="image/*,video/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.mp4,.mov,.webm" className="hidden" onChange={(e) => { addAttachments(e.target.files, 'midia-tecnica'); e.currentTarget.value = ''; }} />
             </label>
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
               <FileText className="h-5 w-5" />
               <span className="text-xs">Documento</span>
-              <Input type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => { addAttachment(e.target.files?.[0], 'documento-tecnico'); e.currentTarget.value = ''; }} />
+              <Input type="file" multiple accept=".pdf,image/*,video/*" className="hidden" onChange={(e) => { addAttachments(e.target.files, 'documento-tecnico'); e.currentTarget.value = ''; }} />
             </label>
             </div>
             <div className="rounded-xl border bg-card p-3">
@@ -591,8 +609,8 @@ export default function TechnicianMobile() {
             <canvas
               ref={signatureCanvasRef}
               width={640}
-              height={180}
-              className="h-36 w-full touch-none rounded-xl border bg-zinc-950"
+              height={220}
+              className="h-44 w-full touch-none rounded-xl border bg-white"
               onPointerDown={startSignature}
               onPointerMove={drawSignature}
               onPointerUp={stopSignature}

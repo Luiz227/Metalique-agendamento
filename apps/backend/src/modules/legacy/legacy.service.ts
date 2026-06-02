@@ -299,18 +299,39 @@ export class LegacyService {
     return { ok: true };
   }
 
-  async technicianReport(id: string, summary?: string) {
+  async technicianReport(
+    id: string,
+    report?: { summary?: string; diagnosis?: string; solution?: string; pendingItems?: string; finishedAt?: string }
+  ) {
+    const summary = report?.summary?.trim();
+    const diagnosis = report?.diagnosis?.trim();
+    const solution = report?.solution?.trim();
+    const pendingItems = report?.pendingItems?.trim();
+
     await this.prisma.statusLog.create({
       data: { appointmentId: id, status: 'COMPLETED_SUCCESS', observation: summary ?? 'Atendimento finalizado pelo técnico' }
     });
     await this.prisma.appointment.update({ where: { id }, data: { status: AppointmentStatus.CRITICAL } });
 
-    if (summary?.trim()) {
-      const reportBytes = Buffer.from(summary.trim(), 'utf8');
+    if (summary || diagnosis || solution || pendingItems) {
+      const appointment = await this.prisma.appointment.findUnique({
+        where: { id },
+        include: { client: true, technician: true }
+      });
+      if (!appointment) throw new NotFoundException('Agendamento não encontrado');
+
+      const reportText = this.buildTechnicalReport(appointment, {
+        summary,
+        diagnosis,
+        solution,
+        pendingItems,
+        finishedAt: report?.finishedAt
+      });
+      const reportBytes = Buffer.from(reportText, 'utf8');
       await this.attachFile(
         id,
         {
-          originalname: `relato-tecnico-${new Date().toISOString().slice(0, 10)}.txt`,
+          originalname: 'relatorio-tecnico-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.txt',
           mimetype: 'text/plain',
           size: reportBytes.length,
           buffer: reportBytes
@@ -320,6 +341,79 @@ export class LegacyService {
     }
 
     return { ok: true };
+  }
+
+  private buildTechnicalReport(
+    appointment: {
+      id: string;
+      osNumber: string | null;
+      city: string;
+      fullAddress: string;
+      serviceType: string;
+      problemDescription: string | null;
+      date: Date;
+      startTime: Date;
+      endTime: Date;
+      notes: string | null;
+      client: { name: string; phone: string | null; email: string | null; cnpj: string | null };
+      technician: { name: string; baseCity: string; baseAddress: string } | null;
+    },
+    report: { summary?: string; diagnosis?: string; solution?: string; pendingItems?: string; finishedAt?: string }
+  ) {
+    const lines = [
+      'RELATORIO TECNICO - METALIQUE',
+      '================================',
+      '',
+      'OS: ' + (appointment.osNumber || appointment.id),
+      'Cliente: ' + appointment.client.name,
+      'CNPJ: ' + (appointment.client.cnpj || 'Nao informado'),
+      'Telefone: ' + (appointment.client.phone || 'Nao informado'),
+      'Email: ' + (appointment.client.email || 'Nao informado'),
+      '',
+      'ATENDIMENTO',
+      '-----------',
+      'Tipo de servico: ' + (appointment.serviceType || 'Nao informado'),
+      'Cidade: ' + (appointment.city || 'Nao informado'),
+      'Endereco: ' + (appointment.fullAddress || 'Nao informado'),
+      'Data: ' + this.formatDateTime(appointment.date),
+      'Inicio previsto: ' + this.formatDateTime(appointment.startTime),
+      'Fim previsto: ' + this.formatDateTime(appointment.endTime),
+      'Tecnico: ' + (appointment.technician?.name || 'Nao informado'),
+      'Base do tecnico: ' + (appointment.technician?.baseAddress || appointment.technician?.baseCity || 'Nao informado'),
+      'Finalizado em: ' + (report.finishedAt ? this.formatDateTime(new Date(report.finishedAt)) : this.formatDateTime(new Date())),
+      '',
+      'DESCRICAO DO PROBLEMA',
+      '---------------------',
+      appointment.problemDescription || 'Nao informado',
+      '',
+      'RELATO DO TECNICO',
+      '-----------------',
+      report.summary || 'Nao informado',
+      '',
+      'DIAGNOSTICO',
+      '-----------',
+      report.diagnosis || 'Nao informado',
+      '',
+      'SOLUCAO APLICADA',
+      '----------------',
+      report.solution || 'Nao informado',
+      '',
+      'PENDENCIAS / OBSERVACOES',
+      '------------------------',
+      report.pendingItems || appointment.notes || 'Nenhuma pendencia informada',
+      ''
+    ];
+
+    return lines.join('\n');
+  }
+
+  private formatDateTime(date: Date) {
+    if (Number.isNaN(date.getTime())) return 'Nao informado';
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      dateStyle: 'short',
+      timeStyle: 'short'
+    }).format(date);
   }
 
   async attachFile(

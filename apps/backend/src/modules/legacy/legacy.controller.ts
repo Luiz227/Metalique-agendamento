@@ -99,8 +99,11 @@ export class LegacyController {
   }
 
   @Post('technician/appointments/:id/reports')
-  technicianReport(@Param('id') id: string, @Body() body: { summary?: string }) {
-    return this.service.technicianReport(id, body?.summary);
+  technicianReport(
+    @Param('id') id: string,
+    @Body() body: { summary?: string; diagnosis?: string; solution?: string; pendingItems?: string; finishedAt?: string }
+  ) {
+    return this.service.technicianReport(id, body);
   }
 
   @Post('attachments/appointments/:id')

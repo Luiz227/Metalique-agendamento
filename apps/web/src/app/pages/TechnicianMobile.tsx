@@ -25,26 +25,40 @@ async function compressImageForUpload(file: File) {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
-      img.onerror = reject;
+      img.onerror = () => reject(new Error('Nao foi possivel ler a imagem selecionada.'));
       img.src = imageUrl;
     });
 
-    const maxSize = 1600;
-    const ratio = Math.min(1, maxSize / Math.max(image.width, image.height));
-    const width = Math.max(1, Math.round(image.width * ratio));
-    const height = Math.max(1, Math.round(image.height * ratio));
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d');
-    if (!context) return file;
-
-    context.drawImage(image, 0, 0, width, height);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.72));
-    if (!blob || blob.size >= file.size) return file;
-
     const cleanName = file.name.replace(/\.[^.]+$/, '') || 'foto-tecnica';
-    return new File([blob], `${cleanName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+    const attempts = [
+      { maxSize: 1600, quality: 0.72 },
+      { maxSize: 1280, quality: 0.62 },
+      { maxSize: 1024, quality: 0.55 }
+    ];
+    let bestFile: File | null = null;
+
+    for (const attempt of attempts) {
+      const ratio = Math.min(1, attempt.maxSize / Math.max(image.width, image.height));
+      const width = Math.max(1, Math.round(image.width * ratio));
+      const height = Math.max(1, Math.round(image.height * ratio));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+      if (!context) continue;
+
+      context.drawImage(image, 0, 0, width, height);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', attempt.quality));
+      if (!blob) continue;
+
+      const nextFile = new File([blob], `${cleanName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+      if (!bestFile || nextFile.size < bestFile.size) bestFile = nextFile;
+      if (nextFile.size <= 900 * 1024) return nextFile;
+    }
+
+    return bestFile && bestFile.size < file.size ? bestFile : file;
+  } catch {
+    return file;
   } finally {
     URL.revokeObjectURL(imageUrl);
   }
@@ -183,7 +197,12 @@ export default function TechnicianMobile() {
       });
 
       for (const attachment of pendingAttachments) {
-        await uploadFileNow(attachment.file, attachment.type);
+        try {
+          await uploadFileNow(attachment.file, attachment.type);
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : String(err || 'Falha ao enviar arquivo');
+          throw new Error(`Falha ao enviar ${attachment.file.name}: ${reason}`);
+        }
       }
 
       pendingAttachments.forEach((item) => {
@@ -194,7 +213,7 @@ export default function TechnicianMobile() {
       setMessage('Relatório e anexos enviados com sucesso.');
       await load();
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Erro ao enviar relatório/anexos');
+      setErrorMessage(err instanceof Error ? err.message : String(err || 'Erro ao enviar relatório/anexos'));
     } finally {
       setSavingReport(false);
     }
@@ -213,8 +232,15 @@ export default function TechnicianMobile() {
       body: data
     });
     if (!response.ok) {
-      const payload = await response.json().catch(() => null);
-      throw new Error(payload?.message ?? 'Falha ao enviar arquivo');
+      const raw = await response.text().catch(() => '');
+      let payload: { message?: string } | null = null;
+      try {
+        payload = raw ? JSON.parse(raw) : null;
+      } catch {
+        payload = null;
+      }
+      const message = payload?.message ?? (raw.slice(0, 180) || 'Falha ao enviar arquivo');
+      throw new Error(`${message} (${response.status})`);
     }
   }
 

@@ -320,7 +320,7 @@ export class LegacyService {
       });
       if (!appointment) throw new NotFoundException('Agendamento não encontrado');
 
-      const reportText = this.buildTechnicalReport(appointment, {
+      const reportText = this.buildServiceOrderHtml(appointment, {
         summary,
         diagnosis,
         solution,
@@ -331,8 +331,8 @@ export class LegacyService {
       await this.attachFile(
         id,
         {
-          originalname: 'relatorio-tecnico-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.txt',
-          mimetype: 'text/plain',
+          originalname: 'ordem-servico-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.html',
+          mimetype: 'text/html',
           size: reportBytes.length,
           buffer: reportBytes
         },
@@ -343,7 +343,7 @@ export class LegacyService {
     return { ok: true };
   }
 
-  private buildTechnicalReport(
+  private buildServiceOrderHtml(
     appointment: {
       id: string;
       osNumber: string | null;
@@ -360,51 +360,180 @@ export class LegacyService {
     },
     report: { summary?: string; diagnosis?: string; solution?: string; pendingItems?: string; finishedAt?: string }
   ) {
-    const lines = [
-      'RELATORIO TECNICO - METALIQUE',
-      '================================',
-      '',
-      'OS: ' + (appointment.osNumber || appointment.id),
-      'Cliente: ' + appointment.client.name,
-      'CNPJ: ' + (appointment.client.cnpj || 'Nao informado'),
-      'Telefone: ' + (appointment.client.phone || 'Nao informado'),
-      'Email: ' + (appointment.client.email || 'Nao informado'),
-      '',
-      'ATENDIMENTO',
-      '-----------',
-      'Tipo de servico: ' + (appointment.serviceType || 'Nao informado'),
-      'Cidade: ' + (appointment.city || 'Nao informado'),
-      'Endereco: ' + (appointment.fullAddress || 'Nao informado'),
-      'Data: ' + this.formatDateTime(appointment.date),
-      'Inicio previsto: ' + this.formatDateTime(appointment.startTime),
-      'Fim previsto: ' + this.formatDateTime(appointment.endTime),
-      'Tecnico: ' + (appointment.technician?.name || 'Nao informado'),
-      'Base do tecnico: ' + (appointment.technician?.baseAddress || appointment.technician?.baseCity || 'Nao informado'),
-      'Finalizado em: ' + (report.finishedAt ? this.formatDateTime(new Date(report.finishedAt)) : this.formatDateTime(new Date())),
-      '',
-      'DESCRICAO DO PROBLEMA',
-      '---------------------',
-      appointment.problemDescription || 'Nao informado',
-      '',
-      'RELATO DO TECNICO',
-      '-----------------',
-      report.summary || 'Nao informado',
-      '',
-      'DIAGNOSTICO',
-      '-----------',
-      report.diagnosis || 'Nao informado',
-      '',
-      'SOLUCAO APLICADA',
-      '----------------',
-      report.solution || 'Nao informado',
-      '',
-      'PENDENCIAS / OBSERVACOES',
-      '------------------------',
-      report.pendingItems || appointment.notes || 'Nenhuma pendencia informada',
-      ''
-    ];
+    const company = this.resolveServiceOrderCompany(appointment.serviceType);
+    const isStart = this.isStartOrTraining(appointment.serviceType);
+    const osNumber = appointment.osNumber || appointment.id;
+    const serviceCode = isStart ? '10021' : '10012';
+    const serviceDescription = isStart
+      ? 'INSTALACAO (START / OU TREINAMENTO) TODAS AS MAQUINAS'
+      : 'MANUTENCAO CORRETIVA LASER F OU DOBRADEIRA';
+    const technicianNotes = [report.summary, report.diagnosis, report.solution, report.pendingItems].filter(Boolean).join('\n\n');
 
-    return lines.join('\n');
+    return `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Ordem de Serviço ${this.escapeHtml(osNumber)}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3f4f6; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+    .page { width: 210mm; min-height: 297mm; margin: 16px auto; padding: 18mm; background: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.12); }
+    .top { display: grid; grid-template-columns: 1fr 150px; gap: 16px; align-items: start; }
+    .brand { font-size: 28px; font-weight: 800; letter-spacing: .5px; text-align: right; }
+    .brand-box { display: inline-flex; min-width: 92px; min-height: 48px; align-items: center; justify-content: center; background: #222; color: #fff; border-radius: 2px; padding: 8px 12px; }
+    .company { font-size: 11px; line-height: 1.45; text-align: center; }
+    .meta { text-align: right; font-size: 11px; line-height: 1.6; margin-top: 10px; }
+    h1 { margin: 22px 0 12px; text-align: center; font-size: 15px; letter-spacing: .4px; }
+    .section-title { margin: 14px 0 5px; text-align: center; font-size: 13px; font-weight: 700; }
+    .box { border: 1px solid #6b7280; padding: 8px; font-size: 11px; line-height: 1.5; min-height: 72px; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; }
+    th, td { border: 1px solid #6b7280; padding: 7px; vertical-align: top; }
+    th { background: #f9fafb; text-align: center; font-weight: 700; }
+    .center { text-align: center; }
+    .notes { min-height: 150px; white-space: pre-wrap; font-size: 13px; line-height: 1.55; }
+    .signature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin-top: 36px; font-size: 11px; text-align: center; }
+    .signature-line { border-top: 1px solid #111827; padding-top: 7px; }
+    .footer { margin-top: 22px; font-size: 10px; text-align: center; color: #374151; }
+    @media print { body { background: #fff; } .page { margin: 0; box-shadow: none; width: auto; min-height: auto; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="top">
+      <div class="company">
+        <strong>${this.escapeHtml(company.name)}</strong><br />
+        <strong>CNPJ:</strong> ${this.escapeHtml(company.cnpj)} - ${this.escapeHtml(company.branch)}<br />
+        ${this.escapeHtml(company.address)}<br />
+        ${this.escapeHtml(company.cityStateZip)}<br />
+        <strong>Fones:</strong> ${this.escapeHtml(company.phones)}
+      </div>
+      <div>
+        <div class="brand"><span class="brand-box">${this.escapeHtml(company.logoText)}</span></div>
+        <div class="meta">
+          <strong>Pedido/Orc Nº:</strong> ${this.escapeHtml(osNumber)}<br />
+          <strong>Emissão:</strong> ${this.formatDateOnly(new Date())}
+        </div>
+      </div>
+    </div>
+
+    <h1>DADOS DO CHAMADO/ ORDEM DE SERVIÇO</h1>
+    <table>
+      <tr>
+        <td><strong>Cliente:</strong> ${this.escapeHtml(appointment.client.name)}</td>
+        <td><strong>Telefone:</strong> ${this.escapeHtml(appointment.client.phone || 'Nao informado')}</td>
+      </tr>
+      <tr>
+        <td><strong>CPF/CNPJ:</strong> ${this.escapeHtml(appointment.client.cnpj || 'Nao informado')}</td>
+        <td><strong>E-mail:</strong> ${this.escapeHtml(appointment.client.email || 'Nao informado')}</td>
+      </tr>
+      <tr>
+        <td><strong>Endereço:</strong> ${this.escapeHtml(appointment.fullAddress || 'Nao informado')}</td>
+        <td><strong>CEP:</strong> Nao informado</td>
+      </tr>
+      <tr>
+        <td><strong>Cidade:</strong> ${this.escapeHtml(appointment.city || 'Nao informado')}</td>
+        <td><strong>Data Visita:</strong> ${this.formatDateOnly(appointment.date)}</td>
+      </tr>
+      <tr>
+        <td colspan="2"><strong>OS Técnico:</strong> ${this.escapeHtml(appointment.technician?.name || 'Nao informado')}</td>
+      </tr>
+    </table>
+
+    <div class="section-title">PROBLEMA</div>
+    <div class="box">${this.escapeHtml(appointment.problemDescription || appointment.serviceType || 'Nao informado')}</div>
+
+    <div class="section-title">DADOS DO(S) EQUIPAMENTO(S)</div>
+    <table>
+      <tr>
+        <th style="width: 18%;">Código</th>
+        <th>Nome</th>
+        <th>Modelo</th>
+        <th>Observações</th>
+        <th>Fabricante</th>
+      </tr>
+      <tr>
+        <td class="center">${this.escapeHtml(osNumber)}</td>
+        <td class="center">${this.escapeHtml(appointment.serviceType || 'Nao informado')}</td>
+        <td class="center">Nao informado</td>
+        <td></td>
+        <td class="center">${this.escapeHtml(company.logoText)}</td>
+      </tr>
+    </table>
+
+    <div class="section-title">PRODUTOS / SERVIÇOS:</div>
+    <table>
+      <tr>
+        <th style="width: 24%;">Código</th>
+        <th>Descrição do(s) serviço(s):</th>
+      </tr>
+      <tr>
+        <td class="center">${serviceCode}</td>
+        <td>${this.escapeHtml(serviceDescription)}</td>
+      </tr>
+    </table>
+
+    <div class="section-title">CONSIDERAÇÕES DO TÉCNICO</div>
+    <div class="box notes">${this.escapeHtml(technicianNotes || 'Nao informado')}</div>
+
+    <div class="footer">
+      Declaro que os serviços descritos neste relatório foram prestados e dados como aceitos por mim nesta data.
+    </div>
+    <div class="signature-grid">
+      <div class="signature-line">Assinatura do Técnico<br />${this.escapeHtml(appointment.technician?.name || '')}</div>
+      <div class="signature-line">Assinatura do Cliente</div>
+    </div>
+  </main>
+</body>
+</html>`;
+  }
+
+  private resolveServiceOrderCompany(serviceType: string | null) {
+    if (this.isStartOrTraining(serviceType)) {
+      return {
+        logoText: 'Metalique',
+        name: 'METALIQUE ENGENHARIA E TECNOLOGIA',
+        cnpj: '30.565.318/0001-90',
+        branch: 'MATRIZ SP',
+        address: 'Rua Reinaldo Raulino dos Santos, 79',
+        cityStateZip: 'Sorocaba - SP CEP 18086-796',
+        phones: '(15) 3411-0907 ou (15) 3411-0908'
+      };
+    }
+
+    return {
+      logoText: 'Visacut',
+      name: 'VISACUT COMERCIO DE MAQUINAS EIRELI',
+      cnpj: '26.715.677/0001-08',
+      branch: 'MATRIZ SP',
+      address: 'Rua Reinaldo Raulino dos Santos, 79',
+      cityStateZip: 'Sorocaba - SP CEP 18086-796',
+      phones: '(15) 3411-0907 ou (15) 3411-0908'
+    };
+  }
+
+  private isStartOrTraining(serviceType: string | null) {
+    const normalized = (serviceType || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    return normalized.includes('start') || normalized.includes('treinamento') || normalized.includes('training');
+  }
+
+  private escapeHtml(value: string | number | null | undefined) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  private formatDateOnly(date: Date) {
+    if (Number.isNaN(date.getTime())) return 'Nao informado';
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      dateStyle: 'short'
+    }).format(date);
   }
 
   private formatDateTime(date: Date) {

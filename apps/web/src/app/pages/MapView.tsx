@@ -180,24 +180,30 @@ export default function MapView() {
           (appointment.latitude == null || appointment.longitude == null) &&
           (appointment.fullAddress || appointment.client?.address)
       );
-      for (const appointment of candidates.slice(0, 200)) {
+      const resolvedBatch: Record<string, { lat: number; lng: number }> = {};
+
+      for (const appointment of candidates.slice(0, 500)) {
         const query = buildMapsQuery(appointment.fullAddress || appointment.client?.address || '', appointment.city);
         try {
           const geo = await api<{ ok: boolean; lat: number | null; lng: number | null }>(`/maps/geocode?q=${encodeURIComponent(query)}`);
           if (cancelled) return;
           if (geo.ok && geo.lat != null && geo.lng != null) {
-            setResolvedCoordsById((prev) => ({ ...prev, [appointment.id]: { lat: geo.lat as number, lng: geo.lng as number } }));
+            resolvedBatch[appointment.id] = { lat: geo.lat as number, lng: geo.lng as number };
           }
         } catch {
           // ignore
         }
+      }
+
+      if (!cancelled && Object.keys(resolvedBatch).length > 0) {
+        setResolvedCoordsById((prev) => ({ ...prev, ...resolvedBatch }));
       }
     }
     resolveMissingCoords();
     return () => {
       cancelled = true;
     };
-  }, [filteredAppointments, resolvedCoordsById]);
+  }, [filteredAppointments]);
 
   const markers = useMemo<MapMarker[]>(
     () =>
@@ -392,33 +398,39 @@ export default function MapView() {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !window.google?.maps || markers.length > 0 || filteredAppointments.length === 0) return;
+    if (!map || !window.google?.maps || filteredAppointments.length === 0) return;
 
     const geocoder = new google.maps.Geocoder();
-    const candidates = filteredAppointments.slice(0, 200);
+    const candidates = filteredAppointments
+      .filter((appointment) => !resolvedCoordsById[appointment.id])
+      .slice(0, 500);
     let cancelled = false;
+    const resolvedBatch: Record<string, { lat: number; lng: number }> = {};
 
     (async () => {
       for (const appointment of candidates) {
         if (cancelled) return;
-        if (resolvedCoordsById[appointment.id]) continue;
         const query = buildMapsQuery(appointment.fullAddress || appointment.client?.address || '', appointment.city);
         if (!query) continue;
         try {
           const result = await geocoder.geocode({ address: query });
           const loc = result.results?.[0]?.geometry?.location;
           if (!loc) continue;
-          setResolvedCoordsById((prev) => ({ ...prev, [appointment.id]: { lat: loc.lat(), lng: loc.lng() } }));
+          resolvedBatch[appointment.id] = { lat: loc.lat(), lng: loc.lng() };
         } catch {
           // ignora erro individual
         }
+      }
+
+      if (!cancelled && Object.keys(resolvedBatch).length > 0) {
+        setResolvedCoordsById((prev) => ({ ...prev, ...resolvedBatch }));
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [filteredAppointments, markers.length, resolvedCoordsById]);
+  }, [filteredAppointments, resolvedCoordsById]);
 
   async function handleSearchAddress() {
     const query = searchAddress.trim();

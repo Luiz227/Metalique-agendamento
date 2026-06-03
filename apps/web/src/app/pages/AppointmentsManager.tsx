@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, AlertCircle } from 'lucide-react';
+import { Plus, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -9,7 +9,7 @@ import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { ApiError, api, connectRealtime } from '../services/api';
 import type { Appointment, Client } from '../services/types';
-import { statusLabel } from '../services/types';
+import { formatDate, formatTime, money, statusLabel } from '../services/types';
 
 type QuickForm = {
   companyName: string;
@@ -54,6 +54,15 @@ function missingItems(appointment: Appointment): string[] {
   return list;
 }
 
+function technicianReportText(appointment: Appointment) {
+  return (
+    appointment.statusLogs
+      ?.filter((log) => log.status === 'COMPLETED_SUCCESS' || log.status === 'COMPLETED_PARTIAL')
+      .map((log) => log.observation?.trim())
+      .find(Boolean) ?? ''
+  );
+}
+
 export default function AppointmentsManager() {
   const [form, setForm] = useState<QuickForm>(initialForm);
   const [saving, setSaving] = useState(false);
@@ -94,6 +103,14 @@ export default function AppointmentsManager() {
         .filter((row) => row.item.status !== 'CRITICAL')
         .filter((row) => row.item.status !== 'READY' || row.missing.length > 0)
         .sort((a, b) => new Date(b.item.date).getTime() - new Date(a.item.date).getTime()),
+    [items]
+  );
+
+  const finished = useMemo(
+    () =>
+      items
+        .filter((item) => item.status === 'CRITICAL')
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
     [items]
   );
 
@@ -245,6 +262,114 @@ export default function AppointmentsManager() {
               </div>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5 text-blue-500" />
+            Agendamentos finalizados
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {loading && <p className="text-sm text-muted-foreground">Carregando...</p>}
+          {!loading && finished.length === 0 && <p className="text-sm text-muted-foreground">Nenhum agendamento finalizado.</p>}
+          {finished.map((item) => {
+            const technicalReport = technicianReportText(item);
+
+            return (
+              <div key={item.id} className="rounded-lg border bg-card p-4 space-y-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold">{item.client?.name ?? 'Cliente sem nome'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(item.date)} as {formatTime(item.startTime)}
+                      {item.osNumber ? ` - OS ${item.osNumber}` : ''}
+                    </p>
+                  </div>
+                  <Badge variant="outline">{statusLabel(item.status)}</Badge>
+                </div>
+
+                <div className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Tecnico</p>
+                    <p>{item.technician?.name ?? 'Sem tecnico vinculado'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Cidade</p>
+                    <p>{item.city || 'Nao informado'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Endereco</p>
+                    <p>{item.fullAddress || 'Nao informado'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Tipo de servico</p>
+                    <p>{item.serviceType || 'Nao informado'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Maquina</p>
+                    <p>{[item.machineName, item.machineModel].filter(Boolean).join(' - ') || 'Nao informado'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Numero de serie</p>
+                    <p>{item.machineSerial || 'Nao informado'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Hospedagem</p>
+                    <p>
+                      {item.hasHotel
+                        ? `${item.hotelName || 'Hotel informado'}${item.hotelDailyRate ? ` - ${money(item.hotelDailyRate)}` : ''}`
+                        : 'Sem hospedagem'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Transporte</p>
+                    <p>{item.transportMode || (item.needsTransport ? 'Necessario' : 'Nao informado')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Periodo</p>
+                    <p>{item.daysOut ?? 1} dia(s)</p>
+                  </div>
+                </div>
+
+                <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Relato do tecnico</p>
+                  <p className="whitespace-pre-wrap">{technicalReport || 'Relato nao informado.'}</p>
+                </div>
+
+                {(item.problemDescription || item.notes || item.hotelNotes) && (
+                  <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                    {item.problemDescription && (
+                      <p>
+                        <span className="text-muted-foreground">Servico: </span>
+                        {item.problemDescription}
+                      </p>
+                    )}
+                    {item.notes && (
+                      <p>
+                        <span className="text-muted-foreground">Observacoes: </span>
+                        {item.notes}
+                      </p>
+                    )}
+                    {item.hotelNotes && (
+                      <p>
+                        <span className="text-muted-foreground">Hotel: </span>
+                        {item.hotelNotes}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <Link to={`/appointments/${item.id}`}>
+                    <Button size="sm" variant="outline">Visualizar campos do agendamento</Button>
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
         </CardContent>
       </Card>
     </div>

@@ -17,6 +17,10 @@ const statusConfig = {
   critical: { color: 'bg-red-500' }
 };
 
+function shortCompanyName(name: string) {
+  return name.length > 22 ? `${name.slice(0, 22).trim()}...` : name;
+}
+
 function weekStartMonday(baseDate: Date) {
   const monday = new Date(baseDate);
   const day = monday.getDay();
@@ -143,12 +147,13 @@ export default function Schedule() {
       const dayNum = i - firstDay + 1;
       const isCurrentMonth = dayNum > 0 && dayNum <= lastDate;
       const date = isCurrentMonth ? new Date(year, month, dayNum) : null;
-      const appointmentCount = isCurrentMonth
+      const dayAppointments = isCurrentMonth
         ? apiAppointments.filter((appointment) => {
             const aptDate = new Date(appointment.date);
             return aptDate.getFullYear() === year && aptDate.getMonth() === month && aptDate.getDate() === dayNum;
-          }).length
-        : 0;
+          })
+        : [];
+      const appointmentCount = dayAppointments.length;
 
       const isSelected =
         !!date &&
@@ -156,7 +161,7 @@ export default function Schedule() {
         selectedMonthDate.getMonth() === date.getMonth() &&
         selectedMonthDate.getDate() === date.getDate();
 
-      return { key: i, dayNum, isCurrentMonth, appointmentCount, date, isSelected };
+      return { key: i, dayNum, isCurrentMonth, appointmentCount, date, isSelected, dayAppointments };
     });
   }, [apiAppointments, referenceDate, selectedMonthDate]);
 
@@ -263,20 +268,28 @@ export default function Schedule() {
                 {weekDays.map((day) => (
                   <div key={day} className="text-center text-sm font-medium text-zinc-400 py-2">{day}</div>
                 ))}
-                {monthGrid.map(({ key, dayNum, isCurrentMonth, appointmentCount, date, isSelected }) => (
+                {monthGrid.map(({ key, dayNum, isCurrentMonth, appointmentCount, date, isSelected, dayAppointments }) => (
                   <button
                     key={key}
                     type="button"
                     disabled={!isCurrentMonth || !date}
                     onClick={() => date && setSelectedMonthDate(date)}
-                    className={`aspect-square rounded-lg border text-left ${isCurrentMonth ? 'bg-zinc-800/30 border-zinc-700 hover:border-zinc-500' : 'bg-zinc-900/20 border-zinc-800'} ${isSelected ? 'ring-2 ring-blue-500 border-blue-500' : ''}`}
+                    className={`min-h-36 rounded-lg border text-left ${isCurrentMonth ? 'bg-zinc-800/30 border-zinc-700 hover:border-zinc-500' : 'bg-zinc-900/20 border-zinc-800'} ${isSelected ? 'ring-2 ring-blue-500 border-blue-500' : ''}`}
                   >
                     {isCurrentMonth && (
                       <div className="h-full flex flex-col p-2">
                         <span className="text-sm text-white mb-1">{dayNum}</span>
                         {appointmentCount > 0 && (
-                          <div className="flex-1 flex items-end">
-                            <Badge variant="secondary" className="text-xs bg-blue-500/20 text-blue-400">{appointmentCount}</Badge>
+                          <div className="flex-1 space-y-1 overflow-hidden">
+                            {dayAppointments.slice(0, 3).map((appointment) => (
+                              <div key={appointment.id} className="rounded bg-blue-500/15 px-2 py-1 text-[11px] leading-tight text-blue-100">
+                                <span className="font-semibold">{appointment.technician?.name ?? 'Sem tecnico'}</span>
+                                <span className="text-blue-200"> / {shortCompanyName(appointment.client?.name ?? 'Cliente')}</span>
+                              </div>
+                            ))}
+                            {appointmentCount > 3 && (
+                              <Badge variant="secondary" className="text-xs bg-blue-500/20 text-blue-400">+{appointmentCount - 3}</Badge>
+                            )}
                           </div>
                         )}
                       </div>

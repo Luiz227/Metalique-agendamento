@@ -544,7 +544,7 @@ export default function MapView() {
               <div key={appointment.id} className="rounded-lg border border-zinc-700/60 p-3 text-xs">
                 <p className="text-zinc-100 font-medium">{formatDate(appointment.date)} - {formatTime(appointment.startTime)}</p>
                 <p className="text-zinc-300 mt-1">Técnico: {appointment.technician?.name ?? 'Sem técnico'}</p>
-                <p className="text-zinc-400 mt-1">{appointment.fullAddress}</p>
+                <p className="text-zinc-400 mt-1">{[appointment.fullAddress, appointment.city].filter(Boolean).join(' - ')}</p>
               </div>
             ))}
           </CardContent>
@@ -612,3 +612,4 @@ export default function MapView() {
     </div>
   );
 }
+

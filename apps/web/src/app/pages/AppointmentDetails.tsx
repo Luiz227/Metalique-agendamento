@@ -27,6 +27,20 @@ type ChecklistKey =
 
 const COMPANY_BASE_ADDRESS = 'R. Reinaldo Raulino dos Santos, 107 - Eden, Sorocaba - SP, 18086-796';
 
+function normalizeCityForMaps(city?: string | null) {
+  return String(city ?? '')
+    .replace(/\s*\/\s*/g, ', ')
+    .replace(/\s+-\s+/g, ', ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildMapsDestination(address?: string | null, city?: string | null) {
+  return [address?.trim(), normalizeCityForMaps(city), 'Brasil']
+    .filter(Boolean)
+    .join(', ');
+}
+
 const checklistLabels: Record<ChecklistKey, string> = {
   clientConfirmed: 'Cliente confirmado',
   contactConfirmed: 'Contato confirmado',
@@ -197,7 +211,7 @@ export default function AppointmentDetails() {
   useEffect(() => {
     const fullAddress = editing ? form.fullAddress : appointment?.fullAddress;
     const city = editing ? form.city : appointment?.city;
-    const destination = [fullAddress, city].filter(Boolean).join(' ').trim();
+    const destination = buildMapsDestination(fullAddress, city);
     if (destination.length < 6) {
       setTravelEstimate(null);
       return;
@@ -224,10 +238,10 @@ export default function AppointmentDetails() {
     return () => clearTimeout(timer);
   }, [editing, form.fullAddress, form.city, appointment?.fullAddress, appointment?.city]);
 
-  const logisticsDestination = [editing ? form.fullAddress : appointment?.fullAddress, editing ? form.city : appointment?.city]
-    .filter(Boolean)
-    .join(', ')
-    .trim();
+  const logisticsDestination = buildMapsDestination(
+    editing ? form.fullAddress : appointment?.fullAddress,
+    editing ? form.city : appointment?.city
+  );
   const routeExternalUrl = logisticsDestination
     ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(logisticsDestination)}&travelmode=driving`
     : '';

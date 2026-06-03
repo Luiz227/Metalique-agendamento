@@ -22,6 +22,20 @@ const steps = [
 const DRAFT_KEY = 'agenda-metalique:new-appointment-draft:v1';
 const COMPANY_BASE_ADDRESS = 'R. Reinaldo Raulino dos Santos, 107 - Éden, Sorocaba - SP, 18086-796';
 
+function normalizeCityForMaps(city?: string | null) {
+  return String(city ?? '')
+    .replace(/\s*\/\s*/g, ', ')
+    .replace(/\s+-\s+/g, ', ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildMapsDestination(address?: string | null, city?: string | null) {
+  return [address?.trim(), normalizeCityForMaps(city), 'Brasil']
+    .filter(Boolean)
+    .join(', ');
+}
+
 function localDateTimeIso(date: string, time: string) {
   return new Date(`${date}T${time}:00`).toISOString();
 }
@@ -137,7 +151,7 @@ export default function NewAppointment() {
   }, []);
 
   useEffect(() => {
-    const destination = [formData.address, formData.city].filter(Boolean).join(', ').trim();
+    const destination = buildMapsDestination(formData.address, formData.city);
     if (currentStep !== 0 || destination.length < 6) {
       setTravelEstimate(null);
       return;

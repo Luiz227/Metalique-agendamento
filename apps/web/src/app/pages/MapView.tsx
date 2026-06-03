@@ -48,6 +48,32 @@ function markerIcon(color: string, label: string): google.maps.Icon {
   };
 }
 
+function routeLabelIcon(text: string): google.maps.Icon {
+  const width = Math.max(96, Math.min(170, text.length * 8 + 24));
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="34" viewBox="0 0 ${width} 34">
+      <rect x="2" y="3" width="${width - 4}" height="28" rx="14" fill="#111827" stroke="#f59e0b" stroke-width="2" opacity="0.95" />
+      <text x="${width / 2}" y="22" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#ffffff">${text}</text>
+    </svg>
+  `;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(width, 34),
+    anchor: new google.maps.Point(width / 2, 17)
+  };
+}
+
+function midpoint(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  return {
+    lat: (a.lat + b.lat) / 2,
+    lng: (a.lng + b.lng) / 2
+  };
+}
+
+function routeLabel(distanceKm: number, durationMinutes: number) {
+  return `${distanceKm.toFixed(1)} km • ${durationMinutes} min`;
+}
+
 
 function loadGoogleMapsScript(apiKey: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -405,6 +431,14 @@ export default function MapView() {
         map
       });
       polylinesRef.current.push(line);
+      const label = new google.maps.Marker({
+        position: midpoint(a, b),
+        map,
+        icon: routeLabelIcon(routeLabel(Number(suggestion.distanceKm), Number(suggestion.durationMinutes))),
+        clickable: false,
+        zIndex: 20
+      });
+      markersRef.current.push(label);
       bounds.extend({ lat: a.lat, lng: a.lng });
       bounds.extend({ lat: b.lat, lng: b.lng });
     });
@@ -421,6 +455,14 @@ export default function MapView() {
         map
       });
       polylinesRef.current.push(line);
+      const label = new google.maps.Marker({
+        position: midpoint(suggestion.originAppointment, suggestion.nearbyAppointment),
+        map,
+        icon: routeLabelIcon(routeLabel(suggestion.distanceKm, suggestion.durationMinutes)),
+        clickable: false,
+        zIndex: 20
+      });
+      markersRef.current.push(label);
       bounds.extend({ lat: suggestion.originAppointment.lat, lng: suggestion.originAppointment.lng });
       bounds.extend({ lat: suggestion.nearbyAppointment.lat, lng: suggestion.nearbyAppointment.lng });
     });

@@ -9,6 +9,7 @@ import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { ApiError, api, connectRealtime } from '../services/api';
 import type { Appointment, Client } from '../services/types';
+import { statusLabel } from '../services/types';
 
 type QuickForm = {
   companyName: string;
@@ -90,6 +91,7 @@ export default function AppointmentsManager() {
     () =>
       items
         .map((item) => ({ item, missing: missingItems(item) }))
+        .filter((row) => row.item.status !== 'CRITICAL')
         .filter((row) => row.item.status !== 'READY' || row.missing.length > 0)
         .sort((a, b) => new Date(b.item.date).getTime() - new Date(a.item.date).getTime()),
     [items]
@@ -228,13 +230,13 @@ export default function AppointmentsManager() {
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="font-semibold">{item.client?.name ?? 'Cliente sem nome'}</p>
-                  <p className="text-xs text-muted-foreground">{item.city} • {item.fullAddress}</p>
+                  <p className="text-xs text-muted-foreground">{item.city} â€¢ {item.fullAddress}</p>
                 </div>
-                <Badge variant="outline">{item.status}</Badge>
+                <Badge variant="outline">{statusLabel(item.status)}</Badge>
               </div>
               <div className="text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 mt-0.5" />
-                <span>Faltando: {missing.slice(0, 6).join(' • ')}{missing.length > 6 ? ' ...' : ''}</span>
+                <span>Faltando: {missing.slice(0, 6).join(' â€¢ ')}{missing.length > 6 ? ' ...' : ''}</span>
               </div>
               <div>
                 <Link to={`/appointments/${item.id}`}>

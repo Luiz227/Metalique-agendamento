@@ -51,11 +51,15 @@ export class LegacyService {
   async listSuggestions(query: { from?: string; to?: string }) {
     await this.rebuildSuggestionsFromAppointments();
 
-    const where: Prisma.RouteSuggestionWhereInput = {};
+    const where: Prisma.RouteSuggestionWhereInput = { status: 'OPEN' };
     if (query.from || query.to) {
-      where.createdAt = {};
-      if (query.from) where.createdAt.gte = new Date(query.from);
-      if (query.to) where.createdAt.lte = new Date(query.to);
+      const dateFilter: Prisma.DateTimeFilter = {};
+      if (query.from) dateFilter.gte = new Date(query.from);
+      if (query.to) dateFilter.lte = new Date(query.to);
+      where.OR = [
+        { originAppointment: { date: dateFilter } },
+        { nearbyAppointment: { date: dateFilter } }
+      ];
     }
     const rows = await this.prisma.routeSuggestion.findMany({
       where,

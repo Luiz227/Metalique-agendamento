@@ -6,6 +6,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { ApiError, api, connectRealtime } from '../services/api';
 import type { Appointment } from '../services/types';
+import { statusLabel } from '../services/types';
 
 type KanbanColumn = {
   key: 'draft' | 'pending' | 'ready' | 'critical';
@@ -15,19 +16,19 @@ type KanbanColumn = {
 
 const columns: KanbanColumn[] = [
   { key: 'draft', title: 'Em preenchimento', tone: 'border-zinc-500' },
-  { key: 'pending', title: 'Pendente de confirmacao', tone: 'border-amber-500' },
+  { key: 'pending', title: 'Pendente de confirmação', tone: 'border-amber-500' },
   { key: 'ready', title: 'Pronto', tone: 'border-green-500' },
-  { key: 'critical', title: 'Finalizados', tone: 'border-red-500' }
+  { key: 'critical', title: 'Visita finalizada', tone: 'border-blue-500' }
 ];
 
 const checklistLabels: Record<string, string> = {
   clientConfirmed: 'Cliente confirmado',
   contactConfirmed: 'Contato confirmado',
-  addressConfirmed: 'Endereco confirmado',
-  serviceTypeConfirmed: 'Tipo de servico confirmado',
+  addressConfirmed: 'Endereço confirmado',
+  serviceTypeConfirmed: 'Tipo de serviço confirmado',
   technicianSelected: 'Tecnico selecionado',
-  technicianAvailability: 'Disponibilidade do tecnico',
-  dateTimeConfirmed: 'Data e horario confirmados',
+  technicianAvailability: 'Disponibilidade do técnico',
+  dateTimeConfirmed: 'Data e horário confirmados',
   hotelNeedChecked: 'Necessidade de hotel conferida',
   transportNeedChecked: 'Necessidade de transporte conferida',
   osChecked: 'OS conferida',
@@ -38,8 +39,8 @@ function missingItems(appointment: Appointment): string[] {
   const list: string[] = [];
   const checklist = appointment.schedulingChecklist;
   if (!appointment.city?.trim()) list.push('Cidade');
-  if (!appointment.fullAddress?.trim()) list.push('Endereco completo');
-  if (!appointment.problemDescription?.trim()) list.push('Descricao do servico');
+  if (!appointment.fullAddress?.trim()) list.push('Endereço completo');
+  if (!appointment.problemDescription?.trim()) list.push('Descricao do serviço');
   if (!appointment.startTime) list.push('Data/hora');
 
   for (const [key, label] of Object.entries(checklistLabels)) {
@@ -63,7 +64,7 @@ function columnOf(appointment: Appointment): KanbanColumn['key'] {
     !appointment.serviceType?.trim() ||
     appointment.serviceType === 'Pendente definicao' ||
     !appointment.problemDescription?.trim() ||
-    appointment.problemDescription === 'Pendente descricao do servico' ||
+    appointment.problemDescription === 'Pendente descricao do serviço' ||
     !appointment.technicianId ||
     !appointment.startTime;
 
@@ -129,7 +130,7 @@ export default function Kanban() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Kanban de Agendamentos</h1>
-          <p className="text-muted-foreground">Acompanhe status, pendencias e lembretes para finalizacao.</p>
+          <p className="text-muted-foreground">Acompanhe status, pendências e lembretes para finalização.</p>
         </div>
         <Button variant="outline" onClick={() => load(true)}>Atualizar</Button>
       </div>
@@ -155,10 +156,10 @@ export default function Kanban() {
                   <div key={appointment.id} className="rounded-lg border bg-card p-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-semibold truncate">{appointment.client?.name || 'Cliente sem nome'}</p>
-                      <Badge variant="outline" className="text-[10px]">{appointment.status}</Badge>
+                      <Badge variant="outline" className="text-[10px]">{statusLabel(appointment.status)}</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">{appointment.city}</p>
-                    <p className="text-xs text-muted-foreground">Tecnico: {appointment.technician?.name || 'Nao definido'}</p>
+                    <p className="text-xs text-muted-foreground">Técnico: {appointment.technician?.name || 'Não definido'}</p>
 
                     {missing.length > 0 ? (
                       <div className="text-xs text-amber-700 dark:text-amber-300">
@@ -169,7 +170,7 @@ export default function Kanban() {
                       <p className="text-xs text-green-600 dark:text-green-400">Checklist completo.</p>
                     )}
                     {wasFinishedByTechnician(appointment) && (
-                      <p className="text-xs text-red-600 dark:text-red-400">Finalizado pelo técnico.</p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400">Visita finalizada pelo técnico.</p>
                     )}
 
                     <div className="flex gap-2 pt-1">

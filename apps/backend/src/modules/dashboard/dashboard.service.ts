@@ -11,6 +11,8 @@ export class DashboardService {
   }
 
   async data() {
+    await this.rebuildSuggestionsFromAppointments();
+
     const now = new Date();
     const startToday = new Date(now);
     startToday.setHours(0, 0, 0, 0);
@@ -65,7 +67,7 @@ export class DashboardService {
       weekDifference: 0,
       monthPlanned: 0,
       monthReal: 0,
-      alerts: critical > 0 ? [{ type: 'critical', message: `${critical} atendimento(s) crítico(s).`, severity: 'high' }] : [],
+      alerts: critical > 0 ? [{ type: 'finished', message: `${critical} visita(s) finalizada(s).`, severity: 'low' }] : [],
       charts: {
         appointmentsByWeekday,
         status: [
@@ -76,5 +78,88 @@ export class DashboardService {
         technicianUsage
       }
     };
+  }
+
+  private async rebuildSuggestionsFromAppointments() {
+    const appointments = await this.prisma.appointment.findMany({
+      where: {
+        status: { in: [AppointmentStatus.WAITING, AppointmentStatus.READY] }
+      },
+      select: {
+        id: true,
+        date: true,
+        latitude: true,
+        longitude: true,
+        fullAddress: true,
+        client: { select: { latitude: true, longitude: true } }
+      },
+      orderBy: [{ date: 'asc' }, { startTime: 'asc' }]
+    });
+
+    const keepPairs = new Set<string>();
+
+    for (let i = 0; i < appointments.length; i += 1) {
+      for (let j = i + 1; j < appointments.length; j += 1) {
+        const a = appointments[i];
+        const b = appointments[j];
+        if (!this.isSameDay(a.date, b.date)) continue;
+
+        const pointA = this.resolvePoint(a);
+        const pointB = this.resolvePoint(b);
+        if (!pointA || !pointB) continue;
+
+        const distanceKm = this.haversineKm(pointA, pointB);
+        if (!Number.isFinite(distanceKm) || distanceKm > 30) continue;
+
+        const durationMinutes = Math.max(5, Math.round((distanceKm / 50) * 60));
+        const score = Math.max(45, Math.min(100, Math.round(100 - distanceKm * 2)));
+        const [originAppointmentId, nearbyAppointmentId] = [a.id, b.id].sort();
+        keepPairs.add(`${originAppointmentId}:${nearbyAppointmentId}`);
+
+        await this.prisma.routeSuggestion.upsert({
+          where: { originAppointmentId_nearbyAppointmentId: { originAppointmentId, nearbyAppointmentId } },
+          update: { distanceKm, durationMinutes, score, status: 'OPEN' },
+          create: { originAppointmentId, nearbyAppointmentId, distanceKm, durationMinutes, score }
+        });
+      }
+    }
+
+    const openSuggestions = await this.prisma.routeSuggestion.findMany({
+      where: { status: 'OPEN' },
+      select: { id: true, originAppointmentId: true, nearbyAppointmentId: true }
+    });
+
+    const staleIds = openSuggestions
+      .filter((item) => !keepPairs.has([item.originAppointmentId, item.nearbyAppointmentId].sort().join(':')))
+      .map((item) => item.id);
+
+    if (staleIds.length) {
+      await this.prisma.routeSuggestion.deleteMany({ where: { id: { in: staleIds } } });
+    }
+  }
+
+  private resolvePoint(row: {
+    latitude: number | null;
+    longitude: number | null;
+    client: { latitude: number | null; longitude: number | null };
+  }) {
+    const lat = row.latitude ?? row.client.latitude;
+    const lng = row.longitude ?? row.client.longitude;
+    if (lat == null || lng == null) return null;
+    return { lat: Number(lat), lng: Number(lng) };
+  }
+
+  private isSameDay(a: Date, b: Date) {
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  }
+
+  private haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+    const radius = 6371;
+    const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+    const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+    const lat1 = (a.lat * Math.PI) / 180;
+    const lat2 = (b.lat * Math.PI) / 180;
+    const x = Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+    return 2 * radius * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
   }
 }

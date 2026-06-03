@@ -4,10 +4,9 @@ import {
   Calendar,
   Users,
   TrendingUp,
-  AlertTriangle,
+  CheckCircle2,
   DollarSign,
   MapPin,
-  CheckCircle2,
   ArrowRight,
   Sparkles
 } from 'lucide-react';
@@ -59,13 +58,13 @@ type DashboardData = {
 const statusLabels: Record<string, string> = {
   READY: 'Pronto',
   WAITING: 'Aguardando',
-  CRITICAL: 'Crítico'
+  CRITICAL: 'Visita finalizada'
 };
 
 const statusColors: Record<string, string> = {
   READY: '#10b981',
   WAITING: '#f59e0b',
-  CRITICAL: '#ef4444'
+  CRITICAL: '#3b82f6'
 };
 
 const money = new Intl.NumberFormat('pt-BR', {
@@ -133,7 +132,7 @@ export default function Dashboard() {
       { label: 'Agendamentos Hoje', value: dashboard.todayCount, icon: Calendar, color: 'text-blue-400', bg: 'bg-blue-500/10' },
       { label: 'Agendamentos Semana', value: dashboard.weekCount, icon: Calendar, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
       { label: 'Técnicos em Campo', value: dashboard.techniciansInField, icon: Users, color: 'text-green-400', bg: 'bg-green-500/10' },
-      { label: 'Pendências Críticas', value: dashboard.critical, icon: AlertTriangle, color: 'text-red-400', bg: 'bg-red-500/10' },
+      { label: 'Visitas Finalizadas', value: dashboard.critical, icon: CheckCircle2, color: 'text-blue-400', bg: 'bg-blue-500/10' },
       { label: 'Gastos Previstos', value: money.format(dashboard.weekPlanned), icon: DollarSign, color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
       { label: 'Gastos Reais', value: money.format(dashboard.weekReal), icon: TrendingUp, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
       { label: 'Economia Gerada', value: money.format(dashboard.estimatedSavings), icon: TrendingUp, color: 'text-purple-400', bg: 'bg-purple-500/10' },
@@ -141,7 +140,6 @@ export default function Dashboard() {
     ],
     [dashboard]
   );
-
   const weeklyAppointments = dashboard.charts.appointmentsByWeekday.map((item) => ({
     dia: item.label,
     atendimentos: item.total
@@ -307,13 +305,13 @@ export default function Dashboard() {
           <Card className="bg-zinc-900/50 border-zinc-800">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-red-400" />
-                Alertas Críticos
+                <CheckCircle2 className="h-5 w-5 text-blue-400" />
+                Visitas Finalizadas
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {dashboard.alerts.length === 0 ? (
-                <div className="py-6 text-sm text-zinc-500">Nenhum alerta operacional no momento.</div>
+                <div className="py-6 text-sm text-zinc-500">Nenhuma visita finalizada no momento.</div>
               ) : (
                 dashboard.alerts.map((alert, index) => (
                   <div key={`${alert.type}-${index}`} className={`p-3 rounded-lg border ${alert.severity === 'high' ? 'bg-red-500/10 border-red-500/20' : 'bg-yellow-500/10 border-yellow-500/20'}`}>
@@ -338,7 +336,7 @@ export default function Dashboard() {
                   <span className="text-xs font-medium text-green-400">{dashboard.openSuggestions}</span>
                 </div>
                 <p className="text-xs text-zinc-400">
-                  As sugestões serão criadas automaticamente quando houver atendimentos próximos no banco.
+                  As sugestões aparecem automaticamente quando houver atendimentos próximos na mesma data.
                 </p>
               </div>
               <Link to="/suggestions">

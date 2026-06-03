@@ -149,13 +149,13 @@ export function formatTime(value: string) {
 }
 
 export function statusLabel(status: Appointment['status']) {
-  return status === 'READY' ? 'Pronto' : status === 'CRITICAL' ? 'Crítico' : 'Aguardando';
+  return status === 'READY' ? 'Pronto' : status === 'CRITICAL' ? 'Visita finalizada' : 'Aguardando';
 }
 
 export function statusTone(status: Appointment['status']) {
   return status === 'READY'
     ? { color: 'bg-green-500', text: 'text-green-400', border: 'border-green-500' }
     : status === 'CRITICAL'
-      ? { color: 'bg-red-500', text: 'text-red-400', border: 'border-red-500' }
+      ? { color: 'bg-blue-500', text: 'text-blue-400', border: 'border-blue-500' }
       : { color: 'bg-yellow-500', text: 'text-yellow-400', border: 'border-yellow-500' };
 }

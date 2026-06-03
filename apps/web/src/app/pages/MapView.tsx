@@ -136,6 +136,7 @@ export default function MapView() {
       end.setHours(23, 59, 59, 999);
     }
     return appointments.filter((appointment) => {
+      if (appointment.status === 'CRITICAL') return false;
       const date = new Date(appointment.date);
       if (date < start || date > end) return false;
       if (filterTechnician !== 'all' && appointment.technician?.name !== filterTechnician) return false;
@@ -270,7 +271,7 @@ export default function MapView() {
 
     const bounds = new google.maps.LatLngBounds();
     markers.forEach((marker) => {
-      const techName = marker.technician?.name ?? 'Sem t?cnico';
+      const techName = marker.technician?.name ?? 'Sem técnico';
       const techColor = normalizeColor(marker.technician?.color);
       const pin = new google.maps.Marker({
         position: { lat: marker.lat, lng: marker.lng },

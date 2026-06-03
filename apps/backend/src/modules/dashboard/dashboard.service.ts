@@ -104,7 +104,6 @@ export class DashboardService {
       for (let j = i + 1; j < appointments.length; j += 1) {
         const a = appointments[i];
         const b = appointments[j];
-        if (!this.isSameDay(a.date, b.date)) continue;
 
         const pointA = pointsByAppointmentId.has(a.id)
           ? pointsByAppointmentId.get(a.id)
@@ -119,7 +118,7 @@ export class DashboardService {
         if (!pointA || !pointB) continue;
 
         const distanceKm = this.haversineKm(pointA, pointB);
-        if (!Number.isFinite(distanceKm) || distanceKm > 30) continue;
+        if (!Number.isFinite(distanceKm) || distanceKm > 60) continue;
 
         const durationMinutes = Math.max(5, Math.round((distanceKm / 50) * 60));
         const score = Math.max(45, Math.min(100, Math.round(100 - distanceKm * 2)));
@@ -216,3 +215,4 @@ export class DashboardService {
     return 2 * radius * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
   }
 }
+

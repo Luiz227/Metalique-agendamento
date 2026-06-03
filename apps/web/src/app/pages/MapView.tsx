@@ -19,6 +19,7 @@ type NearbyMapSuggestion = {
   durationMinutes: number;
   score: number;
   reason: string;
+  action: string;
 };
 
 const COMPANY_BASE = {
@@ -82,6 +83,39 @@ function isSameServiceDay(a: Appointment, b: Appointment) {
   const dateA = new Date(a.date);
   const dateB = new Date(b.date);
   return dateA.getFullYear() === dateB.getFullYear() && dateA.getMonth() === dateB.getMonth() && dateA.getDate() === dateB.getDate();
+}
+
+function buildMapSuggestionText(a: MapMarker, b: MapMarker) {
+  const sameDay = isSameServiceDay(a, b);
+  const techA = a.technician?.id ?? a.technician?.name ?? '';
+  const techB = b.technician?.id ?? b.technician?.name ?? '';
+  const sameTechnician = techA && techB && techA === techB;
+
+  if (sameDay && !sameTechnician) {
+    return {
+      reason: 'Atendimentos próximos no mesmo dia com técnicos diferentes.',
+      action: 'Sugestão: avaliar dividir o mesmo carro ou concentrar a rota com um técnico.'
+    };
+  }
+
+  if (!sameDay && !sameTechnician) {
+    return {
+      reason: 'Atendimentos próximos em dias diferentes.',
+      action: 'Sugestão: avaliar reagendar para o mesmo dia ou enviar um técnico para atender os dois clientes.'
+    };
+  }
+
+  if (!sameDay && sameTechnician) {
+    return {
+      reason: 'Mesmo técnico com clientes próximos em dias diferentes.',
+      action: 'Sugestão: avaliar juntar as visitas na mesma viagem para reduzir deslocamento.'
+    };
+  }
+
+  return {
+    reason: 'Atendimentos próximos na rota.',
+    action: 'Sugestão: avaliar a melhor sequência de atendimento para reduzir deslocamento.'
+  };
 }
 
 function normalizeCityForMaps(city?: string | null) {
@@ -271,13 +305,10 @@ export default function MapView() {
       for (let j = i + 1; j < markers.length; j += 1) {
         const a = markers[i];
         const b = markers[j];
-        const techA = a.technician?.id ?? a.technician?.name;
-        const techB = b.technician?.id ?? b.technician?.name;
-        if (!techA || !techB || techA === techB) continue;
-        if (!isSameServiceDay(a, b)) continue;
-
         const distanceKm = haversineKm(a, b);
-        if (!Number.isFinite(distanceKm) || distanceKm > 30) continue;
+        if (!Number.isFinite(distanceKm) || distanceKm > 60) continue;
+
+        const suggestionText = buildMapSuggestionText(a, b);
 
         rows.push({
           id: [a.id, b.id].sort().join(':'),
@@ -286,7 +317,8 @@ export default function MapView() {
           distanceKm,
           durationMinutes: Math.max(5, Math.round((distanceKm / 50) * 60)),
           score: Math.max(45, Math.min(100, Math.round(100 - distanceKm * 2))),
-          reason: 'Atendimentos proximos na mesma data com tecnicos diferentes'
+          reason: suggestionText.reason,
+          action: suggestionText.action
         });
       }
     }
@@ -565,19 +597,21 @@ export default function MapView() {
           <CardHeader><CardTitle className="text-sm text-white">Sugestoes proximas</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {nearbyMapSuggestions.length === 0 && (
-              <p className="text-xs text-zinc-500">Nenhuma sugestao encontrada para atendimentos proximos na mesma data.</p>
+              <p className="text-xs text-zinc-500">Nenhuma sugestao encontrada entre os atendimentos visiveis no mapa.</p>
             )}
             {nearbyMapSuggestions.slice(0, 8).map((suggestion) => (
               <div key={suggestion.id} className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
                 <p className="font-medium text-amber-100">
                   {suggestion.distanceKm.toFixed(1)} km - cerca de {suggestion.durationMinutes} min
                 </p>
+                <p className="mt-1 text-amber-50">{suggestion.reason}</p>
                 <p className="mt-1 text-zinc-200">
                   {suggestion.originAppointment.technician?.name ?? 'Sem tecnico'} + {suggestion.nearbyAppointment.technician?.name ?? 'Sem tecnico'}
                 </p>
                 <p className="mt-1 text-zinc-400">
-                  {suggestion.originAppointment.client?.name ?? 'Cliente'} / {suggestion.nearbyAppointment.client?.name ?? 'Cliente'}
+                  {formatDate(suggestion.originAppointment.date)} - {suggestion.originAppointment.client?.name ?? 'Cliente'} / {formatDate(suggestion.nearbyAppointment.date)} - {suggestion.nearbyAppointment.client?.name ?? 'Cliente'}
                 </p>
+                <p className="mt-2 text-zinc-300">{suggestion.action}</p>
               </div>
             ))}
           </CardContent>

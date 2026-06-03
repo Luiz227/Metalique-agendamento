@@ -336,7 +336,7 @@ export default function Dashboard() {
                   <span className="text-xs font-medium text-green-400">{dashboard.openSuggestions}</span>
                 </div>
                 <p className="text-xs text-zinc-400">
-                  As sugestões aparecem automaticamente quando houver atendimentos próximos na mesma data.
+                  As sugestoes aparecem automaticamente quando houver atendimentos proximos no mapa.
                 </p>
               </div>
               <Link to="/suggestions">
@@ -368,3 +368,5 @@ export default function Dashboard() {
     </div>
   );
 }
+
+

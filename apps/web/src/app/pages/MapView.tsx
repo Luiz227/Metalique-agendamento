@@ -11,6 +11,15 @@ import { formatDate, formatTime } from '../services/types';
 
 type MapMarker = Appointment & { lat: number; lng: number };
 type SearchPoint = { query: string; lat: number; lng: number; formattedAddress: string | null };
+type NearbyMapSuggestion = {
+  id: string;
+  originAppointment: MapMarker;
+  nearbyAppointment: MapMarker;
+  distanceKm: number;
+  durationMinutes: number;
+  score: number;
+  reason: string;
+};
 
 const COMPANY_BASE = {
   label: 'R. Reinaldo Raulino dos Santos, 107 - Éden, Sorocaba - SP',
@@ -67,6 +76,24 @@ function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: num
   const lat2 = (b.lat * Math.PI) / 180;
   const x = Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
   return 2 * radius * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+function isSameServiceDay(a: Appointment, b: Appointment) {
+  const dateA = new Date(a.date);
+  const dateB = new Date(b.date);
+  return dateA.getFullYear() === dateB.getFullYear() && dateA.getMonth() === dateB.getMonth() && dateA.getDate() === dateB.getDate();
+}
+
+function normalizeCityForMaps(city?: string | null) {
+  return String(city ?? '')
+    .replace(/\s*\/\s*/g, ', ')
+    .replace(/\s+-\s+/g, ', ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildMapsQuery(address?: string | null, city?: string | null) {
+  return [address?.trim(), normalizeCityForMaps(city), 'Brasil'].filter(Boolean).join(', ');
 }
 
 export default function MapView() {
@@ -153,8 +180,8 @@ export default function MapView() {
           (appointment.latitude == null || appointment.longitude == null) &&
           (appointment.fullAddress || appointment.client?.address)
       );
-      for (const appointment of candidates.slice(0, 10)) {
-        const query = [appointment.fullAddress || appointment.client?.address || '', appointment.city, 'Brasil'].filter(Boolean).join(', ');
+      for (const appointment of candidates.slice(0, 200)) {
+        const query = buildMapsQuery(appointment.fullAddress || appointment.client?.address || '', appointment.city);
         try {
           const geo = await api<{ ok: boolean; lat: number | null; lng: number | null }>(`/maps/geocode?q=${encodeURIComponent(query)}`);
           if (cancelled) return;
@@ -218,6 +245,11 @@ export default function MapView() {
     [filteredAppointments, resolvedCoordsById]
   );
 
+  const searchContextCity = useMemo(() => {
+    const cities = Array.from(new Set(filteredAppointments.map((appointment) => appointment.city).filter(Boolean)));
+    return cities.length === 1 ? cities[0] : '';
+  }, [filteredAppointments]);
+
   const visibleSuggestions = useMemo(
     () =>
       suggestions.filter((suggestion) =>
@@ -225,6 +257,36 @@ export default function MapView() {
       ),
     [suggestions, filteredAppointments]
   );
+
+  const nearbyMapSuggestions = useMemo<NearbyMapSuggestion[]>(() => {
+    const rows: NearbyMapSuggestion[] = [];
+
+    for (let i = 0; i < markers.length; i += 1) {
+      for (let j = i + 1; j < markers.length; j += 1) {
+        const a = markers[i];
+        const b = markers[j];
+        const techA = a.technician?.id ?? a.technician?.name;
+        const techB = b.technician?.id ?? b.technician?.name;
+        if (!techA || !techB || techA === techB) continue;
+        if (!isSameServiceDay(a, b)) continue;
+
+        const distanceKm = haversineKm(a, b);
+        if (!Number.isFinite(distanceKm) || distanceKm > 30) continue;
+
+        rows.push({
+          id: [a.id, b.id].sort().join(':'),
+          originAppointment: a,
+          nearbyAppointment: b,
+          distanceKm,
+          durationMinutes: Math.max(5, Math.round((distanceKm / 50) * 60)),
+          score: Math.max(45, Math.min(100, Math.round(100 - distanceKm * 2))),
+          reason: 'Atendimentos proximos na mesma data com tecnicos diferentes'
+        });
+      }
+    }
+
+    return rows.sort((a, b) => a.distanceKm - b.distanceKm);
+  }, [markers]);
 
   const periodLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(referenceDate);
 
@@ -309,24 +371,38 @@ export default function MapView() {
       bounds.extend({ lat: b.lat, lng: b.lng });
     });
 
+    nearbyMapSuggestions.slice(0, 12).forEach((suggestion) => {
+      const line = new google.maps.Polyline({
+        path: [
+          { lat: suggestion.originAppointment.lat, lng: suggestion.originAppointment.lng },
+          { lat: suggestion.nearbyAppointment.lat, lng: suggestion.nearbyAppointment.lng }
+        ],
+        strokeColor: '#f59e0b',
+        strokeOpacity: 0.9,
+        strokeWeight: 4,
+        map
+      });
+      polylinesRef.current.push(line);
+      bounds.extend({ lat: suggestion.originAppointment.lat, lng: suggestion.originAppointment.lng });
+      bounds.extend({ lat: suggestion.nearbyAppointment.lat, lng: suggestion.nearbyAppointment.lng });
+    });
+
     if (!bounds.isEmpty()) map.fitBounds(bounds, 80);
-  }, [markers, visibleSuggestions]);
+  }, [markers, visibleSuggestions, nearbyMapSuggestions]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !window.google?.maps || markers.length > 0 || filteredAppointments.length === 0) return;
 
     const geocoder = new google.maps.Geocoder();
-    const candidates = filteredAppointments.slice(0, 10);
+    const candidates = filteredAppointments.slice(0, 200);
     let cancelled = false;
 
     (async () => {
       for (const appointment of candidates) {
         if (cancelled) return;
         if (resolvedCoordsById[appointment.id]) continue;
-        const query = [appointment.fullAddress || appointment.client?.address || '', appointment.city, 'Brasil']
-          .filter(Boolean)
-          .join(', ');
+        const query = buildMapsQuery(appointment.fullAddress || appointment.client?.address || '', appointment.city);
         if (!query) continue;
         try {
           const result = await geocoder.geocode({ address: query });
@@ -350,14 +426,17 @@ export default function MapView() {
     setSearchLoading(true);
     setSearchError('');
     try {
+      const searchQuery = searchContextCity && !query.toLowerCase().includes(searchContextCity.toLowerCase())
+        ? buildMapsQuery(query, searchContextCity)
+        : query;
       const geo = await api<{ ok: boolean; lat: number | null; lng: number | null; formattedAddress: string | null }>(
-        `/maps/geocode?q=${encodeURIComponent(query)}`
+        `/maps/geocode?q=${encodeURIComponent(searchQuery)}`
       );
       if (!geo.ok || geo.lat == null || geo.lng == null) {
         setSearchError('Endereço não encontrado.');
         return;
       }
-      const point = { query, lat: geo.lat, lng: geo.lng, formattedAddress: geo.formattedAddress };
+      const point = { query: searchQuery, lat: geo.lat, lng: geo.lng, formattedAddress: geo.formattedAddress };
       setSearchedPoint(point);
       const map = mapRef.current;
       if (map) {
@@ -466,6 +545,27 @@ export default function MapView() {
                 <p className="text-zinc-100 font-medium">{formatDate(appointment.date)} - {formatTime(appointment.startTime)}</p>
                 <p className="text-zinc-300 mt-1">Técnico: {appointment.technician?.name ?? 'Sem técnico'}</p>
                 <p className="text-zinc-400 mt-1">{appointment.fullAddress}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+        <Card className="bg-zinc-800/30 border-zinc-700">
+          <CardHeader><CardTitle className="text-sm text-white">Sugestoes proximas</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {nearbyMapSuggestions.length === 0 && (
+              <p className="text-xs text-zinc-500">Nenhuma sugestao encontrada para atendimentos proximos na mesma data.</p>
+            )}
+            {nearbyMapSuggestions.slice(0, 8).map((suggestion) => (
+              <div key={suggestion.id} className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+                <p className="font-medium text-amber-100">
+                  {suggestion.distanceKm.toFixed(1)} km - cerca de {suggestion.durationMinutes} min
+                </p>
+                <p className="mt-1 text-zinc-200">
+                  {suggestion.originAppointment.technician?.name ?? 'Sem tecnico'} + {suggestion.nearbyAppointment.technician?.name ?? 'Sem tecnico'}
+                </p>
+                <p className="mt-1 text-zinc-400">
+                  {suggestion.originAppointment.client?.name ?? 'Cliente'} / {suggestion.nearbyAppointment.client?.name ?? 'Cliente'}
+                </p>
               </div>
             ))}
           </CardContent>

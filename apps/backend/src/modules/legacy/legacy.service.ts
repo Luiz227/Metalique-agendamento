@@ -92,6 +92,7 @@ export class LegacyService {
     });
 
     const keepPairs = new Set<string>();
+    const pointsByAppointmentId = new Map<string, { lat: number; lng: number }>();
 
     for (let i = 0; i < appointments.length; i += 1) {
       for (let j = i + 1; j < appointments.length; j += 1) {
@@ -99,8 +100,10 @@ export class LegacyService {
         const b = appointments[j];
         if (!this.isSameDay(a.date, b.date)) continue;
 
-        const pointA = this.resolvePoint(a);
-        const pointB = this.resolvePoint(b);
+        const pointA = pointsByAppointmentId.get(a.id) ?? await this.resolvePoint(a);
+        if (pointA) pointsByAppointmentId.set(a.id, pointA);
+        const pointB = pointsByAppointmentId.get(b.id) ?? await this.resolvePoint(b);
+        if (pointB) pointsByAppointmentId.set(b.id, pointB);
         if (!pointA || !pointB) continue;
 
         const distanceKm = this.haversineKm(pointA, pointB);
@@ -839,15 +842,58 @@ export class LegacyService {
     );
   }
 
-  private resolvePoint(appointment: {
+  private async resolvePoint(appointment: {
+    id: string;
+    city: string;
+    fullAddress: string;
     latitude: number | null;
     longitude: number | null;
-    client: { latitude: number | null; longitude: number | null };
+    client: { address?: string | null; latitude: number | null; longitude: number | null };
   }) {
     const lat = appointment.latitude ?? appointment.client?.latitude;
     const lng = appointment.longitude ?? appointment.client?.longitude;
-    if (lat == null || lng == null) return null;
-    return { lat: Number(lat), lng: Number(lng) };
+    if (lat != null && lng != null) return { lat: Number(lat), lng: Number(lng) };
+
+    const point = await this.geocodeAddress(appointment.fullAddress || appointment.client?.address || '', appointment.city);
+    if (!point) return null;
+
+    void this.prisma.appointment.update({
+      where: { id: appointment.id },
+      data: { latitude: point.lat, longitude: point.lng }
+    }).catch(() => undefined);
+
+    return point;
+  }
+
+  private buildMapsQuery(address?: string | null, city?: string | null) {
+    const normalizedCity = String(city ?? '')
+      .replace(/\s*\/\s*/g, ', ')
+      .replace(/\s+-\s+/g, ', ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return [String(address ?? '').trim(), normalizedCity, 'Brasil'].filter(Boolean).join(', ');
+  }
+
+  private async geocodeAddress(address?: string | null, city?: string | null) {
+    const key = process.env.GOOGLE_MAPS_API_KEY;
+    const query = this.buildMapsQuery(address, city);
+    if (!key || !query) return null;
+
+    try {
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${encodeURIComponent(key)}`;
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const payload = (await response.json()) as {
+        status?: string;
+        results?: Array<{ geometry?: { location?: { lat?: number; lng?: number } } }>;
+      };
+      if (payload.status !== 'OK') return null;
+      const location = payload.results?.[0]?.geometry?.location;
+      if (typeof location?.lat !== 'number' || typeof location?.lng !== 'number') return null;
+      return { lat: location.lat, lng: location.lng };
+    } catch {
+      return null;
+    }
   }
 
   private haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {

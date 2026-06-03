@@ -90,13 +90,15 @@ export class DashboardService {
         date: true,
         latitude: true,
         longitude: true,
+        city: true,
         fullAddress: true,
-        client: { select: { latitude: true, longitude: true } }
+        client: { select: { address: true, latitude: true, longitude: true } }
       },
       orderBy: [{ date: 'asc' }, { startTime: 'asc' }]
     });
 
     const keepPairs = new Set<string>();
+    const pointsByAppointmentId = new Map<string, { lat: number; lng: number } | null>();
 
     for (let i = 0; i < appointments.length; i += 1) {
       for (let j = i + 1; j < appointments.length; j += 1) {
@@ -104,8 +106,16 @@ export class DashboardService {
         const b = appointments[j];
         if (!this.isSameDay(a.date, b.date)) continue;
 
-        const pointA = this.resolvePoint(a);
-        const pointB = this.resolvePoint(b);
+        const pointA = pointsByAppointmentId.has(a.id)
+          ? pointsByAppointmentId.get(a.id)
+          : await this.resolvePoint(a);
+        pointsByAppointmentId.set(a.id, pointA ?? null);
+
+        const pointB = pointsByAppointmentId.has(b.id)
+          ? pointsByAppointmentId.get(b.id)
+          : await this.resolvePoint(b);
+        pointsByAppointmentId.set(b.id, pointB ?? null);
+
         if (!pointA || !pointB) continue;
 
         const distanceKm = this.haversineKm(pointA, pointB);
@@ -138,15 +148,58 @@ export class DashboardService {
     }
   }
 
-  private resolvePoint(row: {
+  private async resolvePoint(row: {
+    id: string;
+    city: string;
+    fullAddress: string;
     latitude: number | null;
     longitude: number | null;
-    client: { latitude: number | null; longitude: number | null };
+    client: { address: string | null; latitude: number | null; longitude: number | null };
   }) {
     const lat = row.latitude ?? row.client.latitude;
     const lng = row.longitude ?? row.client.longitude;
-    if (lat == null || lng == null) return null;
-    return { lat: Number(lat), lng: Number(lng) };
+    if (lat != null && lng != null) return { lat: Number(lat), lng: Number(lng) };
+
+    const point = await this.geocodeAddress(row.fullAddress || row.client.address || '', row.city);
+    if (!point) return null;
+
+    void this.prisma.appointment.update({
+      where: { id: row.id },
+      data: { latitude: point.lat, longitude: point.lng }
+    }).catch(() => undefined);
+
+    return point;
+  }
+
+  private buildMapsQuery(address?: string | null, city?: string | null) {
+    const normalizedCity = String(city ?? '')
+      .replace(/\s*\/\s*/g, ', ')
+      .replace(/\s+-\s+/g, ', ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return [String(address ?? '').trim(), normalizedCity, 'Brasil'].filter(Boolean).join(', ');
+  }
+
+  private async geocodeAddress(address?: string | null, city?: string | null) {
+    const key = process.env.GOOGLE_MAPS_API_KEY;
+    const query = this.buildMapsQuery(address, city);
+    if (!key || !query) return null;
+
+    try {
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${encodeURIComponent(key)}`;
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const payload = (await response.json()) as {
+        status?: string;
+        results?: Array<{ geometry?: { location?: { lat?: number; lng?: number } } }>;
+      };
+      if (payload.status !== 'OK') return null;
+      const location = payload.results?.[0]?.geometry?.location;
+      if (typeof location?.lat !== 'number' || typeof location?.lng !== 'number') return null;
+      return { lat: location.lat, lng: location.lng };
+    } catch {
+      return null;
+    }
   }
 
   private isSameDay(a: Date, b: Date) {

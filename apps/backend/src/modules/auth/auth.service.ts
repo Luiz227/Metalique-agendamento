@@ -26,7 +26,7 @@ export class AuthService {
       throw new UnauthorizedException('Credenciais inválidas');
     }
 
-    const payload = { sub: user.id, email: user.email, role: user.role };
+    const payload = { sub: user.id, email: user.email, name: user.name, role: user.role };
     const accessToken = await this.jwt.signAsync(payload);
     const refreshToken = await this.jwt.signAsync(payload, {
       expiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? '30d'

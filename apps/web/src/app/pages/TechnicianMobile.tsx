@@ -1,12 +1,12 @@
 import { type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, Camera, CheckCircle, Clock, FileText, MapPin, Navigation, Phone, Play } from 'lucide-react';
+import { Calendar, Camera, CheckCircle, Clock, FileText, MapPin, Navigation, Phone, Play, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Separator } from '../components/ui/separator';
 import { Textarea } from '../components/ui/textarea';
 import { Input } from '../components/ui/input';
-import { api, connectRealtime, getToken, getUser } from '../services/api';
+import { ApiError, api, clearSession, connectRealtime, getToken, getUser } from '../services/api';
 import type { Appointment } from '../services/types';
 import { formatDate, formatTime, statusLabel, statusTone } from '../services/types';
 
@@ -98,6 +98,8 @@ export default function TechnicianMobile() {
   const user = getUser();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
+  const [loadingAppointments, setLoadingAppointments] = useState(true);
+  const [appointmentsError, setAppointmentsError] = useState('');
   const [report, setReport] = useState({ summary: '' });
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -111,18 +113,31 @@ export default function TechnicianMobile() {
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingSignatureRef = useRef(false);
 
-  async function load() {
-    const rows = await api<Appointment[]>('/technician/appointments');
-    const nextIds = new Set(rows.map((item) => item.id));
-    const newItems = rows.filter((item) => !knownIdsRef.current.has(item.id));
-    if (newItems.length > 0 && Notification.permission === 'granted') {
-      new Notification('Novo agendamento confirmado', {
-        body: `${newItems[0].client?.name ?? 'Cliente'} - ${newItems[0].city}`
-      });
+  async function load(silent = false) {
+    if (!silent) setLoadingAppointments(true);
+    setAppointmentsError('');
+    try {
+      const rows = await api<Appointment[]>('/technician/appointments');
+      const nextIds = new Set(rows.map((item) => item.id));
+      const newItems = rows.filter((item) => !knownIdsRef.current.has(item.id));
+      if (newItems.length > 0 && Notification.permission === 'granted') {
+        new Notification('Novo agendamento confirmado', {
+          body: `${newItems[0].client?.name ?? 'Cliente'} - ${newItems[0].city}`
+        });
+      }
+      knownIdsRef.current = nextIds;
+      setAppointments(rows);
+      setSelectedId((current) => (rows.some((item) => item.id === current) ? current : rows[0]?.id || ''));
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+        clearSession();
+        setAppointmentsError('Sessao expirada. Saia e entre novamente para carregar seus atendimentos.');
+        return;
+      }
+      setAppointmentsError(err instanceof Error ? err.message : 'Nao foi possivel carregar os atendimentos.');
+    } finally {
+      setLoadingAppointments(false);
     }
-    knownIdsRef.current = nextIds;
-    setAppointments(rows);
-    setSelectedId((current) => current || rows[0]?.id || '');
   }
 
   useEffect(() => {
@@ -137,14 +152,14 @@ export default function TechnicianMobile() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      load().catch(() => undefined);
+      load(true).catch(() => undefined);
     }, 15000);
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
     const disconnect = connectRealtime(() => {
-      load().catch(() => undefined);
+      load(true).catch(() => undefined);
     });
     return () => disconnect();
   }, []);
@@ -357,7 +372,40 @@ export default function TechnicianMobile() {
   if (!current) {
     return (
       <div className="min-h-screen bg-background px-4 py-6">
-        <div className="mx-auto w-full max-w-2xl text-muted-foreground">Nenhum atendimento encontrado para este tecnico.</div>
+        <div className="mx-auto w-full max-w-2xl space-y-4">
+          <div className="rounded-2xl bg-card p-5">
+            <h1 className="text-xl font-bold">Meus Atendimentos</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {user?.name ? `Usuario logado: ${user.name}` : 'Usuario tecnico'}
+            </p>
+          </div>
+
+          {loadingAppointments ? (
+            <div className="rounded-2xl border bg-card p-5 text-muted-foreground">
+              Carregando atendimentos do tecnico...
+            </div>
+          ) : appointmentsError ? (
+            <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-5">
+              <p className="font-semibold text-red-500">Falha ao carregar atendimentos</p>
+              <p className="mt-2 text-sm text-red-300">{appointmentsError}</p>
+              <Button className="mt-4 w-full" onClick={() => load()}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Tentar novamente
+              </Button>
+            </div>
+          ) : (
+            <div className="rounded-2xl border bg-card p-5 text-muted-foreground">
+              <p>Nenhum atendimento encontrado para este tecnico.</p>
+              <p className="mt-2 text-sm">
+                Se existir agendamento confirmado, verifique se o usuario tecnico esta vinculado ao cadastro do tecnico correto.
+              </p>
+              <Button className="mt-4 w-full" onClick={() => load()}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Atualizar
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     );
   }

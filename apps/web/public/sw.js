@@ -1,4 +1,4 @@
-const CACHE_NAME = "agenda-metalique-v1";
+const CACHE_NAME = "agenda-metalique-v2";
 const APP_SHELL = ["/", "/login", "/manifest.webmanifest", "/images/logo-metalique-256.png"];
 
 self.addEventListener("install", (event) => {
@@ -18,10 +18,17 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
+  const url = new URL(request.url);
+
+  if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) {
+    event.respondWith(fetch(request, { cache: "no-store" }));
+    return;
+  }
 
   event.respondWith(
     fetch(request)
       .then((response) => {
+        if (!response.ok) return response;
         const clone = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         return response;

@@ -1,5 +1,5 @@
 import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
-import { AppointmentStatus, Prisma } from '@prisma/client';
+import { AppointmentStatus, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { google } from 'googleapis';
 import { Readable } from 'stream';
@@ -281,38 +281,43 @@ export class LegacyService {
   async technicianAppointments(identity: { userId: string | null; email: string | null; name: string | null } | null) {
     if (!identity) return [];
 
-    let technician =
-      identity.userId
-        ? await this.prisma.technician.findFirst({
-            where: { userId: identity.userId }
+    const linkedUser = identity.userId
+      ? await this.prisma.user.findUnique({ where: { id: identity.userId } })
+      : identity.email
+        ? await this.prisma.user.findUnique({
+        where: { email: identity.email }
           })
         : null;
 
-    if (!technician && identity.email) {
-      const userByEmail = await this.prisma.user.findUnique({
-        where: { email: identity.email }
-      });
-
-      if (userByEmail) {
-        technician = await this.prisma.technician.findFirst({
-          where: {
-            OR: [{ userId: userByEmail.id }]
-          }
-        });
-
-        if (!technician && identity.name?.trim()) {
-          technician = await this.prisma.technician.findFirst({
-            where: { name: { equals: identity.name.trim(), mode: 'insensitive' } }
-          });
-        }
-
-        if (technician && !technician.userId) {
-          technician = await this.prisma.technician.update({
-            where: { id: technician.id },
-            data: { userId: userByEmail.id }
-          });
-        }
+    const candidateName = linkedUser?.name?.trim() || identity.name?.trim() || '';
+    let technician = await this.prisma.technician.findFirst({
+      where: {
+        OR: [
+          ...(linkedUser ? [{ userId: linkedUser.id }] : []),
+          ...(candidateName ? [{ name: { equals: candidateName, mode: 'insensitive' as const } }] : [])
+        ]
       }
+    });
+
+    if (!technician && linkedUser?.role === UserRole.TECHNICIAN) {
+      technician = await this.prisma.technician.create({
+        data: {
+          userId: linkedUser.id,
+          name: linkedUser.name,
+          baseCity: 'Nao informado',
+          baseAddress: 'Nao informado',
+          specialties: [],
+          active: linkedUser.active,
+          color: '#2563eb'
+        }
+      });
+    }
+
+    if (technician && linkedUser && !technician.userId) {
+      technician = await this.prisma.technician.update({
+        where: { id: technician.id },
+        data: { userId: linkedUser.id, active: linkedUser.active }
+      });
     }
 
     if (!technician) return [];

@@ -57,7 +57,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!(init.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
-  const response = await fetch(`${API_URL}${path}`, { ...init, headers });
+  const response = await fetch(`${API_URL}${path}`, { ...init, headers, cache: 'no-store' });
   const payload = response.status === 204 ? null : await response.json().catch(() => null);
   if (!response.ok) {
     throw new ApiError(payload?.message ?? 'Erro na API', response.status);

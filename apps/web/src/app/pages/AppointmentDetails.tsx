@@ -86,6 +86,7 @@ export default function AppointmentDetails() {
     osNumber: '',
     date: '',
     startTime: '',
+    daysOut: '1',
     technicianId: '',
     transportMode: 'CAR',
     vehicleId: '',
@@ -179,6 +180,7 @@ export default function AppointmentDetails() {
       osNumber: appointment.osNumber ?? '',
       date: new Date(appointment.date).toISOString().slice(0, 10),
       startTime: new Date(appointment.startTime).toTimeString().slice(0, 5),
+      daysOut: String(appointment.daysOut ?? 1),
       technicianId: appointment.technicianId ?? '',
       transportMode: appointment.transportMode ?? (appointment.vehicle ? 'CAR' : 'NONE'),
       vehicleId: appointment.vehicle?.id ?? '',
@@ -365,6 +367,7 @@ export default function AppointmentDetails() {
             problemDescription: form.problemDescription || 'Pendente descricao do servico',
             notes: form.notes,
             osNumber: form.osNumber || null,
+            daysOut: Number(form.daysOut || 1),
             needsHotel: form.hasHotel,
             needsTransport: form.transportMode !== 'NONE',
             date: new Date(`${form.date}T12:00:00`).toISOString(),
@@ -560,7 +563,7 @@ export default function AppointmentDetails() {
                 Agendamento
               </CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <CardContent className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div>
                 <p className="text-xs text-muted-foreground">Data</p>
                 {editing ? <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-1" /> : <p className="font-medium">{formatDate(appointment.date)}</p>}
@@ -568,6 +571,20 @@ export default function AppointmentDetails() {
               <div>
                 <p className="text-xs text-muted-foreground">Horario</p>
                 {editing ? <Input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} className="mt-1" /> : <p className="font-medium">{formatTime(appointment.startTime)}</p>}
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Dias em campo</p>
+                {editing ? (
+                  <Input
+                    type="number"
+                    min="1"
+                    value={form.daysOut}
+                    onChange={(e) => setForm({ ...form, daysOut: e.target.value })}
+                    className="mt-1"
+                  />
+                ) : (
+                  <p className="font-medium">{appointment.daysOut ?? 1} dia(s)</p>
+                )}
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Tecnico</p>

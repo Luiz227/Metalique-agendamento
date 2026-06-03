@@ -69,9 +69,10 @@ export default function AppointmentsManager() {
   const [error, setError] = useState('');
   const [items, setItems] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showFinished, setShowFinished] = useState(false);
 
-  async function load() {
-    setLoading(true);
+  async function load(showSpinner = false) {
+    if (showSpinner) setLoading(true);
     try {
       const data = await api<Appointment[]>('/appointments');
       setItems(data);
@@ -83,7 +84,7 @@ export default function AppointmentsManager() {
   }
 
   useEffect(() => {
-    load();
+    load(true);
   }, []);
 
   useEffect(() => {
@@ -247,13 +248,13 @@ export default function AppointmentsManager() {
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="font-semibold">{item.client?.name ?? 'Cliente sem nome'}</p>
-                  <p className="text-xs text-muted-foreground">{item.city} â€¢ {item.fullAddress}</p>
+                  <p className="text-xs text-muted-foreground">{item.city} - {item.fullAddress}</p>
                 </div>
                 <Badge variant="outline">{statusLabel(item.status)}</Badge>
               </div>
               <div className="text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 mt-0.5" />
-                <span>Faltando: {missing.slice(0, 6).join(' â€¢ ')}{missing.length > 6 ? ' ...' : ''}</span>
+                <span>Faltando: {missing.slice(0, 6).join(' - ')}{missing.length > 6 ? ' ...' : ''}</span>
               </div>
               <div>
                 <Link to={`/appointments/${item.id}`}>
@@ -266,16 +267,24 @@ export default function AppointmentsManager() {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <CardTitle className="flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5 text-blue-500" />
             Agendamentos finalizados
           </CardTitle>
+          <Button variant="outline" onClick={() => setShowFinished((value) => !value)}>
+            {showFinished ? 'Ocultar finalizados' : `Mostrar finalizados (${finished.length})`}
+          </Button>
         </CardHeader>
         <CardContent className="space-y-3">
-          {loading && <p className="text-sm text-muted-foreground">Carregando...</p>}
-          {!loading && finished.length === 0 && <p className="text-sm text-muted-foreground">Nenhum agendamento finalizado.</p>}
-          {finished.map((item) => {
+          {!showFinished && (
+            <p className="text-sm text-muted-foreground">
+              Clique em mostrar finalizados para consultar atendimentos encerrados e o relato do tecnico.
+            </p>
+          )}
+          {showFinished && loading && <p className="text-sm text-muted-foreground">Carregando...</p>}
+          {showFinished && !loading && finished.length === 0 && <p className="text-sm text-muted-foreground">Nenhum agendamento finalizado.</p>}
+          {showFinished && finished.map((item) => {
             const technicalReport = technicianReportText(item);
 
             return (

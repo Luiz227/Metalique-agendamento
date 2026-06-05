@@ -285,17 +285,20 @@ export class LegacyService {
       ? await this.prisma.user.findUnique({ where: { id: identity.userId } })
       : identity.email
         ? await this.prisma.user.findUnique({
-        where: { email: identity.email }
+            where: { email: identity.email }
           })
         : null;
 
     const candidateName = linkedUser?.name?.trim() || identity.name?.trim() || '';
+    const technicianSearch: Prisma.TechnicianWhereInput[] = [];
+    if (linkedUser) technicianSearch.push({ userId: linkedUser.id });
+    if (candidateName) technicianSearch.push({ name: { equals: candidateName, mode: 'insensitive' } });
+
+    if (technicianSearch.length === 0) return [];
+
     let technician = await this.prisma.technician.findFirst({
       where: {
-        OR: [
-          ...(linkedUser ? [{ userId: linkedUser.id }] : []),
-          ...(candidateName ? [{ name: { equals: candidateName, mode: 'insensitive' as const } }] : [])
-        ]
+        OR: technicianSearch
       }
     });
 

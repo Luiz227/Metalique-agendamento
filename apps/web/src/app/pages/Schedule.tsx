@@ -17,6 +17,10 @@ const statusConfig = {
   critical: { color: 'bg-red-500' }
 };
 
+function normalizeTechnicianColor(color?: string | null) {
+  return color || '#2563eb';
+}
+
 function shortCompanyName(name: string) {
   return name.length > 22 ? `${name.slice(0, 22).trim()}...` : name;
 }
@@ -104,6 +108,7 @@ export default function Schedule() {
         id: appointment.id,
         time: formatTime(appointment.startTime),
         technician: appointment.technician?.name ?? 'Sem técnico',
+        technicianColor: normalizeTechnicianColor(appointment.technician?.color),
         client: appointment.client?.name ?? 'Cliente',
         city: appointment.city,
         status: appointment.status === 'READY' ? 'ready' : appointment.status === 'CRITICAL' ? 'critical' : 'waiting',
@@ -236,7 +241,7 @@ export default function Schedule() {
                         <span className="text-sm font-medium text-white">{apt.time}</span>
                         <span className="text-xs text-zinc-500">{apt.duration}h</span>
                       </div>
-                      <div className={`w-1 self-stretch rounded-full ${statusConfig[apt.status as keyof typeof statusConfig].color}`} />
+                      <div className="w-1 self-stretch rounded-full" style={{ backgroundColor: apt.technicianColor }} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <h4 className="font-medium text-white group-hover:text-blue-400 transition-colors">{apt.client}</h4>
@@ -244,6 +249,7 @@ export default function Schedule() {
                         </div>
                         <div className="flex flex-wrap gap-4 text-sm text-zinc-400">
                           <div className="flex items-center gap-1.5">
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: apt.technicianColor }} />
                             <User className="h-3.5 w-3.5" />
                             <span>{apt.technician}</span>
                           </div>
@@ -282,9 +288,16 @@ export default function Schedule() {
                         {appointmentCount > 0 && (
                           <div className="flex-1 space-y-1 overflow-hidden">
                             {dayAppointments.slice(0, 3).map((appointment) => (
-                              <div key={appointment.id} className="rounded bg-blue-500/15 px-2 py-1 text-[11px] leading-tight text-blue-100">
+                              <div
+                                key={appointment.id}
+                                className="rounded px-2 py-1 text-[11px] leading-tight text-white"
+                                style={{
+                                  backgroundColor: `${normalizeTechnicianColor(appointment.technician?.color)}33`,
+                                  borderLeft: `3px solid ${normalizeTechnicianColor(appointment.technician?.color)}`
+                                }}
+                              >
                                 <span className="font-semibold">{appointment.technician?.name ?? 'Sem tecnico'}</span>
-                                <span className="text-blue-200"> / {shortCompanyName(appointment.client?.name ?? 'Cliente')}</span>
+                                <span className="text-white/85"> / {shortCompanyName(appointment.client?.name ?? 'Cliente')}</span>
                               </div>
                             ))}
                             {appointmentCount > 3 && (
@@ -319,7 +332,7 @@ export default function Schedule() {
                         <span className="text-sm font-medium text-white">{apt.time}</span>
                         <span className="text-xs text-zinc-500">{apt.duration}h</span>
                       </div>
-                      <div className={`w-1 self-stretch rounded-full ${statusConfig[apt.status as keyof typeof statusConfig].color}`} />
+                      <div className="w-1 self-stretch rounded-full" style={{ backgroundColor: apt.technicianColor }} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <h4 className="font-medium text-white group-hover:text-blue-400 transition-colors">{apt.client}</h4>
@@ -327,6 +340,7 @@ export default function Schedule() {
                         </div>
                         <div className="flex flex-wrap gap-4 text-sm text-zinc-400">
                           <div className="flex items-center gap-1.5">
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: apt.technicianColor }} />
                             <User className="h-3.5 w-3.5" />
                             <span>{apt.technician}</span>
                           </div>

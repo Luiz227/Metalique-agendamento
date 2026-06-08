@@ -30,7 +30,28 @@ const roleLabels: Record<ApiUser['role'], string> = {
   SALES: 'Vendas'
 };
 
-const defaultColors = ['#2563eb', '#16a34a', '#dc2626', '#ca8a04', '#9333ea', '#0891b2', '#ea580c', '#db2777'];
+const defaultColors = [
+  '#2563eb',
+  '#16a34a',
+  '#dc2626',
+  '#ca8a04',
+  '#9333ea',
+  '#0891b2',
+  '#ea580c',
+  '#db2777',
+  '#0f766e',
+  '#4f46e5',
+  '#7c3aed',
+  '#be123c',
+  '#15803d',
+  '#0369a1',
+  '#b45309',
+  '#334155',
+  '#1d4ed8',
+  '#a21caf',
+  '#c2410c',
+  '#047857'
+];
 
 const emptyForm: UserForm = {
   name: '',

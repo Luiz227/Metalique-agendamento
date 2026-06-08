@@ -35,8 +35,10 @@ export type Technician = {
 export type Vehicle = {
   id: string;
   name: string;
+  year?: number | null;
   plate: string;
-  driverName?: string;
+  mileage: number;
+  active: boolean;
 };
 
 export type Hotel = {

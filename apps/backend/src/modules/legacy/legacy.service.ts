@@ -14,6 +14,32 @@ export class LegacyService {
     return this.prisma.vehicle.findMany({ orderBy: { name: 'asc' } });
   }
 
+  async createVehicle(payload: { name?: string; year?: number | string | null; plate?: string; mileage?: number | string | null }) {
+    const data = this.normalizeVehicleCreatePayload(payload);
+    return this.prisma.vehicle.create({ data });
+  }
+
+  async updateVehicle(
+    id: string,
+    payload: { name?: string; year?: number | string | null; plate?: string; mileage?: number | string | null; active?: boolean }
+  ) {
+    const data = this.normalizeVehicleUpdatePayload(payload);
+    if (typeof payload.active === 'boolean') data.active = payload.active;
+    return this.prisma.vehicle.update({
+      where: { id },
+      data
+    });
+  }
+
+  async toggleVehicle(id: string) {
+    const current = await this.prisma.vehicle.findUnique({ where: { id } });
+    if (!current) throw new NotFoundException('Veiculo nao encontrado');
+    return this.prisma.vehicle.update({
+      where: { id },
+      data: { active: !current.active }
+    });
+  }
+
   async resourcesHotels() {
     return this.prisma.hotel.findMany({ orderBy: { name: 'asc' } });
   }
@@ -935,6 +961,75 @@ export class LegacyService {
     const lat2 = (b.lat * Math.PI) / 180;
     const x = Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
     return 2 * radius * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  }
+
+  private normalizeVehicleCreatePayload(payload: {
+    name?: string;
+    year?: number | string | null;
+    plate?: string;
+    mileage?: number | string | null;
+  }): Prisma.VehicleUncheckedCreateInput {
+    const name = payload.name?.trim();
+    const plate = payload.plate?.trim().toUpperCase();
+    const year = payload.year == null || payload.year === '' ? null : Number(payload.year);
+    const mileage = payload.mileage == null || payload.mileage === '' ? 0 : Number(payload.mileage);
+
+    if (!name) throw new InternalServerErrorException('Nome do veiculo e obrigatorio');
+    if (!plate) throw new InternalServerErrorException('Placa e obrigatoria');
+
+    if (year != null && (!Number.isInteger(year) || year < 1900 || year > 3000)) {
+      throw new InternalServerErrorException('Ano do veiculo invalido');
+    }
+
+    if (!Number.isFinite(mileage) || mileage < 0) {
+      throw new InternalServerErrorException('Quilometragem invalida');
+    }
+
+    return {
+      name,
+      plate,
+      year,
+      mileage: Math.round(mileage)
+    };
+  }
+
+  private normalizeVehicleUpdatePayload(payload: {
+    name?: string;
+    year?: number | string | null;
+    plate?: string;
+    mileage?: number | string | null;
+  }): Prisma.VehicleUncheckedUpdateInput {
+    const data: Prisma.VehicleUncheckedUpdateInput = {};
+
+    if (payload.name !== undefined) {
+      const name = payload.name.trim();
+      if (!name) throw new InternalServerErrorException('Nome do veiculo e obrigatorio');
+      data.name = name;
+    }
+
+    if (payload.plate !== undefined) {
+      const plate = payload.plate.trim().toUpperCase();
+      if (!plate) throw new InternalServerErrorException('Placa e obrigatoria');
+      data.plate = plate;
+    }
+
+    if (payload.year !== undefined) {
+      const year = payload.year == null || payload.year === '' ? null : Number(payload.year);
+      if (year != null && (!Number.isInteger(year) || year < 1900 || year > 3000)) {
+        throw new InternalServerErrorException('Ano do veiculo invalido');
+      }
+      data.year = year;
+    }
+
+    if (payload.mileage !== undefined) {
+      const mileage = payload.mileage == null || payload.mileage === '' ? 0 : Number(payload.mileage);
+      if (!Number.isFinite(mileage) || mileage < 0) {
+        throw new InternalServerErrorException('Quilometragem invalida');
+      }
+      data.mileage = Math.round(mileage);
+    }
+
+    return data;
   }
 }
 

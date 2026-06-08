@@ -28,6 +28,24 @@ export class LegacyController {
     return this.service.resourcesVehicles();
   }
 
+  @Post('resources/vehicles')
+  createVehicle(@Body() body: { name?: string; year?: number | string | null; plate?: string; mileage?: number | string | null }) {
+    return this.service.createVehicle(body);
+  }
+
+  @Put('resources/vehicles/:id')
+  updateVehicle(
+    @Param('id') id: string,
+    @Body() body: { name?: string; year?: number | string | null; plate?: string; mileage?: number | string | null; active?: boolean }
+  ) {
+    return this.service.updateVehicle(id, body);
+  }
+
+  @Post('resources/vehicles/:id/toggle')
+  toggleVehicle(@Param('id') id: string) {
+    return this.service.toggleVehicle(id);
+  }
+
   @Get('resources/hotels')
   hotels() {
     return this.service.resourcesHotels();

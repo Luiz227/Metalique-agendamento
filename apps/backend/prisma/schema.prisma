@@ -144,7 +144,9 @@ model Hotel {
 model Vehicle {
   id          String   @id @default(cuid())
   name        String
+  year        Int?
   plate       String   @unique
+  mileage     Int      @default(0)
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

@@ -3,7 +3,6 @@ import {
   LayoutDashboard,
   Map,
   Calendar,
-  Sparkles,
   DollarSign,
   CheckCircle,
   Users,
@@ -14,8 +13,7 @@ import {
   Shield,
   BarChart3,
   LogOut,
-  Settings
-  ,
+  Settings,
   Sun,
   Moon,
   Columns3,
@@ -91,17 +89,17 @@ export default function Layout() {
     { name: 'Mapa Operacional', href: '/map', icon: Map, roles: ['ADMIN', 'LOGISTICS', 'SALES'] },
     { name: 'Agenda', href: '/schedule', icon: Calendar, roles: ['ADMIN', 'LOGISTICS', 'SALES'] },
     { name: 'Central Agend.', href: '/appointments/manage', icon: ClipboardList, roles: ['ADMIN', 'LOGISTICS', 'SALES'] },
-    { name: 'Sugestões IA', href: '/suggestions', icon: Sparkles, roles: ['ADMIN', 'LOGISTICS', 'SALES'] },
     { name: 'Financeiro', href: '/financial', icon: DollarSign, roles: ['ADMIN'] },
-    { name: 'Validação', href: '/validation', icon: CheckCircle, roles: ['ADMIN', 'VALIDATOR'] },
+    { name: 'Validacao', href: '/validation', icon: CheckCircle, roles: ['ADMIN', 'VALIDATOR'] },
     { name: 'Meus Atendimentos', href: '/technician', icon: Calendar, roles: ['TECHNICIAN'] },
-    { name: 'Calendário', href: '/technician/calendar', icon: Calendar, roles: ['TECHNICIAN'] },
-    { name: 'Técnicos', href: '/technicians', icon: Users, roles: ['ADMIN', 'LOGISTICS', 'SALES'] },
-    { name: 'Usuários', href: '/users', icon: Shield, roles: ['ADMIN'] },
-    { name: 'Veículos', href: '/vehicles', icon: Car, roles: ['ADMIN', 'LOGISTICS'] },
-    { name: 'Relatórios', href: '/reports', icon: BarChart3, roles: ['ADMIN', 'LOGISTICS'] },
-    { name: 'Configurações', href: '/settings', icon: Settings, roles: ['ADMIN'] }
+    { name: 'Calendario', href: '/technician/calendar', icon: Calendar, roles: ['TECHNICIAN'] },
+    { name: 'Tecnicos', href: '/technicians', icon: Users, roles: ['ADMIN', 'LOGISTICS', 'SALES'] },
+    { name: 'Usuarios', href: '/users', icon: Shield, roles: ['ADMIN'] },
+    { name: 'Veiculos', href: '/vehicles', icon: Car, roles: ['ADMIN', 'LOGISTICS'] },
+    { name: 'Relatorios', href: '/reports', icon: BarChart3, roles: ['ADMIN', 'LOGISTICS'] },
+    { name: 'Configuracoes', href: '/settings', icon: Settings, roles: ['ADMIN'] }
   ];
+
   const visibleNavigation = navigation.filter((item) => !user?.role || item.roles.includes(user.role));
 
   return (
@@ -183,11 +181,13 @@ export default function Layout() {
             <Button variant="ghost" size="icon" onClick={toggleTheme} title="Alternar tema">
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
-            {user?.role === 'ADMIN' && <Link to="/notifications">
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="h-5 w-5" />
-              </Button>
-            </Link>}
+            {user?.role === 'ADMIN' && (
+              <Link to="/notifications">
+                <Button variant="ghost" size="icon" className="relative">
+                  <Bell className="h-5 w-5" />
+                </Button>
+              </Link>
+            )}
           </div>
         </header>
 

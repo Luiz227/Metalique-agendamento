@@ -8,7 +8,6 @@ import Schedule from './pages/Schedule';
 import NewAppointment from './pages/NewAppointment';
 import AppointmentsManager from './pages/AppointmentsManager';
 import AppointmentDetails from './pages/AppointmentDetails';
-import Suggestions from './pages/Suggestions';
 import Financial from './pages/Financial';
 import Validation from './pages/Validation';
 import TechnicianMobile from './pages/TechnicianMobile';
@@ -60,7 +59,6 @@ export default function App() {
           <Route path="kanban" element={<RequireRole roles={['ADMIN']}><Kanban /></RequireRole>} />
           <Route path="appointments/new" element={<RequireRole roles={['ADMIN', 'LOGISTICS', 'SALES']}><NewAppointment /></RequireRole>} />
           <Route path="appointments/:id" element={<RequireRole roles={['ADMIN', 'LOGISTICS', 'SALES', 'VALIDATOR']}><AppointmentDetails /></RequireRole>} />
-          <Route path="suggestions" element={<RequireRole roles={['ADMIN', 'LOGISTICS', 'SALES']}><Suggestions /></RequireRole>} />
           <Route path="financial" element={<RequireRole roles={['ADMIN']}><Financial /></RequireRole>} />
           <Route path="validation" element={<RequireRole roles={['ADMIN', 'VALIDATOR']}><Validation /></RequireRole>} />
           <Route path="technician" element={<RequireRole roles={['TECHNICIAN']}><TechnicianMobile /></RequireRole>} />

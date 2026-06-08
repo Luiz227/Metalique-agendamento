@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   DollarSign,
   MapPin,
-  ArrowRight,
   Sparkles
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -336,13 +335,12 @@ export default function Dashboard() {
                   <span className="text-xs font-medium text-green-400">{dashboard.openSuggestions}</span>
                 </div>
                 <p className="text-xs text-zinc-400">
-                  As sugestoes aparecem automaticamente quando houver atendimentos proximos no mapa.
+                  As sugestoes aparecem automaticamente no mapa quando houver atendimentos proximos.
                 </p>
               </div>
-              <Link to="/suggestions">
+              <Link to="/map">
                 <Button variant="outline" className="w-full border-purple-500/20 text-purple-400 hover:bg-purple-500/10">
-                  Ver sugestões
-                  <ArrowRight className="h-4 w-4 ml-2" />
+                  Abrir mapa com sugestoes
                 </Button>
               </Link>
             </CardContent>
@@ -368,5 +366,6 @@ export default function Dashboard() {
     </div>
   );
 }
+
 
 

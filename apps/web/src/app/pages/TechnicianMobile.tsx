@@ -69,13 +69,6 @@ async function compressImageForUpload(file: File) {
   }
 }
 
-function dataUrlToFile(dataUrl: string, fileName: string) {
-  const [meta, base64] = dataUrl.split(',');
-  const mimeType = meta.match(/data:(.*?);base64/)?.[1] ?? 'image/png';
-  const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
-  return new File([bytes], fileName, { type: mimeType });
-}
-
 function isInCurrentWeek(dateValue: string) {
   const date = new Date(dateValue);
   const now = new Date();
@@ -105,13 +98,15 @@ export default function TechnicianMobile() {
   const [errorMessage, setErrorMessage] = useState('');
   const [savingReport, setSavingReport] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
-  const [signatureDataUrl, setSignatureDataUrl] = useState('');
+  const [clientSignatureDataUrl, setClientSignatureDataUrl] = useState('');
+  const [technicianSignatureDataUrl, setTechnicianSignatureDataUrl] = useState('');
   const [activeTripsView, setActiveTripsView] = useState<'WEEK' | 'FINISHED'>('WEEK');
   const [activeSection, setActiveSection] = useState<'LIST' | 'DETAILS' | 'CALENDAR'>('LIST');
   const [monthCursor, setMonthCursor] = useState(() => new Date());
   const knownIdsRef = useRef<Set<string>>(new Set());
-  const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const drawingSignatureRef = useRef(false);
+  const clientSignatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const technicianSignatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingSignatureRef = useRef<'client' | 'technician' | null>(null);
 
   async function load(silent = false) {
     if (!silent) setLoadingAppointments(true);
@@ -173,6 +168,8 @@ export default function TechnicianMobile() {
   }, [pendingAttachments]);
 
   const current = useMemo(() => appointments.find((item) => item.id === selectedId) ?? appointments[0], [appointments, selectedId]);
+  const currentServiceOrder = (current?.attachments ?? []).find((attachment) => attachment.kind === 'SERVICE_ORDER_TEMPLATE');
+  const currentGeneratedReport = (current?.attachments ?? []).find((attachment) => attachment.kind === 'TECHNICAL_REPORT');
   const upcoming = appointments.filter((item) => item.id !== current?.id && !wasFinishedByTechnician(item));
   const weeklyTrips = useMemo(
     () => appointments.filter((item) => isInCurrentWeek(item.date) && !wasFinishedByTechnician(item)),
@@ -223,7 +220,12 @@ export default function TechnicianMobile() {
     try {
       await api(`/technician/appointments/${current.id}/reports`, {
         method: 'POST',
-        body: JSON.stringify({ ...report, signatureDataUrl, finishedAt: new Date().toISOString() })
+        body: JSON.stringify({
+          ...report,
+          clientSignatureDataUrl,
+          technicianSignatureDataUrl,
+          finishedAt: new Date().toISOString()
+        })
       });
 
       for (const attachment of pendingAttachments) {
@@ -235,15 +237,12 @@ export default function TechnicianMobile() {
         }
       }
 
-      if (signatureDataUrl) {
-        await uploadFileNow(dataUrlToFile(signatureDataUrl, 'assinatura-cliente.png'), 'documento-tecnico', 'assinatura-cliente.png');
-      }
-
       pendingAttachments.forEach((item) => {
         if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
       });
       setPendingAttachments([]);
-      clearSignature();
+      clearSignature('client');
+      clearSignature('technician');
       setReport({ summary: '' });
       setMessage('Relatório e anexos enviados com sucesso.');
       await load();
@@ -312,9 +311,25 @@ export default function TechnicianMobile() {
     return `${cleanName}${extension}`;
   }
 
-  function drawSignature(event: PointerEvent<HTMLCanvasElement>) {
-    const canvas = signatureCanvasRef.current;
-    if (!canvas || !drawingSignatureRef.current) return;
+  function getSignatureCanvas(target: 'client' | 'technician') {
+    return target === 'client' ? clientSignatureCanvasRef.current : technicianSignatureCanvasRef.current;
+  }
+
+  function getSignatureData(target: 'client' | 'technician') {
+    return target === 'client' ? clientSignatureDataUrl : technicianSignatureDataUrl;
+  }
+
+  function setSignatureData(target: 'client' | 'technician', value: string) {
+    if (target === 'client') {
+      setClientSignatureDataUrl(value);
+      return;
+    }
+    setTechnicianSignatureDataUrl(value);
+  }
+
+  function drawSignature(event: PointerEvent<HTMLCanvasElement>, target: 'client' | 'technician') {
+    const canvas = getSignatureCanvas(target);
+    if (!canvas || drawingSignatureRef.current !== target) return;
     const rect = canvas.getBoundingClientRect();
     const context = canvas.getContext('2d');
     if (!context) return;
@@ -325,40 +340,40 @@ export default function TechnicianMobile() {
     context.strokeStyle = '#111827';
     context.lineTo((event.clientX - rect.left) * scaleX, (event.clientY - rect.top) * scaleY);
     context.stroke();
-    setSignatureDataUrl(canvas.toDataURL('image/png'));
+    setSignatureData(target, canvas.toDataURL('image/png'));
   }
 
-  function startSignature(event: PointerEvent<HTMLCanvasElement>) {
-    const canvas = signatureCanvasRef.current;
+  function startSignature(event: PointerEvent<HTMLCanvasElement>, target: 'client' | 'technician') {
+    const canvas = getSignatureCanvas(target);
     const context = canvas?.getContext('2d');
     if (!canvas || !context) return;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    if (!signatureDataUrl) {
+    if (!getSignatureData(target)) {
       context.fillStyle = '#ffffff';
       context.fillRect(0, 0, canvas.width, canvas.height);
     }
-    drawingSignatureRef.current = true;
+    drawingSignatureRef.current = target;
     context.beginPath();
     context.moveTo((event.clientX - rect.left) * scaleX, (event.clientY - rect.top) * scaleY);
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
-  function stopSignature() {
-    drawingSignatureRef.current = false;
-    const canvas = signatureCanvasRef.current;
-    if (canvas) setSignatureDataUrl(canvas.toDataURL('image/png'));
+  function stopSignature(target: 'client' | 'technician') {
+    drawingSignatureRef.current = null;
+    const canvas = getSignatureCanvas(target);
+    if (canvas) setSignatureData(target, canvas.toDataURL('image/png'));
   }
 
-  function clearSignature() {
-    const canvas = signatureCanvasRef.current;
+  function clearSignature(target: 'client' | 'technician') {
+    const canvas = getSignatureCanvas(target);
     const context = canvas?.getContext('2d');
     if (canvas && context) {
       context.fillStyle = '#ffffff';
       context.fillRect(0, 0, canvas.width, canvas.height);
     }
-    setSignatureDataUrl('');
+    setSignatureData(target, '');
   }
 
   function removeAttachment(id: string) {
@@ -582,6 +597,31 @@ export default function TechnicianMobile() {
         <Card className="rounded-2xl">
           <CardHeader><CardTitle className="text-base sm:text-lg">Relatorio Tecnico</CardTitle></CardHeader>
           <CardContent className="space-y-3">
+            <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
+              <p className="text-xs font-medium text-blue-700 dark:text-blue-200">OS anexada pelo agendamento</p>
+              {currentServiceOrder ? (
+                <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border bg-card p-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{currentServiceOrder.originalName}</p>
+                    <p className="text-[11px] text-muted-foreground">Essa OS serÃ¡ usada como modelo para preencher relato e assinaturas.</p>
+                  </div>
+                  {currentServiceOrder.publicUrl && (
+                    <a href={currentServiceOrder.publicUrl} target="_blank" rel="noreferrer">
+                      <Button type="button" variant="outline" size="sm">Abrir OS</Button>
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">Nenhuma OS original foi anexada ainda neste atendimento.</p>
+              )}
+              {currentGeneratedReport?.publicUrl && (
+                <div className="mt-2">
+                  <a href={currentGeneratedReport.publicUrl} target="_blank" rel="noreferrer">
+                    <Button type="button" variant="outline" className="w-full">Ver ultima OS preenchida</Button>
+                  </a>
+                </div>
+              )}
+            </div>
             <Textarea
               className="min-h-36 text-base"
               placeholder="Consideracoes do tecnico"
@@ -652,28 +692,48 @@ export default function TechnicianMobile() {
 
         {activeSection === 'DETAILS' && (
         <Card className="rounded-2xl">
-          <CardHeader><CardTitle className="text-base sm:text-lg">Assinatura do cliente</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <canvas
-              ref={signatureCanvasRef}
-              width={640}
-              height={220}
-              className="h-44 w-full touch-none rounded-xl border bg-white"
-              onPointerDown={startSignature}
-              onPointerMove={drawSignature}
-              onPointerUp={stopSignature}
-              onPointerCancel={stopSignature}
-              onPointerLeave={stopSignature}
-            />
-            <Button type="button" variant="outline" className="w-full" onClick={clearSignature}>
-              Limpar assinatura
-            </Button>
+          <CardHeader><CardTitle className="text-base sm:text-lg">Assinaturas</CardTitle></CardHeader>
+          <CardContent className="space-y-5">
+            <div className="space-y-3">
+              <p className="text-sm font-medium">Assinatura do tecnico</p>
+              <canvas
+                ref={technicianSignatureCanvasRef}
+                width={640}
+                height={220}
+                className="h-44 w-full touch-none rounded-xl border bg-white"
+                onPointerDown={(event) => startSignature(event, 'technician')}
+                onPointerMove={(event) => drawSignature(event, 'technician')}
+                onPointerUp={() => stopSignature('technician')}
+                onPointerCancel={() => stopSignature('technician')}
+                onPointerLeave={() => stopSignature('technician')}
+              />
+              <Button type="button" variant="outline" className="w-full" onClick={() => clearSignature('technician')}>
+                Limpar assinatura do tecnico
+              </Button>
+            </div>
+            <div className="space-y-3">
+              <p className="text-sm font-medium">Assinatura do cliente</p>
+              <canvas
+                ref={clientSignatureCanvasRef}
+                width={640}
+                height={220}
+                className="h-44 w-full touch-none rounded-xl border bg-white"
+                onPointerDown={(event) => startSignature(event, 'client')}
+                onPointerMove={(event) => drawSignature(event, 'client')}
+                onPointerUp={() => stopSignature('client')}
+                onPointerCancel={() => stopSignature('client')}
+                onPointerLeave={() => stopSignature('client')}
+              />
+              <Button type="button" variant="outline" className="w-full" onClick={() => clearSignature('client')}>
+                Limpar assinatura do cliente
+              </Button>
+            </div>
           </CardContent>
         </Card>
         )}
 
         {activeSection === 'DETAILS' && (
-        <Button className="h-12 w-full rounded-xl bg-[#c8142f] hover:bg-[#a81027]" disabled={!report.summary || savingReport} onClick={saveReport}>
+        <Button className="h-12 w-full rounded-xl bg-[#c8142f] hover:bg-[#a81027]" disabled={!report.summary || !clientSignatureDataUrl || !technicianSignatureDataUrl || savingReport} onClick={saveReport}>
           {savingReport ? 'Enviando...' : `Enviar relatório técnico${pendingAttachments.length ? ` + ${pendingAttachments.length} anexo(s)` : ''}`}
         </Button>
         )}

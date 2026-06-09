@@ -116,6 +116,7 @@ export default function AppointmentDetails() {
   });
   const [travelEstimate, setTravelEstimate] = useState<{ distanceText: string; durationText: string } | null>(null);
   const [travelLoading, setTravelLoading] = useState(false);
+  const [uploadingServiceOrder, setUploadingServiceOrder] = useState(false);
 
   async function load(showLoading = true) {
     if (!id) {
@@ -262,6 +263,8 @@ export default function AppointmentDetails() {
   );
 
   const checklistProgress = checklist.length ? (checklist.filter((item) => item.done).length / checklist.length) * 100 : 0;
+  const serviceOrderTemplates = (appointment.attachments ?? []).filter((attachment) => attachment.kind === 'SERVICE_ORDER_TEMPLATE');
+  const generatedReports = (appointment.attachments ?? []).filter((attachment) => attachment.kind === 'TECHNICAL_REPORT');
 
   async function cancelAppointment() {
     if (!appointment) return;
@@ -401,6 +404,26 @@ export default function AppointmentDetails() {
       setError(err instanceof ApiError ? err.message : 'Nao foi possivel confirmar o agendamento.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function uploadServiceOrderTemplate(file: File | undefined) {
+    if (!appointment || !file) return;
+    setUploadingServiceOrder(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file, file.name);
+      formData.append('type', 'service-order-template');
+      await api(`/attachments/appointments/${appointment.id}`, {
+        method: 'POST',
+        body: formData
+      });
+      await load(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Nao foi possivel anexar a OS do SIGE.');
+    } finally {
+      setUploadingServiceOrder(false);
     }
   }
 
@@ -807,6 +830,64 @@ export default function AppointmentDetails() {
                 <Input value={form.serviceType} onChange={(e) => setForm({ ...form, serviceType: e.target.value })} disabled={!editing} />
                 <Textarea value={form.problemDescription} onChange={(e) => setForm({ ...form, problemDescription: e.target.value })} disabled={!editing} />
                 <Input value={form.osNumber} placeholder="OS" onChange={(e) => setForm({ ...form, osNumber: e.target.value })} disabled={!editing} />
+                <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-sm font-medium">OS original do SIGE Cloud</p>
+                      <p className="text-xs text-muted-foreground">Anexe o PDF padrÃ£o para o tÃ©cnico visualizar e o sistema preencher no final do atendimento.</p>
+                    </div>
+                    <label className="inline-flex cursor-pointer items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+                      {uploadingServiceOrder ? 'Enviando...' : 'Anexar OS'}
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        className="hidden"
+                        disabled={uploadingServiceOrder}
+                        onChange={(event) => {
+                          uploadServiceOrderTemplate(event.target.files?.[0]);
+                          event.currentTarget.value = '';
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {serviceOrderTemplates.length === 0 && (
+                      <p className="text-xs text-muted-foreground">Nenhuma OS original anexada ainda.</p>
+                    )}
+                    {serviceOrderTemplates.map((attachment) => (
+                      <div key={attachment.id} className="flex items-center justify-between rounded-md border border-border/70 bg-background/60 px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{attachment.originalName}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            enviado em {new Date(attachment.createdAt).toLocaleString('pt-BR')}
+                          </p>
+                        </div>
+                        {attachment.publicUrl && (
+                          <a href={attachment.publicUrl} target="_blank" rel="noreferrer">
+                            <Button type="button" variant="outline" size="sm">Abrir</Button>
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                    {generatedReports.length > 0 && (
+                      <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
+                        <p className="text-xs font-medium text-emerald-300">OS preenchidas geradas</p>
+                        <div className="mt-2 space-y-2">
+                          {generatedReports.map((attachment) => (
+                            <div key={attachment.id} className="flex items-center justify-between rounded-md border border-emerald-500/20 bg-background/60 px-3 py-2">
+                              <span className="truncate text-sm">{attachment.originalName}</span>
+                              {attachment.publicUrl && (
+                                <a href={attachment.publicUrl} target="_blank" rel="noreferrer">
+                                  <Button type="button" variant="outline" size="sm">Abrir</Button>
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <div className="grid gap-2 md:grid-cols-3">
                   <div>
                     <p className="mb-1 text-[11px] text-muted-foreground">Nome da maquina</p>

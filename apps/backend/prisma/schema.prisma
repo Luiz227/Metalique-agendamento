@@ -173,6 +173,7 @@ model Expense {
 model Attachment {
   id               String      @id @default(cuid())
   appointmentId    String
+  kind             String      @default("GENERAL")
   driveFileId      String
   driveFolderPath  String
   originalName     String

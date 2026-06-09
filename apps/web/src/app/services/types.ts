@@ -123,6 +123,15 @@ export type Appointment = {
     createdAt: string;
     observation?: string | null;
   }>;
+  attachments?: Array<{
+    id: string;
+    kind: string;
+    originalName: string;
+    mimeType: string;
+    size: number;
+    publicUrl?: string | null;
+    createdAt: string;
+  }>;
 };
 
 export type Suggestion = {

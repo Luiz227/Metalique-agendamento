@@ -3,6 +3,17 @@ import { AppointmentStatus, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { google } from 'googleapis';
 import { Readable } from 'stream';
+import { PDFDocument, PDFPage, PDFFont, rgb, StandardFonts } from 'pdf-lib';
+
+const ATTACHMENT_KIND = {
+  GENERAL: 'GENERAL',
+  SERVICE_ORDER_TEMPLATE: 'SERVICE_ORDER_TEMPLATE',
+  TECHNICAL_REPORT: 'TECHNICAL_REPORT',
+  TECHNICAL_MEDIA: 'TECHNICAL_MEDIA',
+  TECHNICAL_DOCUMENT: 'TECHNICAL_DOCUMENT',
+  CLIENT_SIGNATURE: 'CLIENT_SIGNATURE',
+  TECHNICIAN_SIGNATURE: 'TECHNICIAN_SIGNATURE'
+} as const;
 
 @Injectable()
 export class LegacyService {
@@ -352,7 +363,7 @@ export class LegacyService {
     if (!technician) return [];
     const rows = await this.prisma.appointment.findMany({
       where: { technicianId: technician.id, status: { in: [AppointmentStatus.READY, AppointmentStatus.CRITICAL, AppointmentStatus.WAITING] } },
-      include: { client: true, technician: true, statusLogs: { orderBy: { createdAt: 'desc' } } },
+      include: { client: true, technician: true, attachments: true, statusLogs: { orderBy: { createdAt: 'desc' } } },
       orderBy: { date: 'asc' }
     });
     return rows.map((row) => this.toSimpleAppointment(row));
@@ -365,7 +376,12 @@ export class LegacyService {
 
   async technicianReport(
     id: string,
-    report?: { summary?: string; finishedAt?: string; signatureDataUrl?: string }
+    report?: {
+      summary?: string;
+      finishedAt?: string;
+      clientSignatureDataUrl?: string;
+      technicianSignatureDataUrl?: string;
+    }
   ) {
     const summary = report?.summary?.trim();
 
@@ -374,29 +390,52 @@ export class LegacyService {
     });
     await this.prisma.appointment.update({ where: { id }, data: { status: AppointmentStatus.CRITICAL } });
 
-    if (summary || report?.signatureDataUrl) {
+    if (summary || report?.clientSignatureDataUrl || report?.technicianSignatureDataUrl) {
       const appointment = await this.prisma.appointment.findUnique({
         where: { id },
-        include: { client: true, technician: true }
+        include: { client: true, technician: true, attachments: { orderBy: { createdAt: 'desc' } } }
       });
       if (!appointment) throw new NotFoundException('Agendamento não encontrado');
 
-      const reportText = this.buildServiceOrderHtml(appointment, {
-        summary,
-        finishedAt: report?.finishedAt,
-        signatureDataUrl: report?.signatureDataUrl
-      });
-      const reportBytes = Buffer.from(reportText, 'utf8');
-      await this.attachFile(
-        id,
-        {
-          originalname: 'ordem-servico-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.html',
-          mimetype: 'text/html',
-          size: reportBytes.length,
-          buffer: reportBytes
-        },
-        'relato-tecnico'
-      );
+      const templateAttachment = appointment.attachments.find((attachment) => attachment.kind === ATTACHMENT_KIND.SERVICE_ORDER_TEMPLATE);
+
+      if (templateAttachment?.mimeType === 'application/pdf') {
+        const reportPdf = await this.buildFilledServiceOrderPdf(appointment, templateAttachment.driveFileId, {
+          summary,
+          finishedAt: report?.finishedAt,
+          clientSignatureDataUrl: report?.clientSignatureDataUrl,
+          technicianSignatureDataUrl: report?.technicianSignatureDataUrl
+        });
+
+        await this.attachFile(
+          id,
+          {
+            originalname: 'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.pdf',
+            mimetype: 'application/pdf',
+            size: reportPdf.length,
+            buffer: reportPdf
+          },
+          ATTACHMENT_KIND.TECHNICAL_REPORT
+        );
+      } else {
+        const reportText = this.buildServiceOrderHtml(appointment, {
+          summary,
+          finishedAt: report?.finishedAt,
+          clientSignatureDataUrl: report?.clientSignatureDataUrl,
+          technicianSignatureDataUrl: report?.technicianSignatureDataUrl
+        });
+        const reportBytes = Buffer.from(reportText, 'utf8');
+        await this.attachFile(
+          id,
+          {
+            originalname: 'ordem-servico-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.html',
+            mimetype: 'text/html',
+            size: reportBytes.length,
+            buffer: reportBytes
+          },
+          ATTACHMENT_KIND.TECHNICAL_REPORT
+        );
+      }
     }
 
     return { ok: true };
@@ -431,7 +470,12 @@ export class LegacyService {
       client: { name: string; phone: string | null; email: string | null; cnpj: string | null };
       technician: { name: string; baseCity: string; baseAddress: string } | null;
     },
-    report: { summary?: string; finishedAt?: string; signatureDataUrl?: string }
+    report: {
+      summary?: string;
+      finishedAt?: string;
+      clientSignatureDataUrl?: string;
+      technicianSignatureDataUrl?: string;
+    }
   ) {
     const company = this.resolveServiceOrderCompany(appointment.serviceType);
     const isStart = this.isStartOrTraining(appointment.serviceType);
@@ -441,8 +485,11 @@ export class LegacyService {
       ? 'INSTALACAO (START / OU TREINAMENTO) TODAS AS MAQUINAS'
       : 'MANUTENCAO CORRETIVA LASER F OU DOBRADEIRA';
     const technicianNotes = report.summary || '';
-    const signatureImage = report.signatureDataUrl
-      ? `<img class="signature-image" src="${this.escapeHtml(report.signatureDataUrl)}" alt="Assinatura do cliente" />`
+    const clientSignatureImage = report.clientSignatureDataUrl
+      ? `<img class="signature-image" src="${this.escapeHtml(report.clientSignatureDataUrl)}" alt="Assinatura do cliente" />`
+      : '';
+    const technicianSignatureImage = report.technicianSignatureDataUrl
+      ? `<img class="signature-image" src="${this.escapeHtml(report.technicianSignatureDataUrl)}" alt="Assinatura do tecnico" />`
       : '';
 
     return `<!doctype html>
@@ -564,13 +611,177 @@ export class LegacyService {
     </div>
     <table class="signature-table">
       <tr>
-        <td>${signatureImage}<div class="signature-line">Assinatura do Cliente</div></td>
-        <td><div class="signature-line">Assinatura do Técnico<br />${this.escapeHtml(appointment.technician?.name || '')}</div></td>
+        <td>${technicianSignatureImage}<div class="signature-line">Assinatura do TÃ©cnico<br />${this.escapeHtml(appointment.technician?.name || '')}</div></td>
+        <td>${clientSignatureImage}<div class="signature-line">Assinatura do Cliente</div></td>
       </tr>
     </table>
   </main>
 </body>
 </html>`;
+  }
+
+  private async buildFilledServiceOrderPdf(
+    appointment: {
+      id: string;
+      osNumber: string | null;
+      date: Date;
+      technician: { name: string } | null;
+    },
+    templateDriveFileId: string,
+    report: {
+      summary?: string;
+      finishedAt?: string;
+      clientSignatureDataUrl?: string;
+      technicianSignatureDataUrl?: string;
+    }
+  ) {
+    const templateBytes = await this.downloadDriveFile(templateDriveFileId);
+    const pdf = await PDFDocument.load(templateBytes);
+    const page = pdf.getPages()[pdf.getPageCount() - 1];
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold);
+    const { width, height } = page.getSize();
+
+    const notesText = report.summary?.trim() || 'Nao informado';
+    const noteFontSize = Math.max(10, Math.min(13, width / 52));
+    const notesBox = {
+      x: width * 0.035,
+      y: height * 0.565,
+      width: width * 0.93,
+      height: height * 0.215
+    };
+    this.drawWrappedText(page, notesText, {
+      x: notesBox.x + 10,
+      y: notesBox.y + notesBox.height - 18,
+      maxWidth: notesBox.width - 20,
+      lineHeight: noteFontSize + 5,
+      maxLines: 6,
+      font,
+      fontSize: noteFontSize,
+      color: rgb(0.08, 0.08, 0.08)
+    });
+
+    const acceptanceDate = report.finishedAt ? new Date(report.finishedAt) : new Date();
+    const acceptanceDateText = this.formatDateOnly(acceptanceDate);
+    page.drawText(acceptanceDateText, {
+      x: width * 0.468,
+      y: height * 0.462,
+      font: boldFont,
+      size: 12,
+      color: rgb(0.08, 0.08, 0.08)
+    });
+
+    await this.drawSignatureOnPdf(pdf, page, report.technicianSignatureDataUrl, {
+      x: width * 0.05,
+      y: height * 0.085,
+      width: width * 0.32,
+      height: height * 0.08
+    });
+    await this.drawSignatureOnPdf(pdf, page, report.clientSignatureDataUrl, {
+      x: width * 0.615,
+      y: height * 0.085,
+      width: width * 0.32,
+      height: height * 0.08
+    });
+
+    page.drawText(appointment.technician?.name || 'Tecnico', {
+      x: width * 0.11,
+      y: height * 0.03,
+      font,
+      size: 11,
+      color: rgb(0.12, 0.12, 0.12)
+    });
+
+    return Buffer.from(await pdf.save());
+  }
+
+  private async drawSignatureOnPdf(
+    pdf: PDFDocument,
+    page: PDFPage,
+    dataUrl: string | undefined,
+    box: { x: number; y: number; width: number; height: number }
+  ) {
+    if (!dataUrl?.startsWith('data:image/')) return;
+
+    const image = await this.embedDataUrlImage(pdf, dataUrl);
+    const dims = image.scale(1);
+    const scale = Math.min(box.width / dims.width, box.height / dims.height);
+    const targetWidth = dims.width * scale;
+    const targetHeight = dims.height * scale;
+    page.drawImage(image, {
+      x: box.x + (box.width - targetWidth) / 2,
+      y: box.y + (box.height - targetHeight) / 2,
+      width: targetWidth,
+      height: targetHeight
+    });
+  }
+
+  private async embedDataUrlImage(pdf: PDFDocument, dataUrl: string) {
+    const [meta, base64] = dataUrl.split(',');
+    const bytes = Buffer.from(base64 ?? '', 'base64');
+    if (meta.includes('image/png')) return pdf.embedPng(bytes);
+    return pdf.embedJpg(bytes);
+  }
+
+  private drawWrappedText(
+    page: any,
+    text: string,
+    options: {
+      x: number;
+      y: number;
+      maxWidth: number;
+      lineHeight: number;
+      maxLines: number;
+      font: PDFFont;
+      fontSize: number;
+      color: ReturnType<typeof rgb>;
+    }
+  ) {
+    const words = text.replace(/\s+/g, ' ').trim().split(' ');
+    const lines: string[] = [];
+    let currentLine = '';
+
+    for (const word of words) {
+      const candidate = currentLine ? `${currentLine} ${word}` : word;
+      const width = options.font.widthOfTextAtSize(candidate, options.fontSize);
+      if (width <= options.maxWidth) {
+        currentLine = candidate;
+        continue;
+      }
+
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+      if (lines.length >= options.maxLines - 1) break;
+    }
+
+    if (currentLine && lines.length < options.maxLines) lines.push(currentLine);
+    if (lines.length === options.maxLines && words.length > 0) {
+      const last = lines[lines.length - 1];
+      if (!last.endsWith('...')) lines[lines.length - 1] = `${last.slice(0, Math.max(0, last.length - 3))}...`;
+    }
+
+    lines.forEach((line, index) => {
+      page.drawText(line, {
+        x: options.x,
+        y: options.y - index * options.lineHeight,
+        font: options.font,
+        size: options.fontSize,
+        color: options.color
+      });
+    });
+  }
+
+  private async downloadDriveFile(fileId: string) {
+    const drive = this.getDriveClient();
+    const response = await drive.files.get(
+      {
+        fileId,
+        alt: 'media',
+        supportsAllDrives: true
+      },
+      { responseType: 'arraybuffer' }
+    );
+    return Buffer.from(response.data as ArrayBuffer);
   }
 
   private resolveServiceOrderCompany(serviceType: string | null) {
@@ -645,6 +856,7 @@ export class LegacyService {
     const originalName = file?.originalname ?? 'arquivo.bin';
     const mimeType = file?.mimetype ?? 'application/octet-stream';
     const size = file?.size ?? 0;
+    const kind = this.normalizeAttachmentKind(type, mimeType);
     let uploadResult: { fileId: string; folderPath: string; publicUrl: string | null };
     try {
       uploadResult = await this.uploadToDrive({
@@ -669,6 +881,7 @@ export class LegacyService {
     await this.prisma.attachment.create({
       data: {
         appointmentId,
+        kind,
         driveFileId: uploadResult.fileId,
         driveFolderPath: uploadResult.folderPath,
         originalName,
@@ -680,6 +893,7 @@ export class LegacyService {
     return {
       ok: true,
       type: type ?? 'midia-tecnica',
+      kind,
       fileId: uploadResult.fileId,
       folder: uploadResult.folderPath
     };
@@ -700,6 +914,13 @@ export class LegacyService {
     notes: string | null;
     osNumber: string | null;
     daysOut: number;
+    machineName: string | null;
+    machineModel: string | null;
+    machineSerial: string | null;
+    transportMode: string | null;
+    flightAirport: string | null;
+    flightDepartureAt: Date | null;
+    flightReturnAt: Date | null;
     hotelName: string | null;
     hotelAddress: string | null;
     hotelCheckIn: Date | null;
@@ -707,6 +928,7 @@ export class LegacyService {
     hotelNotes: string | null;
     client: { id: string; name: string; city: string; address: string; phone: string | null; email: string | null };
     technician: { id: string; name: string; baseCity: string; baseAddress: string; specialties: string[]; active: boolean; color: string } | null;
+    attachments?: { id: string; kind: string; originalName: string; mimeType: string; size: number; publicUrl: string | null; createdAt: Date }[];
     statusLogs: { id: string; status: string; createdAt: Date; observation: string | null }[];
   }) {
     return {
@@ -724,6 +946,13 @@ export class LegacyService {
       notes: row.notes,
       osNumber: row.osNumber,
       daysOut: row.daysOut,
+      machineName: row.machineName,
+      machineModel: row.machineModel,
+      machineSerial: row.machineSerial,
+      transportMode: row.transportMode,
+      flightAirport: row.flightAirport,
+      flightDepartureAt: row.flightDepartureAt?.toISOString() ?? null,
+      flightReturnAt: row.flightReturnAt?.toISOString() ?? null,
       hotelName: row.hotelName,
       hotelAddress: row.hotelAddress,
       hotelCheckIn: row.hotelCheckIn?.toISOString() ?? null,
@@ -760,8 +989,29 @@ export class LegacyService {
         status: log.status,
         createdAt: log.createdAt.toISOString(),
         observation: log.observation
+      })),
+      attachments: (row.attachments ?? []).map((attachment) => ({
+        id: attachment.id,
+        kind: attachment.kind,
+        originalName: attachment.originalName,
+        mimeType: attachment.mimeType,
+        size: attachment.size,
+        publicUrl: attachment.publicUrl,
+        createdAt: attachment.createdAt.toISOString()
       }))
     };
+  }
+
+  private normalizeAttachmentKind(type: string | undefined, mimeType: string) {
+    const normalized = String(type ?? '').trim().toLowerCase();
+    if (normalized === 'service-order-template') return ATTACHMENT_KIND.SERVICE_ORDER_TEMPLATE;
+    if (normalized === 'relato-tecnico') return ATTACHMENT_KIND.TECHNICAL_REPORT;
+    if (normalized === 'assinatura-cliente') return ATTACHMENT_KIND.CLIENT_SIGNATURE;
+    if (normalized === 'assinatura-tecnico') return ATTACHMENT_KIND.TECHNICIAN_SIGNATURE;
+    if (normalized === 'midia-tecnica') return ATTACHMENT_KIND.TECHNICAL_MEDIA;
+    if (normalized === 'documento-tecnico') return ATTACHMENT_KIND.TECHNICAL_DOCUMENT;
+    if (mimeType.startsWith('image/') || mimeType.startsWith('video/')) return ATTACHMENT_KIND.TECHNICAL_MEDIA;
+    return ATTACHMENT_KIND.GENERAL;
   }
 
   private async uploadToDrive(params: {
@@ -1032,4 +1282,5 @@ export class LegacyService {
     return data;
   }
 }
+
 

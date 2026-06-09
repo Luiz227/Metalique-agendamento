@@ -119,7 +119,16 @@ export class LegacyController {
   @Post('technician/appointments/:id/reports')
   technicianReport(
     @Param('id') id: string,
-    @Body() body: { summary?: string; diagnosis?: string; solution?: string; pendingItems?: string; finishedAt?: string; signatureDataUrl?: string }
+    @Body()
+    body: {
+      summary?: string;
+      diagnosis?: string;
+      solution?: string;
+      pendingItems?: string;
+      finishedAt?: string;
+      clientSignatureDataUrl?: string;
+      technicianSignatureDataUrl?: string;
+    }
   ) {
     return this.service.technicianReport(id, body);
   }

@@ -6,6 +6,7 @@ type AppointmentRow = Prisma.AppointmentGetPayload<{
   include: {
     client: true;
     technician: true;
+    attachments: true;
     statusLogs: true;
   };
 }>;
@@ -31,6 +32,7 @@ export class AppointmentsService {
       include: {
         client: true,
         technician: true,
+        attachments: true,
         statusLogs: { orderBy: { createdAt: 'desc' } }
       },
       orderBy: { date: 'desc' }
@@ -46,6 +48,7 @@ export class AppointmentsService {
       include: {
         client: true,
         technician: true,
+        attachments: true,
         statusLogs: { orderBy: { createdAt: 'desc' } }
       }
     });
@@ -85,7 +88,7 @@ export class AppointmentsService {
         flightDepartureAt: body.flightDepartureAt ? new Date(String(body.flightDepartureAt)) : null,
         flightReturnAt: body.flightReturnAt ? new Date(String(body.flightReturnAt)) : null
       },
-      include: { client: true, technician: true, statusLogs: true }
+      include: { client: true, technician: true, attachments: true, statusLogs: true }
     });
     if (body.schedulingChecklist && typeof body.schedulingChecklist === 'object') {
       await this.prisma.auditLog.create({
@@ -131,7 +134,7 @@ export class AppointmentsService {
         flightDepartureAt: body.flightDepartureAt !== undefined ? (body.flightDepartureAt ? new Date(String(body.flightDepartureAt)) : null) : undefined,
         flightReturnAt: body.flightReturnAt !== undefined ? (body.flightReturnAt ? new Date(String(body.flightReturnAt)) : null) : undefined
       },
-      include: { client: true, technician: true, statusLogs: { orderBy: { createdAt: 'desc' } } }
+      include: { client: true, technician: true, attachments: true, statusLogs: { orderBy: { createdAt: 'desc' } } }
     });
     return this.toApiAppointment(row);
   }
@@ -273,6 +276,15 @@ export class AppointmentsService {
         status: log.status,
         createdAt: log.createdAt.toISOString(),
         observation: log.observation
+      })),
+      attachments: row.attachments.map((attachment) => ({
+        id: attachment.id,
+        kind: attachment.kind,
+        originalName: attachment.originalName,
+        mimeType: attachment.mimeType,
+        size: attachment.size,
+        publicUrl: attachment.publicUrl,
+        createdAt: attachment.createdAt.toISOString()
       }))
     };
   }

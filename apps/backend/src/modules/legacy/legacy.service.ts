@@ -1150,10 +1150,34 @@ export class LegacyService {
     mimeType: string;
     buffer?: Buffer;
   }) {
-    const drive = this.getDriveClient();
+    try {
+      return await this.uploadToDriveWithClient(params);
+    } catch (error) {
+      if (!this.isInvalidGrantError(error) || !this.hasServiceAccountCredentials()) {
+        throw error;
+      }
+
+      this.driveClient = null;
+      return this.uploadToDriveWithClient(params, true);
+    }
+  }
+
+  private async uploadToDriveWithClient(
+    params: {
+      appointmentId: string;
+      clientName: string;
+      osNumber: string;
+      technicianName: string;
+      fileName: string;
+      mimeType: string;
+      buffer?: Buffer;
+    },
+    forceServiceAccount = false
+  ) {
+    const drive = this.getDriveClient({ forceServiceAccount });
     const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-    if (!rootFolderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID não configurado');
-    if (!params.buffer || !params.buffer.length) throw new Error('Arquivo inválido para upload');
+    if (!rootFolderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID nao configurado');
+    if (!params.buffer || !params.buffer.length) throw new Error('Arquivo invalido para upload');
 
     const safeClient = this.sanitizeFolderName(params.clientName || 'Cliente');
     const safeOs = this.sanitizeFolderName('OS ' + (params.osNumber || params.appointmentId) + ' - ' + params.technicianName);
@@ -1218,14 +1242,14 @@ export class LegacyService {
     return created.data.id;
   }
 
-  private getDriveClient() {
-    if (this.driveClient) return this.driveClient;
+  private getDriveClient(options?: { forceServiceAccount?: boolean }) {
+    if (this.driveClient && !options?.forceServiceAccount) return this.driveClient;
 
     const oauthClientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
     const oauthClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
     const oauthRefreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
 
-    if (oauthClientId && oauthClientSecret && oauthRefreshToken) {
+    if (!options?.forceServiceAccount && oauthClientId && oauthClientSecret && oauthRefreshToken) {
       const oauth2Client = new google.auth.OAuth2({
         clientId: oauthClientId,
         clientSecret: oauthClientSecret
@@ -1254,6 +1278,29 @@ export class LegacyService {
 
     this.driveClient = google.drive({ version: 'v3', auth });
     return this.driveClient;
+  }
+
+  private hasServiceAccountCredentials() {
+    return Boolean(process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY);
+  }
+
+  private isInvalidGrantError(error: unknown) {
+    if (!error || typeof error !== 'object') return false;
+
+    const maybeError = error as {
+      message?: string;
+      response?: { data?: unknown };
+      errors?: Array<{ message?: string }>;
+    };
+
+    const responseData =
+      typeof maybeError.response?.data === 'string'
+        ? maybeError.response.data
+        : JSON.stringify(maybeError.response?.data ?? {});
+
+    return [maybeError.message, responseData, ...(maybeError.errors?.map((item) => item.message) ?? [])]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes('invalid_grant'));
   }
 
   private sanitizeFolderName(value: string) {

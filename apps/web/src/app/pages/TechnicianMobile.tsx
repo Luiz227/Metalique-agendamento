@@ -115,7 +115,7 @@ export default function TechnicianMobile() {
       const rows = await api<Appointment[]>('/technician/appointments');
       const nextIds = new Set(rows.map((item) => item.id));
       const newItems = rows.filter((item) => !knownIdsRef.current.has(item.id));
-      if (newItems.length > 0 && Notification.permission === 'granted') {
+      if (newItems.length > 0 && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         new Notification('Novo agendamento confirmado', {
           body: `${newItems[0].client?.name ?? 'Cliente'} - ${newItems[0].city}`
         });
@@ -171,6 +171,9 @@ export default function TechnicianMobile() {
   const currentServiceOrder = (current?.attachments ?? []).find((attachment) => attachment.kind === 'SERVICE_ORDER_TEMPLATE');
   const currentGeneratedReport = (current?.attachments ?? []).find((attachment) => attachment.kind === 'TECHNICAL_REPORT');
   const upcoming = appointments.filter((item) => item.id !== current?.id && !wasFinishedByTechnician(item));
+  const currentClientName = current?.client?.name ?? 'Cliente';
+  const currentClientPhone = current?.client?.phone ?? '';
+  const currentAddress = current?.fullAddress ?? 'Endereco nao informado';
   const weeklyTrips = useMemo(
     () => appointments.filter((item) => isInCurrentWeek(item.date) && !wasFinishedByTechnician(item)),
     [appointments]
@@ -490,7 +493,7 @@ export default function TechnicianMobile() {
                 {activeTripsView === 'WEEK' ? 'Nenhum agendamento na semana.' : 'Nenhuma viagem finalizada.'}
               </p>
             )}
-            {visibleTrips
+            {[...visibleTrips]
               .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
               .map((apt) => (
                 <button key={apt.id} onClick={() => { setSelectedId(apt.id); setActiveSection('DETAILS'); }} className="w-full rounded-xl border bg-card p-3 text-left">
@@ -511,12 +514,12 @@ export default function TechnicianMobile() {
           </CardHeader>
           <CardContent className="space-y-5">
             <div>
-              <h3 className="text-lg font-bold sm:text-xl break-words">{current.client.name}</h3>
+              <h3 className="text-lg font-bold sm:text-xl break-words">{currentClientName}</h3>
               <div className="mt-3 space-y-2 text-sm">
                 <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="h-4 w-4 shrink-0" /><span>{formatDate(current.date)}</span></div>
                 <div className="flex items-center gap-2 text-muted-foreground"><Clock className="h-4 w-4 shrink-0" /><span>{formatTime(current.startTime)} ate {formatTime(current.endTime)}</span></div>
-                <div className="flex items-start gap-2 text-muted-foreground"><MapPin className="mt-0.5 h-4 w-4 shrink-0" /><span className="break-words">{current.fullAddress}</span></div>
-                {current.client.phone && <div className="flex items-center gap-2 text-muted-foreground"><Phone className="h-4 w-4 shrink-0" /><span>{current.client.phone}</span></div>}
+                <div className="flex items-start gap-2 text-muted-foreground"><MapPin className="mt-0.5 h-4 w-4 shrink-0" /><span className="break-words">{currentAddress}</span></div>
+                {currentClientPhone && <div className="flex items-center gap-2 text-muted-foreground"><Phone className="h-4 w-4 shrink-0" /><span>{currentClientPhone}</span></div>}
               </div>
             </div>
 
@@ -544,7 +547,7 @@ export default function TechnicianMobile() {
             )}
 
             <div className="space-y-2">
-              <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(current.fullAddress)}`} target="_blank" rel="noreferrer">
+              <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(currentAddress)}`} target="_blank" rel="noreferrer">
                 <Button className="h-12 w-full text-base bg-[#c8142f] hover:bg-[#a81027]">
                   <Navigation className="mr-2 h-5 w-5" />
                   Abrir rota
@@ -752,7 +755,7 @@ export default function TechnicianMobile() {
                   <MapPin className="h-5 w-5 text-blue-500" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold sm:text-base">{apt.client.name}</p>
+                  <p className="truncate text-sm font-semibold sm:text-base">{apt.client?.name ?? 'Cliente'}</p>
                   <p className="mt-1 text-xs text-muted-foreground break-words">{apt.city} - {formatDate(apt.date)} as {formatTime(apt.startTime)}</p>
                 </div>
               </button>

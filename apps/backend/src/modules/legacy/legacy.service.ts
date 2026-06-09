@@ -659,19 +659,19 @@ export class LegacyService {
     const { width, height } = page.getSize();
 
     const notesText = report.summary?.trim() || 'Nao informado';
-    const noteFontSize = Math.max(10, Math.min(13, width / 52));
+    const noteFontSize = Math.max(10, Math.min(12, width / 58));
     const notesBox = {
       x: width * 0.02,
-      y: height * 0.235,
+      y: height * 0.275,
       width: width * 0.96,
-      height: height * 0.16
+      height: height * 0.14
     };
     this.drawWrappedText(page, notesText, {
-      x: notesBox.x + 10,
-      y: notesBox.y + notesBox.height - 18,
+      x: notesBox.x + 12,
+      y: notesBox.y + notesBox.height - 16,
       maxWidth: notesBox.width - 20,
-      lineHeight: noteFontSize + 5,
-      maxLines: 5,
+      lineHeight: noteFontSize + 6,
+      maxLines: 4,
       font,
       fontSize: noteFontSize,
       color: rgb(0.08, 0.08, 0.08)
@@ -681,31 +681,23 @@ export class LegacyService {
     const acceptanceDateText = this.formatDateOnly(acceptanceDate);
     page.drawText(acceptanceDateText, {
       x: width * 0.49,
-      y: height * 0.175,
+      y: height * 0.205,
       font: boldFont,
       size: 12,
       color: rgb(0.08, 0.08, 0.08)
     });
 
     await this.drawSignatureOnPdf(pdf, page, report.technicianSignatureDataUrl, {
-      x: width * 0.03,
-      y: height * 0.02,
-      width: width * 0.35,
-      height: height * 0.075
+      x: width * 0.04,
+      y: height * 0.075,
+      width: width * 0.32,
+      height: height * 0.055
     });
     await this.drawSignatureOnPdf(pdf, page, report.clientSignatureDataUrl, {
-      x: width * 0.62,
-      y: height * 0.02,
-      width: width * 0.33,
-      height: height * 0.075
-    });
-
-    page.drawText(appointment.technician?.name || 'Tecnico', {
-      x: width * 0.10,
-      y: height * 0.008,
-      font,
-      size: 11,
-      color: rgb(0.12, 0.12, 0.12)
+      x: width * 0.64,
+      y: height * 0.075,
+      width: width * 0.28,
+      height: height * 0.055
     });
 
     return Buffer.from(await pdf.save());

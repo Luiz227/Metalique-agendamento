@@ -27,6 +27,30 @@ type ChecklistKey =
 
 const COMPANY_BASE_ADDRESS = 'R. Reinaldo Raulino dos Santos, 107 - Eden, Sorocaba - SP, 18086-796';
 
+function toValidDate(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function safeDateInputValue(value?: string | null) {
+  return toValidDate(value)?.toISOString().slice(0, 10) ?? '';
+}
+
+function safeTimeInputValue(value?: string | null) {
+  const date = toValidDate(value);
+  return date ? date.toTimeString().slice(0, 5) : '';
+}
+
+function safeDateTimeLocalValue(value?: string | null) {
+  return toValidDate(value)?.toISOString().slice(0, 16) ?? '';
+}
+
+function safeLocaleDateTime(value?: string | null) {
+  const date = toValidDate(value);
+  return date ? date.toLocaleString('pt-BR') : 'Nao informado';
+}
+
 function normalizeCityForMaps(city?: string | null) {
   return String(city ?? '')
     .replace(/\s*\/\s*/g, ', ')
@@ -179,20 +203,20 @@ export default function AppointmentDetails() {
       machineSerial: appointment.machineSerial ?? '',
       notes: appointment.notes ?? '',
       osNumber: appointment.osNumber ?? '',
-      date: new Date(appointment.date).toISOString().slice(0, 10),
-      startTime: new Date(appointment.startTime).toTimeString().slice(0, 5),
+      date: safeDateInputValue(appointment.date),
+      startTime: safeTimeInputValue(appointment.startTime),
       daysOut: String(appointment.daysOut ?? 1),
       technicianId: appointment.technicianId ?? '',
       transportMode: appointment.transportMode ?? (appointment.vehicle ? 'CAR' : 'NONE'),
       vehicleId: appointment.vehicle?.id ?? '',
       flightAirport: appointment.flightAirport ?? '',
-      flightDepartureAt: appointment.flightDepartureAt ? new Date(appointment.flightDepartureAt).toISOString().slice(0, 16) : '',
-      flightReturnAt: appointment.flightReturnAt ? new Date(appointment.flightReturnAt).toISOString().slice(0, 16) : '',
+      flightDepartureAt: safeDateTimeLocalValue(appointment.flightDepartureAt),
+      flightReturnAt: safeDateTimeLocalValue(appointment.flightReturnAt),
       hasHotel: Boolean(appointment.hasHotel || appointment.hotelName || appointment.hotelAddress || appointment.hotelCheckIn || appointment.hotelCheckOut),
       hotelName: appointment.hotelName ?? '',
       hotelAddress: appointment.hotelAddress ?? '',
-      hotelCheckIn: appointment.hotelCheckIn ? new Date(appointment.hotelCheckIn).toISOString().slice(0, 16) : '',
-      hotelCheckOut: appointment.hotelCheckOut ? new Date(appointment.hotelCheckOut).toISOString().slice(0, 16) : '',
+      hotelCheckIn: safeDateTimeLocalValue(appointment.hotelCheckIn),
+      hotelCheckOut: safeDateTimeLocalValue(appointment.hotelCheckOut),
       hotelDailyRate: appointment.hotelDailyRate ?? '',
       hotelNotes: appointment.hotelNotes ?? ''
     });
@@ -445,8 +469,8 @@ export default function AppointmentDetails() {
     );
   }
 
-  const defaultDate = new Date(appointment.date).toISOString().slice(0, 10);
-  const defaultTime = new Date(appointment.startTime).toTimeString().slice(0, 5);
+  const defaultDate = safeDateInputValue(appointment.date);
+  const defaultTime = safeTimeInputValue(appointment.startTime);
 
   function openRescheduleDialog() {
     setRescheduleDate(defaultDate);
@@ -688,8 +712,8 @@ export default function AppointmentDetails() {
                 ) : (
                   <div className="space-y-1 text-sm">
                     <p>Aeroporto: {appointment.flightAirport || 'Nao informado'}</p>
-                    <p className="text-muted-foreground">Ida: {appointment.flightDepartureAt ? new Date(appointment.flightDepartureAt).toLocaleString('pt-BR') : 'Nao informado'}</p>
-                    <p className="text-muted-foreground">Volta: {appointment.flightReturnAt ? new Date(appointment.flightReturnAt).toLocaleString('pt-BR') : 'Nao informado'}</p>
+                    <p className="text-muted-foreground">Ida: {safeLocaleDateTime(appointment.flightDepartureAt)}</p>
+                    <p className="text-muted-foreground">Volta: {safeLocaleDateTime(appointment.flightReturnAt)}</p>
                   </div>
                 )}
               </div>
@@ -727,8 +751,8 @@ export default function AppointmentDetails() {
                     {(appointment.hasHotel || appointment.hotelName) && <p>{appointment.hotelName || "Nao informado"}</p>}
                     {appointment.hotelAddress && <p className="text-muted-foreground">{appointment.hotelAddress}</p>}
                     {appointment.hotelDailyRate && <p className="text-muted-foreground">Valor: R$ {appointment.hotelDailyRate}</p>}
-                    {appointment.hotelCheckIn && <p className="text-muted-foreground">Check-in: {new Date(appointment.hotelCheckIn).toLocaleString("pt-BR")}</p>}
-                    {appointment.hotelCheckOut && <p className="text-muted-foreground">Check-out: {new Date(appointment.hotelCheckOut).toLocaleString("pt-BR")}</p>}
+                    {appointment.hotelCheckIn && <p className="text-muted-foreground">Check-in: {safeLocaleDateTime(appointment.hotelCheckIn)}</p>}
+                    {appointment.hotelCheckOut && <p className="text-muted-foreground">Check-out: {safeLocaleDateTime(appointment.hotelCheckOut)}</p>}
                     {appointment.hotelNotes && <p className="text-muted-foreground">{appointment.hotelNotes}</p>}
                   </div>
                 )}

@@ -787,17 +787,26 @@ export class LegacyService {
     });
   }
 
-  private async downloadDriveFile(fileId: string) {
-    const drive = this.getDriveClient();
-    const response = await drive.files.get(
-      {
-        fileId,
-        alt: 'media',
-        supportsAllDrives: true
-      },
-      { responseType: 'arraybuffer' }
-    );
-    return Buffer.from(response.data as ArrayBuffer);
+  private async downloadDriveFile(fileId: string, forceServiceAccount = false): Promise<Buffer> {
+    try {
+      const drive = this.getDriveClient({ forceServiceAccount });
+      const response = await drive.files.get(
+        {
+          fileId,
+          alt: 'media',
+          supportsAllDrives: true
+        },
+        { responseType: 'arraybuffer' }
+      );
+      return Buffer.from(response.data as ArrayBuffer);
+    } catch (error) {
+      if (forceServiceAccount || !this.isInvalidGrantError(error) || !this.hasServiceAccountCredentials()) {
+        throw error;
+      }
+
+      this.driveClient = null;
+      return this.downloadDriveFile(fileId, true);
+    }
   }
 
   private async downloadStoredAttachment(attachment: { driveFileId: string; driveFolderPath: string }) {

@@ -74,15 +74,19 @@ async function showBrowserNotification(title: string, options?: NotificationOpti
   if (Notification.permission !== 'granted') return;
 
   try {
-    new Notification(title, options);
-    return;
-  } catch {
-    try {
-      const registration = await navigator.serviceWorker?.getRegistration();
-      await registration?.showNotification(title, options);
-    } catch {
-      // Ignora falhas de notificacao para nao quebrar a tela do tecnico.
+    const registration = await navigator.serviceWorker?.getRegistration();
+    if (registration?.showNotification) {
+      await registration.showNotification(title, options);
+      return;
     }
+  } catch {
+    // Continua para o fallback abaixo.
+  }
+
+  try {
+    new Notification(title, options);
+  } catch {
+    // Ignora falhas de notificacao para nao quebrar a tela do tecnico.
   }
 }
 

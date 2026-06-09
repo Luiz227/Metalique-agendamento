@@ -50,7 +50,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => updateCache(request, response))
-        .catch(async () => (await caches.match(request)) || (await caches.match("/")) || Response.error())
+        .catch(async () => (await caches.match(request)) || (await caches.match("/")) || new Response("offline", { status: 503 }))
     );
     return;
   }
@@ -58,6 +58,6 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(request)
       .then((response) => updateCache(request, response))
-      .catch(async () => (await caches.match(request)) || Response.error())
+      .catch(async () => (await caches.match(request)) || new Response("", { status: 504 }))
   );
 });

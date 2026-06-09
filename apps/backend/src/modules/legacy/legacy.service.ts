@@ -661,17 +661,17 @@ export class LegacyService {
     const notesText = report.summary?.trim() || 'Nao informado';
     const noteFontSize = Math.max(10, Math.min(13, width / 52));
     const notesBox = {
-      x: width * 0.035,
-      y: height * 0.565,
-      width: width * 0.93,
-      height: height * 0.215
+      x: width * 0.02,
+      y: height * 0.235,
+      width: width * 0.96,
+      height: height * 0.16
     };
     this.drawWrappedText(page, notesText, {
       x: notesBox.x + 10,
       y: notesBox.y + notesBox.height - 18,
       maxWidth: notesBox.width - 20,
       lineHeight: noteFontSize + 5,
-      maxLines: 6,
+      maxLines: 5,
       font,
       fontSize: noteFontSize,
       color: rgb(0.08, 0.08, 0.08)
@@ -680,29 +680,29 @@ export class LegacyService {
     const acceptanceDate = report.finishedAt ? new Date(report.finishedAt) : new Date();
     const acceptanceDateText = this.formatDateOnly(acceptanceDate);
     page.drawText(acceptanceDateText, {
-      x: width * 0.468,
-      y: height * 0.462,
+      x: width * 0.49,
+      y: height * 0.175,
       font: boldFont,
       size: 12,
       color: rgb(0.08, 0.08, 0.08)
     });
 
     await this.drawSignatureOnPdf(pdf, page, report.technicianSignatureDataUrl, {
-      x: width * 0.05,
-      y: height * 0.085,
-      width: width * 0.32,
-      height: height * 0.08
+      x: width * 0.03,
+      y: height * 0.02,
+      width: width * 0.35,
+      height: height * 0.075
     });
     await this.drawSignatureOnPdf(pdf, page, report.clientSignatureDataUrl, {
-      x: width * 0.615,
-      y: height * 0.085,
-      width: width * 0.32,
-      height: height * 0.08
+      x: width * 0.62,
+      y: height * 0.02,
+      width: width * 0.33,
+      height: height * 0.075
     });
 
     page.drawText(appointment.technician?.name || 'Tecnico', {
-      x: width * 0.11,
-      y: height * 0.03,
+      x: width * 0.10,
+      y: height * 0.008,
       font,
       size: 11,
       color: rgb(0.12, 0.12, 0.12)
@@ -922,12 +922,27 @@ export class LegacyService {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Falha ao enviar arquivo para o Google Drive';
+        if (kind === ATTACHMENT_KIND.TECHNICAL_REPORT) {
+          uploadResult = await this.saveAttachmentInline({
+            attachmentId,
+            appointmentId,
+            fileName: originalName,
+            mimeType,
+            buffer: file?.buffer,
+            baseUrl: baseUrl ?? null
+          });
+        } else
         if (message.includes('Service Accounts do not have storage quota')) {
           throw new InternalServerErrorException(
             'Google Drive bloqueou o upload para Service Account sem cota. Compartilhe uma Unidade Compartilhada com esta Service Account ou use delegacao OAuth de usuario.'
           );
+        } else if (message.toLowerCase().includes('invalid_grant')) {
+          throw new InternalServerErrorException(
+            'Google Drive recusou a autenticacao do upload. Atualize as credenciais OAuth ou mantenha a Service Account com acesso de edicao na pasta compartilhada.'
+          );
+        } else {
+          throw new InternalServerErrorException(message);
         }
-        throw new InternalServerErrorException(message);
       }
     }
 

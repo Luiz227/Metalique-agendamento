@@ -287,8 +287,8 @@ export default function AppointmentDetails() {
   );
 
   const checklistProgress = checklist.length ? (checklist.filter((item) => item.done).length / checklist.length) * 100 : 0;
-  const serviceOrderTemplates = (appointment.attachments ?? []).filter((attachment) => attachment.kind === 'SERVICE_ORDER_TEMPLATE');
-  const generatedReports = (appointment.attachments ?? []).filter((attachment) => attachment.kind === 'TECHNICAL_REPORT');
+  const serviceOrderTemplates = (appointment?.attachments ?? []).filter((attachment) => attachment.kind === 'SERVICE_ORDER_TEMPLATE');
+  const generatedReports = (appointment?.attachments ?? []).filter((attachment) => attachment.kind === 'TECHNICAL_REPORT');
 
   async function cancelAppointment() {
     if (!appointment) return;

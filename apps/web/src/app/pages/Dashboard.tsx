@@ -101,6 +101,21 @@ const emptyDashboard: DashboardData = {
   }
 };
 
+function normalizeDashboard(data: Partial<DashboardData> | null | undefined): DashboardData {
+  return {
+    ...emptyDashboard,
+    ...data,
+    alerts: Array.isArray(data?.alerts) ? data.alerts : [],
+    charts: {
+      appointmentsByWeekday: Array.isArray(data?.charts?.appointmentsByWeekday) ? data!.charts.appointmentsByWeekday : [],
+      status: Array.isArray(data?.charts?.status) && data!.charts.status.length > 0
+        ? data!.charts.status
+        : emptyDashboard.charts.status,
+      technicianUsage: Array.isArray(data?.charts?.technicianUsage) ? data!.charts.technicianUsage : []
+    }
+  };
+}
+
 export default function Dashboard() {
   const [dashboard, setDashboard] = useState<DashboardData>(emptyDashboard);
   const [loading, setLoading] = useState(true);
@@ -112,7 +127,7 @@ export default function Dashboard() {
     async function loadDashboard() {
       try {
         const data = await api<DashboardData>('/dashboard');
-        if (active) setDashboard(data);
+        if (active) setDashboard(normalizeDashboard(data));
       } catch (err) {
         if (active) setError(err instanceof ApiError ? err.message : 'Falha ao carregar o dashboard');
       } finally {

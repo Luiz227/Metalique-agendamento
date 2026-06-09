@@ -24,7 +24,14 @@ export function getToken() {
 
 export function getUser(): ApiUser | null {
   const raw = localStorage.getItem(USER_KEY);
-  return raw ? JSON.parse(raw) : null;
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as ApiUser;
+  } catch {
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    return null;
+  }
 }
 
 export function setSession(token: string, user: ApiUser) {

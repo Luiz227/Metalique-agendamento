@@ -43,6 +43,7 @@ export default function Layout() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => (localStorage.getItem('sp-theme') as 'dark' | 'light') || 'light');
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isMobileWeb, setIsMobileWeb] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
   const user = getUser();
 
   useEffect(() => {
@@ -68,6 +69,20 @@ export default function Layout() {
   }, []);
 
   useEffect(() => {
+    const updateStandalone = () => {
+      const standaloneByMedia = window.matchMedia?.('(display-mode: standalone)')?.matches ?? false;
+      const standaloneByNavigator = typeof navigator !== 'undefined' && 'standalone' in navigator
+        ? Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+        : false;
+      setIsStandalone(standaloneByMedia || standaloneByNavigator);
+    };
+
+    updateStandalone();
+    window.addEventListener('resize', updateStandalone);
+    return () => window.removeEventListener('resize', updateStandalone);
+  }, []);
+
+  useEffect(() => {
     const handler = (evt: Event) => {
       const custom = evt as CustomEvent<BeforeInstallPromptEvent>;
       if (custom.detail) setInstallPrompt(custom.detail);
@@ -77,10 +92,16 @@ export default function Layout() {
   }, []);
 
   async function installApp() {
-    if (!installPrompt) return;
-    await installPrompt.prompt();
-    await installPrompt.userChoice.catch(() => undefined);
-    setInstallPrompt(null);
+    if (installPrompt) {
+      await installPrompt.prompt();
+      await installPrompt.userChoice.catch(() => undefined);
+      setInstallPrompt(null);
+      return;
+    }
+
+    window.alert(
+      'Para instalar no celular: abra o menu do navegador e escolha "Adicionar a tela inicial" ou "Instalar aplicativo".'
+    );
   }
 
   const navigation: NavigationItem[] = [
@@ -173,7 +194,7 @@ export default function Layout() {
           </div>
 
           <div className="flex items-center gap-3">
-            {installPrompt && isMobileWeb && user?.role === 'TECHNICIAN' && (
+            {!isStandalone && isMobileWeb && user?.role === 'TECHNICIAN' && (
               <Button variant="outline" size="sm" onClick={installApp}>
                 Instalar app
               </Button>

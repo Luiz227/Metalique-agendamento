@@ -71,16 +71,15 @@ createRoot(document.getElementById('root')!).render(
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.getRegistrations()
-      .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
-      .catch(() => undefined);
-  });
-}
-
-if ('caches' in window) {
-  window.addEventListener('load', () => {
-    caches.keys()
-      .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+    navigator.serviceWorker.register('/sw.js')
+      .then(async (registration) => {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(
+          registrations
+            .filter((item) => item.scope !== registration.scope)
+            .map((item) => item.unregister())
+        );
+      })
       .catch(() => undefined);
   });
 }

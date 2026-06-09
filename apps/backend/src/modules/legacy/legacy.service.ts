@@ -332,20 +332,25 @@ export class LegacyService {
         : null;
 
     const candidateName = linkedUser?.name?.trim() || identity.name?.trim() || '';
+    const firstName = candidateName.split(/\s+/).filter(Boolean)[0] ?? '';
     const technicianSearch: Prisma.TechnicianWhereInput[] = [];
     if (linkedUser) technicianSearch.push({ userId: linkedUser.id });
     if (candidateName) technicianSearch.push({ name: { equals: candidateName, mode: 'insensitive' } });
+    if (firstName && firstName.length >= 3) technicianSearch.push({ name: { startsWith: firstName, mode: 'insensitive' } });
 
-    if (technicianSearch.length === 0) return [];
+    let technicians = technicianSearch.length
+      ? await this.prisma.technician.findMany({
+          where: {
+            OR: technicianSearch
+          },
+          orderBy: { createdAt: 'asc' }
+        })
+      : [];
 
-    let technician = await this.prisma.technician.findFirst({
-      where: {
-        OR: technicianSearch
-      }
-    });
+    let primaryTechnician = technicians.find((item) => linkedUser && item.userId === linkedUser.id) ?? technicians[0] ?? null;
 
-    if (!technician && linkedUser?.role === UserRole.TECHNICIAN) {
-      technician = await this.prisma.technician.create({
+    if (!primaryTechnician && linkedUser?.role === UserRole.TECHNICIAN) {
+      primaryTechnician = await this.prisma.technician.create({
         data: {
           userId: linkedUser.id,
           name: linkedUser.name,
@@ -356,18 +361,25 @@ export class LegacyService {
           color: '#2563eb'
         }
       });
+      technicians = [primaryTechnician];
     }
 
-    if (technician && linkedUser && !technician.userId) {
-      technician = await this.prisma.technician.update({
-        where: { id: technician.id },
-        data: { userId: linkedUser.id, active: linkedUser.active }
+    if (linkedUser && primaryTechnician && !primaryTechnician.userId) {
+      primaryTechnician = await this.prisma.technician.update({
+        where: { id: primaryTechnician.id },
+        data: { userId: linkedUser.id, active: linkedUser.active, name: linkedUser.name }
       });
+      technicians = technicians.map((item) => (item.id === primaryTechnician!.id ? primaryTechnician! : item));
     }
 
-    if (!technician) return [];
+    if (!primaryTechnician) return [];
+
+    const technicianIds = Array.from(new Set(technicians.map((item) => item.id)));
     const rows = await this.prisma.appointment.findMany({
-      where: { technicianId: technician.id, status: { in: [AppointmentStatus.READY, AppointmentStatus.CRITICAL, AppointmentStatus.WAITING] } },
+      where: {
+        technicianId: { in: technicianIds },
+        status: { in: [AppointmentStatus.READY, AppointmentStatus.CRITICAL, AppointmentStatus.WAITING] }
+      },
       include: { client: true, technician: true, attachments: true, statusLogs: { orderBy: { createdAt: 'desc' } } },
       orderBy: { date: 'asc' }
     });

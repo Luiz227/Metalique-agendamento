@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Headers,
   Param,
@@ -156,6 +157,11 @@ export class LegacyController {
     res.setHeader('Content-Length', String(file.size));
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.originalName)}"`);
     res.send(file.buffer);
+  }
+
+  @Delete('attachments/:attachmentId')
+  deleteAttachment(@Param('attachmentId') attachmentId: string) {
+    return this.service.deleteAttachment(attachmentId);
   }
 
   @Sse('events/stream')

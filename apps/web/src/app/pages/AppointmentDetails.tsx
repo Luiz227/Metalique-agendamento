@@ -451,6 +451,22 @@ export default function AppointmentDetails() {
     }
   }
 
+  async function deleteAttachment(attachmentId: string) {
+    if (!appointment) return;
+    const confirmed = window.confirm('Deseja excluir este anexo?');
+    if (!confirmed) return;
+
+    setError('');
+    try {
+      await api(`/attachments/${attachmentId}`, {
+        method: 'DELETE'
+      });
+      await load(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Nao foi possivel excluir o anexo.');
+    }
+  }
+
   if (loading) {
     return <div className="p-6">Carregando atendimento...</div>;
   }
@@ -886,11 +902,16 @@ export default function AppointmentDetails() {
                             enviado em {new Date(attachment.createdAt).toLocaleString('pt-BR')}
                           </p>
                         </div>
-                        {attachment.publicUrl && (
-                          <a href={resolveApiAssetUrl(attachment.publicUrl) ?? undefined} target="_blank" rel="noreferrer">
-                            <Button type="button" variant="outline" size="sm">Abrir</Button>
-                          </a>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {attachment.publicUrl && (
+                            <a href={resolveApiAssetUrl(attachment.publicUrl) ?? undefined} target="_blank" rel="noreferrer">
+                              <Button type="button" variant="outline" size="sm">Abrir</Button>
+                            </a>
+                          )}
+                          <Button type="button" variant="destructive" size="sm" onClick={() => deleteAttachment(attachment.id)}>
+                            Excluir
+                          </Button>
+                        </div>
                       </div>
                     ))}
                     {generatedReports.length > 0 && (

@@ -69,6 +69,23 @@ async function compressImageForUpload(file: File) {
   }
 }
 
+async function showBrowserNotification(title: string, options?: NotificationOptions) {
+  if (typeof window === 'undefined' || typeof Notification === 'undefined') return;
+  if (Notification.permission !== 'granted') return;
+
+  try {
+    new Notification(title, options);
+    return;
+  } catch {
+    try {
+      const registration = await navigator.serviceWorker?.getRegistration();
+      await registration?.showNotification(title, options);
+    } catch {
+      // Ignora falhas de notificacao para nao quebrar a tela do tecnico.
+    }
+  }
+}
+
 function isInCurrentWeek(dateValue: string) {
   const date = new Date(dateValue);
   const now = new Date();
@@ -116,7 +133,7 @@ export default function TechnicianMobile() {
       const nextIds = new Set(rows.map((item) => item.id));
       const newItems = rows.filter((item) => !knownIdsRef.current.has(item.id));
       if (newItems.length > 0 && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        new Notification('Novo agendamento confirmado', {
+        await showBrowserNotification('Novo agendamento confirmado', {
           body: `${newItems[0].client?.name ?? 'Cliente'} - ${newItems[0].city}`
         });
       }

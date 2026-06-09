@@ -1088,6 +1088,29 @@ export class LegacyService {
     throw new NotFoundException('Este anexo nao esta disponivel para download local');
   }
 
+  async deleteAttachment(attachmentId: string) {
+    const attachment = await this.prisma.attachment.findUnique({ where: { id: attachmentId } });
+    if (!attachment) throw new NotFoundException('Anexo nao encontrado');
+
+    if (
+      !attachment.driveFileId.startsWith(INLINE_ATTACHMENT_PREFIX) &&
+      !attachment.driveFileId.startsWith(LOCAL_ATTACHMENT_PREFIX)
+    ) {
+      try {
+        const drive = this.getDriveClient();
+        await drive.files.delete({
+          fileId: attachment.driveFileId,
+          supportsAllDrives: true
+        });
+      } catch {
+        // Se o arquivo externo ja nao existir, ainda removemos o registro local.
+      }
+    }
+
+    await this.prisma.attachment.delete({ where: { id: attachmentId } });
+    return { ok: true };
+  }
+
   private async saveAttachmentInline(params: {
     attachmentId: string;
     appointmentId: string;

@@ -8,7 +8,7 @@ import { Progress } from '../components/ui/progress';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
-import { ApiError, api, connectRealtime } from '../services/api';
+import { ApiError, api, connectRealtime, resolveApiAssetUrl } from '../services/api';
 import type { Appointment, Technician, Vehicle } from '../services/types';
 import { formatDate, formatTime, statusLabel, statusTone } from '../services/types';
 
@@ -887,7 +887,7 @@ export default function AppointmentDetails() {
                           </p>
                         </div>
                         {attachment.publicUrl && (
-                          <a href={attachment.publicUrl} target="_blank" rel="noreferrer">
+                          <a href={resolveApiAssetUrl(attachment.publicUrl) ?? undefined} target="_blank" rel="noreferrer">
                             <Button type="button" variant="outline" size="sm">Abrir</Button>
                           </a>
                         )}
@@ -901,7 +901,7 @@ export default function AppointmentDetails() {
                             <div key={attachment.id} className="flex items-center justify-between rounded-md border border-emerald-500/20 bg-background/60 px-3 py-2">
                               <span className="truncate text-sm">{attachment.originalName}</span>
                               {attachment.publicUrl && (
-                                <a href={attachment.publicUrl} target="_blank" rel="noreferrer">
+                                <a href={resolveApiAssetUrl(attachment.publicUrl) ?? undefined} target="_blank" rel="noreferrer">
                                   <Button type="button" variant="outline" size="sm">Abrir</Button>
                                 </a>
                               )}

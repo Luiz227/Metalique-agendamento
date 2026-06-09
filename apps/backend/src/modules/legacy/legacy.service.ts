@@ -1,7 +1,10 @@
 import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { AppointmentStatus, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import { randomUUID } from 'crypto';
+import { promises as fs } from 'fs';
 import { google } from 'googleapis';
+import path from 'path';
 import { Readable } from 'stream';
 import { PDFDocument, PDFPage, PDFFont, rgb, StandardFonts } from 'pdf-lib';
 
@@ -14,6 +17,8 @@ const ATTACHMENT_KIND = {
   CLIENT_SIGNATURE: 'CLIENT_SIGNATURE',
   TECHNICIAN_SIGNATURE: 'TECHNICIAN_SIGNATURE'
 } as const;
+
+const LOCAL_ATTACHMENT_PREFIX = 'local:';
 
 @Injectable()
 export class LegacyService {
@@ -400,7 +405,7 @@ export class LegacyService {
       const templateAttachment = appointment.attachments.find((attachment) => attachment.kind === ATTACHMENT_KIND.SERVICE_ORDER_TEMPLATE);
 
       if (templateAttachment?.mimeType === 'application/pdf') {
-        const reportPdf = await this.buildFilledServiceOrderPdf(appointment, templateAttachment.driveFileId, {
+        const reportPdf = await this.buildFilledServiceOrderPdf(appointment, templateAttachment, {
           summary,
           finishedAt: report?.finishedAt,
           clientSignatureDataUrl: report?.clientSignatureDataUrl,
@@ -627,7 +632,7 @@ export class LegacyService {
       date: Date;
       technician: { name: string } | null;
     },
-    templateDriveFileId: string,
+    templateAttachment: { driveFileId: string; originalName: string; mimeType: string },
     report: {
       summary?: string;
       finishedAt?: string;
@@ -635,7 +640,7 @@ export class LegacyService {
       technicianSignatureDataUrl?: string;
     }
   ) {
-    const templateBytes = await this.downloadDriveFile(templateDriveFileId);
+    const templateBytes = await this.downloadStoredAttachment(templateAttachment);
     const pdf = await PDFDocument.load(templateBytes);
     const page = pdf.getPages()[pdf.getPageCount() - 1];
     const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -784,6 +789,16 @@ export class LegacyService {
     return Buffer.from(response.data as ArrayBuffer);
   }
 
+  private async downloadStoredAttachment(attachment: { driveFileId: string }) {
+    if (attachment.driveFileId.startsWith(LOCAL_ATTACHMENT_PREFIX)) {
+      const relativePath = attachment.driveFileId.slice(LOCAL_ATTACHMENT_PREFIX.length);
+      const absolutePath = path.join(this.getLocalAttachmentRoot(), ...relativePath.split('/'));
+      return fs.readFile(absolutePath);
+    }
+
+    return this.downloadDriveFile(attachment.driveFileId);
+  }
+
   private resolveServiceOrderCompany(serviceType: string | null) {
     if (this.isStartOrTraining(serviceType)) {
       return {
@@ -845,7 +860,8 @@ export class LegacyService {
   async attachFile(
     appointmentId: string,
     file?: { originalname?: string; mimetype?: string; size?: number; buffer?: Buffer },
-    type?: string
+    type?: string,
+    baseUrl?: string | null
   ) {
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
@@ -857,29 +873,43 @@ export class LegacyService {
     const mimeType = file?.mimetype ?? 'application/octet-stream';
     const size = file?.size ?? 0;
     const kind = this.normalizeAttachmentKind(type, mimeType);
+    const attachmentId = randomUUID();
     let uploadResult: { fileId: string; folderPath: string; publicUrl: string | null };
-    try {
-      uploadResult = await this.uploadToDrive({
+
+    if (kind === ATTACHMENT_KIND.SERVICE_ORDER_TEMPLATE) {
+      uploadResult = await this.saveAttachmentLocally({
+        attachmentId,
         appointmentId,
-        clientName: appointment.client.name,
-        osNumber: appointment.osNumber || appointment.id,
-        technicianName: appointment.technician?.name || 'Sem tecnico',
         fileName: originalName,
         mimeType,
-        buffer: file?.buffer
+        buffer: file?.buffer,
+        baseUrl: baseUrl ?? null
       });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Falha ao enviar arquivo para o Google Drive';
-      if (message.includes('Service Accounts do not have storage quota')) {
-        throw new InternalServerErrorException(
-          'Google Drive bloqueou o upload para Service Account sem cota. Compartilhe uma Unidade Compartilhada com esta Service Account ou use delegacao OAuth de usuario.'
-        );
+    } else {
+      try {
+        uploadResult = await this.uploadToDrive({
+          appointmentId,
+          clientName: appointment.client.name,
+          osNumber: appointment.osNumber || appointment.id,
+          technicianName: appointment.technician?.name || 'Sem tecnico',
+          fileName: originalName,
+          mimeType,
+          buffer: file?.buffer
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Falha ao enviar arquivo para o Google Drive';
+        if (message.includes('Service Accounts do not have storage quota')) {
+          throw new InternalServerErrorException(
+            'Google Drive bloqueou o upload para Service Account sem cota. Compartilhe uma Unidade Compartilhada com esta Service Account ou use delegacao OAuth de usuario.'
+          );
+        }
+        throw new InternalServerErrorException(message);
       }
-      throw new InternalServerErrorException(message);
     }
 
     await this.prisma.attachment.create({
       data: {
+        id: attachmentId,
         appointmentId,
         kind,
         driveFileId: uploadResult.fileId,
@@ -1012,6 +1042,58 @@ export class LegacyService {
     if (normalized === 'documento-tecnico') return ATTACHMENT_KIND.TECHNICAL_DOCUMENT;
     if (mimeType.startsWith('image/') || mimeType.startsWith('video/')) return ATTACHMENT_KIND.TECHNICAL_MEDIA;
     return ATTACHMENT_KIND.GENERAL;
+  }
+
+  async getAttachmentFile(attachmentId: string) {
+    const attachment = await this.prisma.attachment.findUnique({ where: { id: attachmentId } });
+    if (!attachment) throw new NotFoundException('Anexo nao encontrado');
+    if (!attachment.driveFileId.startsWith(LOCAL_ATTACHMENT_PREFIX)) {
+      throw new NotFoundException('Este anexo nao esta disponivel para download local');
+    }
+
+    const relativePath = attachment.driveFileId.slice(LOCAL_ATTACHMENT_PREFIX.length);
+    const absolutePath = path.join(this.getLocalAttachmentRoot(), ...relativePath.split('/'));
+    const buffer = await fs.readFile(absolutePath);
+
+    return {
+      originalName: attachment.originalName,
+      mimeType: attachment.mimeType,
+      size: attachment.size,
+      buffer
+    };
+  }
+
+  private async saveAttachmentLocally(params: {
+    attachmentId: string;
+    appointmentId: string;
+    fileName: string;
+    mimeType: string;
+    buffer?: Buffer;
+    baseUrl: string | null;
+  }) {
+    if (!params.buffer?.length) throw new InternalServerErrorException('Arquivo invalido para upload');
+
+    const safeName = this.sanitizeFileName(params.fileName || 'arquivo.bin');
+    const relativePath = ['service-order-templates', params.appointmentId, `${params.attachmentId}-${safeName}`].join('/');
+    const absolutePath = path.join(this.getLocalAttachmentRoot(), ...relativePath.split('/'));
+
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+    await fs.writeFile(absolutePath, params.buffer);
+
+    const publicPath = `/api/attachments/files/${params.attachmentId}`;
+    return {
+      fileId: `${LOCAL_ATTACHMENT_PREFIX}${relativePath}`,
+      folderPath: `local/service-order-templates/${params.appointmentId}`,
+      publicUrl: params.baseUrl ? `${params.baseUrl}${publicPath}` : publicPath
+    };
+  }
+
+  private getLocalAttachmentRoot() {
+    return path.resolve(process.cwd(), 'storage', 'attachments');
+  }
+
+  private sanitizeFileName(fileName: string) {
+    return fileName.replace(/[<>:"/\\|?*\x00-\x1F]/g, '-').replace(/\s+/g, ' ').trim() || 'arquivo.bin';
   }
 
   private async uploadToDrive(params: {

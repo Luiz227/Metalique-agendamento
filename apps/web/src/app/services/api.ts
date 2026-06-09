@@ -44,6 +44,12 @@ export function clearSession() {
   localStorage.removeItem(USER_KEY);
 }
 
+export function resolveApiAssetUrl(url?: string | null) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${API_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
 export function connectRealtime(onAppointmentsChanged: () => void) {
   const token = getToken();
   if (!token) return () => undefined;

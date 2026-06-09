@@ -9,6 +9,7 @@ import {
   Put,
   Query,
   Req,
+  Res,
   Sse,
   UploadedFile,
   UseInterceptors
@@ -16,7 +17,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { interval, map } from 'rxjs';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { LegacyService } from './legacy.service';
 
 @Controller()
@@ -141,10 +142,20 @@ export class LegacyController {
   )
   attachment(
     @Param('id') id: string,
+    @Req() req: Request,
     @UploadedFile() file: { originalname?: string; mimetype?: string; size?: number; buffer?: Buffer } | undefined,
     @Body('type') type?: string
   ) {
-    return this.service.attachFile(id, file, type);
+    return this.service.attachFile(id, file, type, this.buildBaseUrl(req));
+  }
+
+  @Get('attachments/files/:attachmentId')
+  async attachmentFile(@Param('attachmentId') attachmentId: string, @Res() res: Response) {
+    const file = await this.service.getAttachmentFile(attachmentId);
+    res.setHeader('Content-Type', file.mimeType);
+    res.setHeader('Content-Length', String(file.size));
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.originalName)}"`);
+    res.send(file.buffer);
   }
 
   @Sse('events/stream')
@@ -172,5 +183,13 @@ export class LegacyController {
     } catch {
       return { userId: null, email: null, name: null };
     }
+  }
+
+  private buildBaseUrl(req: Request) {
+    const forwardedProto = req.headers['x-forwarded-proto'];
+    const forwardedHost = req.headers['x-forwarded-host'];
+    const protocol = (Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto) || req.protocol || 'http';
+    const host = (Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost) || req.get('host') || 'localhost:3333';
+    return `${protocol}://${host}`;
   }
 }

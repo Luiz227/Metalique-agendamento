@@ -6,7 +6,7 @@ import { Badge } from '../components/ui/badge';
 import { Separator } from '../components/ui/separator';
 import { Textarea } from '../components/ui/textarea';
 import { Input } from '../components/ui/input';
-import { ApiError, api, clearSession, connectRealtime, getToken, getUser } from '../services/api';
+import { ApiError, api, clearSession, connectRealtime, getToken, getUser, resolveApiAssetUrl } from '../services/api';
 import type { Appointment } from '../services/types';
 import { formatDate, formatTime, statusLabel, statusTone } from '../services/types';
 
@@ -609,7 +609,7 @@ export default function TechnicianMobile() {
                     <p className="text-[11px] text-muted-foreground">Essa OS serÃ¡ usada como modelo para preencher relato e assinaturas.</p>
                   </div>
                   {currentServiceOrder.publicUrl && (
-                    <a href={currentServiceOrder.publicUrl} target="_blank" rel="noreferrer">
+                    <a href={resolveApiAssetUrl(currentServiceOrder.publicUrl) ?? undefined} target="_blank" rel="noreferrer">
                       <Button type="button" variant="outline" size="sm">Abrir OS</Button>
                     </a>
                   )}
@@ -619,7 +619,7 @@ export default function TechnicianMobile() {
               )}
               {currentGeneratedReport?.publicUrl && (
                 <div className="mt-2">
-                  <a href={currentGeneratedReport.publicUrl} target="_blank" rel="noreferrer">
+                  <a href={resolveApiAssetUrl(currentGeneratedReport.publicUrl) ?? undefined} target="_blank" rel="noreferrer">
                     <Button type="button" variant="outline" className="w-full">Ver ultima OS preenchida</Button>
                   </a>
                 </div>

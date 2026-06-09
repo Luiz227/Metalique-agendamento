@@ -3,6 +3,17 @@ import { createRoot } from 'react-dom/client';
 import App from './app/App';
 import './styles/index.css';
 
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+};
+
+declare global {
+  interface Window {
+    __spInstallPrompt?: BeforeInstallPromptEvent | null;
+  }
+}
+
 type ErrorBoundaryState = {
   hasError: boolean;
   message: string;
@@ -86,5 +97,6 @@ if ('serviceWorker' in navigator) {
 
 window.addEventListener('beforeinstallprompt', (event) => {
   event.preventDefault();
+  window.__spInstallPrompt = event as BeforeInstallPromptEvent;
   window.dispatchEvent(new CustomEvent('pwa-install-available', { detail: event }));
 });

@@ -83,6 +83,10 @@ export default function Layout() {
   }, []);
 
   useEffect(() => {
+    if (window.__spInstallPrompt) {
+      setInstallPrompt(window.__spInstallPrompt);
+    }
+
     const handler = (evt: Event) => {
       const custom = evt as CustomEvent<BeforeInstallPromptEvent>;
       if (custom.detail) setInstallPrompt(custom.detail);
@@ -92,16 +96,11 @@ export default function Layout() {
   }, []);
 
   async function installApp() {
-    if (installPrompt) {
-      await installPrompt.prompt();
-      await installPrompt.userChoice.catch(() => undefined);
-      setInstallPrompt(null);
-      return;
-    }
-
-    window.alert(
-      'Para instalar no celular: abra o menu do navegador e escolha "Adicionar a tela inicial" ou "Instalar aplicativo".'
-    );
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    await installPrompt.userChoice.catch(() => undefined);
+    setInstallPrompt(null);
+    window.__spInstallPrompt = null;
   }
 
   const navigation: NavigationItem[] = [
@@ -194,7 +193,7 @@ export default function Layout() {
           </div>
 
           <div className="flex items-center gap-3">
-            {!isStandalone && isMobileWeb && user?.role === 'TECHNICIAN' && (
+            {!isStandalone && installPrompt && isMobileWeb && user?.role === 'TECHNICIAN' && (
               <Button variant="outline" size="sm" onClick={installApp}>
                 Instalar app
               </Button>

@@ -2,9 +2,7 @@ import { Injectable, InternalServerErrorException, NotFoundException } from '@ne
 import { AppointmentStatus, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { randomUUID } from 'crypto';
-import { promises as fs } from 'fs';
 import { google } from 'googleapis';
-import path from 'path';
 import { Readable } from 'stream';
 import { PDFDocument, PDFPage, PDFFont, rgb, StandardFonts } from 'pdf-lib';
 
@@ -19,6 +17,7 @@ const ATTACHMENT_KIND = {
 } as const;
 
 const LOCAL_ATTACHMENT_PREFIX = 'local:';
+const INLINE_ATTACHMENT_PREFIX = 'inline-db:';
 
 @Injectable()
 export class LegacyService {
@@ -644,7 +643,7 @@ export class LegacyService {
       date: Date;
       technician: { name: string } | null;
     },
-    templateAttachment: { driveFileId: string; originalName: string; mimeType: string },
+    templateAttachment: { driveFileId: string; driveFolderPath: string; originalName: string; mimeType: string },
     report: {
       summary?: string;
       finishedAt?: string;
@@ -801,11 +800,15 @@ export class LegacyService {
     return Buffer.from(response.data as ArrayBuffer);
   }
 
-  private async downloadStoredAttachment(attachment: { driveFileId: string }) {
+  private async downloadStoredAttachment(attachment: { driveFileId: string; driveFolderPath: string }) {
+    if (attachment.driveFileId.startsWith(INLINE_ATTACHMENT_PREFIX)) {
+      return this.readInlineAttachmentBuffer(attachment.driveFolderPath);
+    }
+
     if (attachment.driveFileId.startsWith(LOCAL_ATTACHMENT_PREFIX)) {
-      const relativePath = attachment.driveFileId.slice(LOCAL_ATTACHMENT_PREFIX.length);
-      const absolutePath = path.join(this.getLocalAttachmentRoot(), ...relativePath.split('/'));
-      return fs.readFile(absolutePath);
+      const legacyInlineBuffer = this.tryReadLegacyInlineAttachmentBuffer(attachment.driveFolderPath);
+      if (legacyInlineBuffer) return legacyInlineBuffer;
+      throw new NotFoundException('Este anexo local antigo nao esta mais disponivel. Reanexe a OS para continuar.');
     }
 
     return this.downloadDriveFile(attachment.driveFileId);
@@ -889,7 +892,7 @@ export class LegacyService {
     let uploadResult: { fileId: string; folderPath: string; publicUrl: string | null };
 
     if (kind === ATTACHMENT_KIND.SERVICE_ORDER_TEMPLATE) {
-      uploadResult = await this.saveAttachmentLocally({
+      uploadResult = await this.saveAttachmentInline({
         attachmentId,
         appointmentId,
         fileName: originalName,
@@ -1059,23 +1062,33 @@ export class LegacyService {
   async getAttachmentFile(attachmentId: string) {
     const attachment = await this.prisma.attachment.findUnique({ where: { id: attachmentId } });
     if (!attachment) throw new NotFoundException('Anexo nao encontrado');
-    if (!attachment.driveFileId.startsWith(LOCAL_ATTACHMENT_PREFIX)) {
-      throw new NotFoundException('Este anexo nao esta disponivel para download local');
+    if (attachment.driveFileId.startsWith(INLINE_ATTACHMENT_PREFIX)) {
+      const buffer = this.readInlineAttachmentBuffer(attachment.driveFolderPath);
+      return {
+        originalName: attachment.originalName,
+        mimeType: attachment.mimeType,
+        size: attachment.size,
+        buffer
+      };
     }
 
-    const relativePath = attachment.driveFileId.slice(LOCAL_ATTACHMENT_PREFIX.length);
-    const absolutePath = path.join(this.getLocalAttachmentRoot(), ...relativePath.split('/'));
-    const buffer = await fs.readFile(absolutePath);
+    if (attachment.driveFileId.startsWith(LOCAL_ATTACHMENT_PREFIX)) {
+      const buffer = this.tryReadLegacyInlineAttachmentBuffer(attachment.driveFolderPath);
+      if (!buffer) {
+        throw new NotFoundException('Este anexo local antigo nao esta mais disponivel. Reanexe a OS para continuar.');
+      }
+      return {
+        originalName: attachment.originalName,
+        mimeType: attachment.mimeType,
+        size: attachment.size,
+        buffer
+      };
+    }
 
-    return {
-      originalName: attachment.originalName,
-      mimeType: attachment.mimeType,
-      size: attachment.size,
-      buffer
-    };
+    throw new NotFoundException('Este anexo nao esta disponivel para download local');
   }
 
-  private async saveAttachmentLocally(params: {
+  private async saveAttachmentInline(params: {
     attachmentId: string;
     appointmentId: string;
     fileName: string;
@@ -1085,27 +1098,24 @@ export class LegacyService {
   }) {
     if (!params.buffer?.length) throw new InternalServerErrorException('Arquivo invalido para upload');
 
-    const safeName = this.sanitizeFileName(params.fileName || 'arquivo.bin');
-    const relativePath = ['service-order-templates', params.appointmentId, `${params.attachmentId}-${safeName}`].join('/');
-    const absolutePath = path.join(this.getLocalAttachmentRoot(), ...relativePath.split('/'));
-
-    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
-    await fs.writeFile(absolutePath, params.buffer);
-
     const publicPath = `/api/attachments/files/${params.attachmentId}`;
     return {
-      fileId: `${LOCAL_ATTACHMENT_PREFIX}${relativePath}`,
-      folderPath: `local/service-order-templates/${params.appointmentId}`,
+      fileId: `${INLINE_ATTACHMENT_PREFIX}${params.attachmentId}`,
+      folderPath: `${INLINE_ATTACHMENT_PREFIX}${params.buffer.toString('base64')}`,
       publicUrl: params.baseUrl ? `${params.baseUrl}${publicPath}` : publicPath
     };
   }
 
-  private getLocalAttachmentRoot() {
-    return path.resolve(process.cwd(), 'storage', 'attachments');
+  private readInlineAttachmentBuffer(encoded: string) {
+    if (!encoded.startsWith(INLINE_ATTACHMENT_PREFIX)) {
+      throw new InternalServerErrorException('Conteudo inline do anexo invalido');
+    }
+    return Buffer.from(encoded.slice(INLINE_ATTACHMENT_PREFIX.length), 'base64');
   }
 
-  private sanitizeFileName(fileName: string) {
-    return fileName.replace(/[<>:"/\\|?*\x00-\x1F]/g, '-').replace(/\s+/g, ' ').trim() || 'arquivo.bin';
+  private tryReadLegacyInlineAttachmentBuffer(encoded: string) {
+    if (!encoded.startsWith(INLINE_ATTACHMENT_PREFIX)) return null;
+    return Buffer.from(encoded.slice(INLINE_ATTACHMENT_PREFIX.length), 'base64');
   }
 
   private async uploadToDrive(params: {

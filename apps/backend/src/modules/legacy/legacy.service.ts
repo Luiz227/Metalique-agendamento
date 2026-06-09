@@ -787,26 +787,17 @@ export class LegacyService {
     });
   }
 
-  private async downloadDriveFile(fileId: string, forceServiceAccount = false): Promise<Buffer> {
-    try {
-      const drive = this.getDriveClient({ forceServiceAccount });
-      const response = await drive.files.get(
-        {
-          fileId,
-          alt: 'media',
-          supportsAllDrives: true
-        },
-        { responseType: 'arraybuffer' }
-      );
-      return Buffer.from(response.data as ArrayBuffer);
-    } catch (error) {
-      if (forceServiceAccount || !this.isInvalidGrantError(error) || !this.hasServiceAccountCredentials()) {
-        throw error;
-      }
-
-      this.driveClient = null;
-      return this.downloadDriveFile(fileId, true);
-    }
+  private async downloadDriveFile(fileId: string): Promise<Buffer> {
+    const drive = this.getDriveClient();
+    const response = await drive.files.get(
+      {
+        fileId,
+        alt: 'media',
+        supportsAllDrives: true
+      },
+      { responseType: 'arraybuffer' }
+    );
+    return Buffer.from(response.data as ArrayBuffer);
   }
 
   private async downloadStoredAttachment(attachment: { driveFileId: string; driveFolderPath: string }) {
@@ -922,16 +913,6 @@ export class LegacyService {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Falha ao enviar arquivo para o Google Drive';
-        if (kind === ATTACHMENT_KIND.TECHNICAL_REPORT) {
-          uploadResult = await this.saveAttachmentInline({
-            attachmentId,
-            appointmentId,
-            fileName: originalName,
-            mimeType,
-            buffer: file?.buffer,
-            baseUrl: baseUrl ?? null
-          });
-        } else
         if (message.includes('Service Accounts do not have storage quota')) {
           throw new InternalServerErrorException(
             'Google Drive bloqueou o upload para Service Account sem cota. Compartilhe uma Unidade Compartilhada com esta Service Account ou use delegacao OAuth de usuario.'
@@ -1174,16 +1155,7 @@ export class LegacyService {
     mimeType: string;
     buffer?: Buffer;
   }) {
-    try {
-      return await this.uploadToDriveWithClient(params);
-    } catch (error) {
-      if (!this.isInvalidGrantError(error) || !this.hasServiceAccountCredentials()) {
-        throw error;
-      }
-
-      this.driveClient = null;
-      return this.uploadToDriveWithClient(params, true);
-    }
+    return this.uploadToDriveWithClient(params);
   }
 
   private async uploadToDriveWithClient(
@@ -1195,10 +1167,9 @@ export class LegacyService {
       fileName: string;
       mimeType: string;
       buffer?: Buffer;
-    },
-    forceServiceAccount = false
+    }
   ) {
-    const drive = this.getDriveClient({ forceServiceAccount });
+    const drive = this.getDriveClient();
     const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
     if (!rootFolderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID nao configurado');
     if (!params.buffer || !params.buffer.length) throw new Error('Arquivo invalido para upload');
@@ -1266,14 +1237,14 @@ export class LegacyService {
     return created.data.id;
   }
 
-  private getDriveClient(options?: { forceServiceAccount?: boolean }) {
-    if (this.driveClient && !options?.forceServiceAccount) return this.driveClient;
+  private getDriveClient() {
+    if (this.driveClient) return this.driveClient;
 
     const oauthClientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
     const oauthClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
     const oauthRefreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
 
-    if (!options?.forceServiceAccount && oauthClientId && oauthClientSecret && oauthRefreshToken) {
+    if (oauthClientId && oauthClientSecret && oauthRefreshToken) {
       const oauth2Client = new google.auth.OAuth2({
         clientId: oauthClientId,
         clientSecret: oauthClientSecret
@@ -1302,10 +1273,6 @@ export class LegacyService {
 
     this.driveClient = google.drive({ version: 'v3', auth });
     return this.driveClient;
-  }
-
-  private hasServiceAccountCredentials() {
-    return Boolean(process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY);
   }
 
   private isInvalidGrantError(error: unknown) {

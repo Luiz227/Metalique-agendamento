@@ -2,7 +2,10 @@ import { Injectable, InternalServerErrorException, NotFoundException } from '@ne
 import { AppointmentStatus, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { randomUUID } from 'crypto';
+import { existsSync, readFileSync } from 'fs';
 import { google } from 'googleapis';
+import JSZip from 'jszip';
+import { join } from 'path';
 import { Readable } from 'stream';
 import { PDFDocument, PDFPage, PDFFont, rgb, StandardFonts } from 'pdf-lib';
 
@@ -18,6 +21,8 @@ const ATTACHMENT_KIND = {
 
 const LOCAL_ATTACHMENT_PREFIX = 'local:';
 const INLINE_ATTACHMENT_PREFIX = 'inline-db:';
+const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const START_TRAINING_TEMPLATE_PATH = join(process.cwd(), 'apps', 'backend', 'templates', 'template-start-treinamento.docx');
 
 @Injectable()
 export class LegacyService {
@@ -414,8 +419,42 @@ export class LegacyService {
       if (!appointment) throw new NotFoundException('Agendamento não encontrado');
 
       const templateAttachment = appointment.attachments.find((attachment) => attachment.kind === ATTACHMENT_KIND.SERVICE_ORDER_TEMPLATE);
+      const bundledStartTrainingTemplate = this.getBundledStartTrainingTemplate();
 
-      if (templateAttachment?.mimeType === 'application/pdf') {
+      if (this.isStartOrTraining(appointment.serviceType) && bundledStartTrainingTemplate) {
+        const reportDocx = await this.buildFilledServiceOrderDocx(appointment, bundledStartTrainingTemplate.buffer, {
+          summary,
+          finishedAt: report?.finishedAt
+        });
+
+        await this.attachFile(
+          id,
+          {
+            originalname: 'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.docx',
+            mimetype: DOCX_MIME_TYPE,
+            size: reportDocx.length,
+            buffer: reportDocx
+          },
+          ATTACHMENT_KIND.TECHNICAL_REPORT
+        );
+      } else if (templateAttachment?.mimeType === DOCX_MIME_TYPE) {
+        const templateBytes = await this.downloadStoredAttachment(templateAttachment);
+        const reportDocx = await this.buildFilledServiceOrderDocx(appointment, templateBytes, {
+          summary,
+          finishedAt: report?.finishedAt
+        });
+
+        await this.attachFile(
+          id,
+          {
+            originalname: 'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.docx',
+            mimetype: DOCX_MIME_TYPE,
+            size: reportDocx.length,
+            buffer: reportDocx
+          },
+          ATTACHMENT_KIND.TECHNICAL_REPORT
+        );
+      } else if (templateAttachment?.mimeType === 'application/pdf') {
         const reportPdf = await this.buildFilledServiceOrderPdf(appointment, templateAttachment, {
           summary,
           finishedAt: report?.finishedAt,
@@ -636,6 +675,86 @@ export class LegacyService {
 </html>`;
   }
 
+  private getBundledStartTrainingTemplate() {
+    if (!existsSync(START_TRAINING_TEMPLATE_PATH)) return null;
+    return {
+      buffer: readFileSync(START_TRAINING_TEMPLATE_PATH),
+      originalName: 'template-start-treinamento.docx',
+      mimeType: DOCX_MIME_TYPE
+    };
+  }
+
+  private async buildFilledServiceOrderDocx(
+    appointment: {
+      id: string;
+      osNumber: string | null;
+      city: string;
+      fullAddress: string;
+      serviceType: string;
+      problemDescription: string | null;
+      date: Date;
+      notes: string | null;
+      machineName: string | null;
+      machineModel: string | null;
+      machineSerial: string | null;
+      client: { name: string; phone: string | null; email: string | null; cnpj: string | null };
+      technician: { name: string } | null;
+    },
+    templateBytes: Buffer,
+    report: {
+      summary?: string;
+      finishedAt?: string;
+    }
+  ) {
+    const zip = await JSZip.loadAsync(templateBytes);
+    const acceptanceDate = report.finishedAt ? new Date(report.finishedAt) : new Date();
+    const company = this.resolveServiceOrderCompany(appointment.serviceType);
+    const osNumber = appointment.osNumber || appointment.id;
+    const { bairro, cep } = this.extractAddressDetails(appointment.fullAddress);
+    const serviceCode = this.isStartOrTraining(appointment.serviceType) ? '10021' : '10012';
+    const serviceDescription = this.isStartOrTraining(appointment.serviceType)
+      ? 'INSTALACAO (START / OU TREINAMENTO) TODAS AS MAQUINAS'
+      : 'MANUTENCAO CORRETIVA LASER F OU DOBRADEIRA';
+    const placeholders: Record<string, string> = {
+      OS_NUMERO: osNumber,
+      DATA_EMISSAO: this.formatDateOnly(new Date()),
+      CLIENTE: appointment.client.name || 'Nao informado',
+      TELEFONE: appointment.client.phone || 'Nao informado',
+      CPF_CNPJ: appointment.client.cnpj || 'Nao informado',
+      IE: 'Nao informado',
+      BAIRRO: bairro,
+      ENDERECO: appointment.fullAddress || 'Nao informado',
+      EMAIL: appointment.client.email || 'Nao informado',
+      CIDADE: appointment.city || 'Nao informado',
+      CEP: cep,
+      TECNICO: appointment.technician?.name || 'Nao informado',
+      DATA_VISITA: this.formatDateOnly(appointment.date),
+      CODIGO_EQUIPAMENTO: appointment.machineSerial || osNumber,
+      NOME_EQUIPAMENTO: appointment.machineName || appointment.serviceType || 'Nao informado',
+      MODELO_EQUIPAMENTO: appointment.machineModel || 'Nao informado',
+      OBSERVACOES_EQUIPAMENTO: appointment.notes || '',
+      FABRICANTE_EQUIPAMENTO: this.isStartOrTraining(appointment.serviceType)
+        ? 'METALIQUE LASER E PLASMA CNC'
+        : company.logoText,
+      CODIGO_SERVICO: serviceCode,
+      DESCRICAO_SERVICO: serviceDescription,
+      CONSIDERACOES_TECNICO: report.summary?.trim() || 'Nao informado',
+      DATA_ACEITE_DIA: String(acceptanceDate.getDate()).padStart(2, '0'),
+      DATA_ACEITE_MES: String(acceptanceDate.getMonth() + 1).padStart(2, '0'),
+      DATA_ACEITE_ANO: String(acceptanceDate.getFullYear())
+    };
+
+    for (const name of Object.keys(zip.files)) {
+      if (!name.startsWith('word/') || !name.endsWith('.xml')) continue;
+      const file = zip.file(name);
+      if (!file) continue;
+      const content = await file.async('string');
+      zip.file(name, this.replaceDocxPlaceholders(content, placeholders));
+    }
+
+    return Buffer.from(await zip.generateAsync({ type: 'nodebuffer' }));
+  }
+
   private async buildFilledServiceOrderPdf(
     appointment: {
       id: string;
@@ -659,18 +778,21 @@ export class LegacyService {
     const { width, height } = page.getSize();
 
     const notesText = report.summary?.trim() || 'Nao informado';
-    const noteFontSize = Math.max(10, Math.min(12, width / 58));
+    const noteFontSize = Math.max(9, Math.min(11, width / 62));
+
+    // The attached OS templates share the same footer block on the last page.
+    // We anchor the filled content to that block instead of using loose page ratios.
     const notesBox = {
       x: width * 0.02,
-      y: height * 0.275,
+      y: height * 0.205,
       width: width * 0.96,
-      height: height * 0.14
+      height: height * 0.125
     };
     this.drawWrappedText(page, notesText, {
-      x: notesBox.x + 12,
-      y: notesBox.y + notesBox.height - 16,
-      maxWidth: notesBox.width - 20,
-      lineHeight: noteFontSize + 6,
+      x: notesBox.x + 10,
+      y: notesBox.y + notesBox.height - 14,
+      maxWidth: notesBox.width - 18,
+      lineHeight: noteFontSize + 5,
       maxLines: 4,
       font,
       fontSize: noteFontSize,
@@ -680,24 +802,24 @@ export class LegacyService {
     const acceptanceDate = report.finishedAt ? new Date(report.finishedAt) : new Date();
     const acceptanceDateText = this.formatDateOnly(acceptanceDate);
     page.drawText(acceptanceDateText, {
-      x: width * 0.49,
-      y: height * 0.205,
+      x: width * 0.47,
+      y: height * 0.135,
       font: boldFont,
-      size: 12,
+      size: 11,
       color: rgb(0.08, 0.08, 0.08)
     });
 
     await this.drawSignatureOnPdf(pdf, page, report.technicianSignatureDataUrl, {
-      x: width * 0.04,
-      y: height * 0.075,
-      width: width * 0.32,
-      height: height * 0.055
+      x: width * 0.03,
+      y: height * 0.03,
+      width: width * 0.34,
+      height: height * 0.05
     });
     await this.drawSignatureOnPdf(pdf, page, report.clientSignatureDataUrl, {
-      x: width * 0.64,
-      y: height * 0.075,
-      width: width * 0.28,
-      height: height * 0.055
+      x: width * 0.63,
+      y: height * 0.03,
+      width: width * 0.31,
+      height: height * 0.05
     });
 
     return Buffer.from(await pdf.save());
@@ -729,6 +851,16 @@ export class LegacyService {
     const bytes = Buffer.from(base64 ?? '', 'base64');
     if (meta.includes('image/png')) return pdf.embedPng(bytes);
     return pdf.embedJpg(bytes);
+  }
+
+  private replaceDocxPlaceholders(xml: string, placeholders: Record<string, string>) {
+    let result = xml;
+    for (const [key, value] of Object.entries(placeholders)) {
+      const escaped = this.escapeXml(value);
+      const pattern = new RegExp(`\\{\\s*${key}\\s*\\}`, 'g');
+      result = result.replace(pattern, escaped);
+    }
+    return result;
   }
 
   private drawWrappedText(
@@ -862,6 +994,25 @@ export class LegacyService {
       dateStyle: 'short',
       timeStyle: 'short'
     }).format(date);
+  }
+
+  private extractAddressDetails(fullAddress: string | null) {
+    const text = fullAddress || '';
+    const bairroMatch = text.match(/BAIRRO:\s*([^,]+)/i);
+    const cepMatch = text.match(/CEP:\s*([0-9.-]+)/i);
+    return {
+      bairro: bairroMatch?.[1]?.trim() || 'Nao informado',
+      cep: cepMatch?.[1]?.trim() || 'Nao informado'
+    };
+  }
+
+  private escapeXml(value: string | number | null | undefined) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
   }
 
   async attachFile(

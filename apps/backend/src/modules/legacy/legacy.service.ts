@@ -425,7 +425,25 @@ export class LegacyService {
       const templateAttachment = appointment.attachments.find((attachment) => attachment.kind === ATTACHMENT_KIND.SERVICE_ORDER_TEMPLATE);
       const bundledStartTrainingTemplate = this.getBundledStartTrainingTemplate();
 
-      if (this.isStartOrTraining(appointment.serviceType) && bundledStartTrainingTemplate) {
+      if (templateAttachment?.mimeType === 'application/pdf') {
+        const reportPdf = await this.buildFilledServiceOrderPdf(appointment, templateAttachment, {
+          summary,
+          finishedAt: report?.finishedAt,
+          clientSignatureDataUrl: report?.clientSignatureDataUrl,
+          technicianSignatureDataUrl: report?.technicianSignatureDataUrl
+        });
+
+        await this.attachFile(
+          id,
+          {
+            originalname: 'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.pdf',
+            mimetype: 'application/pdf',
+            size: reportPdf.length,
+            buffer: reportPdf
+          },
+          ATTACHMENT_KIND.TECHNICAL_REPORT
+        );
+      } else if (this.isStartOrTraining(appointment.serviceType) && bundledStartTrainingTemplate) {
         const reportDocx = await this.buildFilledServiceOrderDocx(appointment, bundledStartTrainingTemplate.buffer, {
           summary,
           finishedAt: report?.finishedAt
@@ -455,24 +473,6 @@ export class LegacyService {
             mimetype: DOCX_MIME_TYPE,
             size: reportDocx.length,
             buffer: reportDocx
-          },
-          ATTACHMENT_KIND.TECHNICAL_REPORT
-        );
-      } else if (templateAttachment?.mimeType === 'application/pdf') {
-        const reportPdf = await this.buildFilledServiceOrderPdf(appointment, templateAttachment, {
-          summary,
-          finishedAt: report?.finishedAt,
-          clientSignatureDataUrl: report?.clientSignatureDataUrl,
-          technicianSignatureDataUrl: report?.technicianSignatureDataUrl
-        });
-
-        await this.attachFile(
-          id,
-          {
-            originalname: 'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.pdf',
-            mimetype: 'application/pdf',
-            size: reportPdf.length,
-            buffer: reportPdf
           },
           ATTACHMENT_KIND.TECHNICAL_REPORT
         );

@@ -781,53 +781,100 @@ export class LegacyService {
     const font = await pdf.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold);
     const { width, height } = page.getSize();
+    const layout = this.getServiceOrderPdfLayout(width, height, templateAttachment.originalName);
 
     const notesText = report.summary?.trim() || 'Nao informado';
-    const noteFontSize = Math.max(9, Math.min(11, width / 62));
-
-    // The attached OS templates share the same footer block on the last page.
-    // We anchor the filled content to that block instead of using loose page ratios.
-    const notesBox = {
-      x: width * 0.02,
-      y: height * 0.205,
-      width: width * 0.96,
-      height: height * 0.125
-    };
-    this.drawWrappedText(page, notesText, {
-      x: notesBox.x + 10,
-      y: notesBox.y + notesBox.height - 14,
-      maxWidth: notesBox.width - 18,
-      lineHeight: noteFontSize + 5,
-      maxLines: 4,
+    this.drawWrappedTextInBox(page, notesText, {
+      ...layout.notesBox,
       font,
-      fontSize: noteFontSize,
-      color: rgb(0.08, 0.08, 0.08)
+      color: rgb(0.08, 0.08, 0.08),
+      minFontSize: 8.5,
+      maxFontSize: 11
     });
 
     const acceptanceDate = report.finishedAt ? new Date(report.finishedAt) : new Date();
     const acceptanceDateText = this.formatDateOnly(acceptanceDate);
     page.drawText(acceptanceDateText, {
-      x: width * 0.47,
-      y: height * 0.135,
+      x: layout.acceptanceDate.x,
+      y: layout.acceptanceDate.y,
       font: boldFont,
-      size: 11,
+      size: layout.acceptanceDate.fontSize,
       color: rgb(0.08, 0.08, 0.08)
     });
 
-    await this.drawSignatureOnPdf(pdf, page, report.technicianSignatureDataUrl, {
-      x: width * 0.03,
-      y: height * 0.03,
-      width: width * 0.34,
-      height: height * 0.05
-    });
-    await this.drawSignatureOnPdf(pdf, page, report.clientSignatureDataUrl, {
-      x: width * 0.63,
-      y: height * 0.03,
-      width: width * 0.31,
-      height: height * 0.05
-    });
+    await this.drawSignatureOnPdf(pdf, page, report.technicianSignatureDataUrl, layout.technicianSignatureBox);
+    await this.drawSignatureOnPdf(pdf, page, report.clientSignatureDataUrl, layout.clientSignatureBox);
 
     return Buffer.from(await pdf.save());
+  }
+
+  private getServiceOrderPdfLayout(width: number, height: number, originalName: string) {
+    const normalized = (originalName || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
+    if (normalized.includes('ordem_servico') || normalized.includes('ordem servico')) {
+      return {
+        notesBox: {
+          x: width * 0.03,
+          y: height * 0.17,
+          width: width * 0.94,
+          height: height * 0.11,
+          paddingX: 8,
+          paddingTop: 11,
+          maxLines: 5,
+          lineHeight: 13
+        },
+        acceptanceDate: {
+          x: width * 0.485,
+          y: height * 0.112,
+          fontSize: 11
+        },
+        technicianSignatureBox: {
+          x: width * 0.035,
+          y: height * 0.047,
+          width: width * 0.34,
+          height: height * 0.04
+        },
+        clientSignatureBox: {
+          x: width * 0.62,
+          y: height * 0.047,
+          width: width * 0.31,
+          height: height * 0.04
+        }
+      };
+    }
+
+    return {
+      notesBox: {
+        x: width * 0.025,
+        y: height * 0.185,
+        width: width * 0.95,
+        height: height * 0.12,
+        paddingX: 10,
+        paddingTop: 12,
+        maxLines: 4,
+        lineHeight: 14
+      },
+      acceptanceDate: {
+        x: width * 0.47,
+        y: height * 0.135,
+        fontSize: 11
+      },
+      technicianSignatureBox: {
+        x: width * 0.04,
+        y: height * 0.038,
+        width: width * 0.33,
+        height: height * 0.045
+      },
+      clientSignatureBox: {
+        x: width * 0.63,
+        y: height * 0.038,
+        width: width * 0.3,
+        height: height * 0.045
+      }
+    };
   }
 
   private async drawSignatureOnPdf(
@@ -914,6 +961,91 @@ export class LegacyService {
         color: options.color
       });
     });
+  }
+
+  private drawWrappedTextInBox(
+    page: PDFPage,
+    text: string,
+    options: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      paddingX: number;
+      paddingTop: number;
+      maxLines: number;
+      lineHeight: number;
+      font: PDFFont;
+      color: ReturnType<typeof rgb>;
+      minFontSize: number;
+      maxFontSize: number;
+    }
+  ) {
+    const sanitized = (text || '').replace(/\s+/g, ' ').trim() || 'Nao informado';
+    let fontSize = options.maxFontSize;
+    let lines: string[] = [];
+
+    while (fontSize >= options.minFontSize) {
+      lines = this.wrapTextToLines(sanitized, options.font, fontSize, options.width - options.paddingX * 2, options.maxLines);
+      const totalHeight = lines.length * options.lineHeight;
+      if (totalHeight <= options.height - options.paddingTop * 2) break;
+      fontSize -= 0.5;
+    }
+
+    const yStart = options.y + options.height - options.paddingTop - fontSize;
+    lines.forEach((line, index) => {
+      page.drawText(line, {
+        x: options.x + options.paddingX,
+        y: yStart - index * options.lineHeight,
+        font: options.font,
+        size: fontSize,
+        color: options.color
+      });
+    });
+  }
+
+  private wrapTextToLines(
+    text: string,
+    font: PDFFont,
+    fontSize: number,
+    maxWidth: number,
+    maxLines: number
+  ) {
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let currentLine = '';
+
+    for (let index = 0; index < words.length; index += 1) {
+      const word = words[index];
+      const candidate = currentLine ? `${currentLine} ${word}` : word;
+      const candidateWidth = font.widthOfTextAtSize(candidate, fontSize);
+
+      if (candidateWidth <= maxWidth) {
+        currentLine = candidate;
+        continue;
+      }
+
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+
+      if (lines.length >= maxLines - 1) {
+        const remaining = [currentLine, ...words.slice(index + 1)].join(' ');
+        lines.push(this.ellipsizeText(remaining, font, fontSize, maxWidth));
+        return lines;
+      }
+    }
+
+    if (currentLine) lines.push(currentLine);
+    return lines.slice(0, maxLines);
+  }
+
+  private ellipsizeText(text: string, font: PDFFont, fontSize: number, maxWidth: number) {
+    if (font.widthOfTextAtSize(text, fontSize) <= maxWidth) return text;
+    let output = text.trim();
+    while (output.length > 1 && font.widthOfTextAtSize(`${output}...`, fontSize) > maxWidth) {
+      output = output.slice(0, -1).trimEnd();
+    }
+    return `${output}...`;
   }
 
   private async downloadDriveFile(fileId: string): Promise<Buffer> {

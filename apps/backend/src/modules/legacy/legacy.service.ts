@@ -438,25 +438,7 @@ export class LegacyService {
       const bundledOfficialTemplate = this.getBundledOfficialServiceOrderTemplate(appointment.serviceType);
       const bundledStartTrainingTemplate = this.getBundledStartTrainingTemplate();
 
-      if (templateAttachment?.mimeType === 'application/pdf') {
-        const reportPdf = await this.buildFilledServiceOrderPdf(appointment, templateAttachment, {
-          summary,
-          finishedAt: report?.finishedAt,
-          clientSignatureDataUrl: report?.clientSignatureDataUrl,
-          technicianSignatureDataUrl: report?.technicianSignatureDataUrl
-        });
-
-        await this.attachFile(
-          id,
-          {
-            originalname: 'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.pdf',
-            mimetype: 'application/pdf',
-            size: reportPdf.length,
-            buffer: reportPdf
-          },
-          ATTACHMENT_KIND.TECHNICAL_REPORT
-        );
-      } else if (bundledOfficialTemplate) {
+      if (bundledOfficialTemplate) {
         const reportDocx = await this.buildFilledSigeServiceOrderDocx(
           appointment,
           bundledOfficialTemplate.buffer,
@@ -474,6 +456,24 @@ export class LegacyService {
             mimetype: DOCX_MIME_TYPE,
             size: reportDocx.length,
             buffer: reportDocx
+          },
+          ATTACHMENT_KIND.TECHNICAL_REPORT
+        );
+      } else if (templateAttachment?.mimeType === 'application/pdf') {
+        const reportPdf = await this.buildFilledServiceOrderPdf(appointment, templateAttachment, {
+          summary,
+          finishedAt: report?.finishedAt,
+          clientSignatureDataUrl: report?.clientSignatureDataUrl,
+          technicianSignatureDataUrl: report?.technicianSignatureDataUrl
+        });
+
+        await this.attachFile(
+          id,
+          {
+            originalname: 'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.pdf',
+            mimetype: 'application/pdf',
+            size: reportPdf.length,
+            buffer: reportPdf
           },
           ATTACHMENT_KIND.TECHNICAL_REPORT
         );

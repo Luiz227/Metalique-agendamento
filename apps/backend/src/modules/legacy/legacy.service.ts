@@ -22,7 +22,11 @@ const ATTACHMENT_KIND = {
 const LOCAL_ATTACHMENT_PREFIX = 'local:';
 const INLINE_ATTACHMENT_PREFIX = 'inline-db:';
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-const START_TRAINING_TEMPLATE_PATH = join(process.cwd(), 'apps', 'backend', 'templates', 'template-start-treinamento.docx');
+const START_TRAINING_TEMPLATE_NAME = 'template-start-treinamento.docx';
+const START_TRAINING_TEMPLATE_PATHS = [
+  join(process.cwd(), 'apps', 'backend', 'templates', START_TRAINING_TEMPLATE_NAME),
+  join(process.cwd(), 'templates', START_TRAINING_TEMPLATE_NAME)
+];
 
 @Injectable()
 export class LegacyService {
@@ -676,10 +680,11 @@ export class LegacyService {
   }
 
   private getBundledStartTrainingTemplate() {
-    if (!existsSync(START_TRAINING_TEMPLATE_PATH)) return null;
+    const templatePath = START_TRAINING_TEMPLATE_PATHS.find((candidate) => existsSync(candidate));
+    if (!templatePath) return null;
     return {
-      buffer: readFileSync(START_TRAINING_TEMPLATE_PATH),
-      originalName: 'template-start-treinamento.docx',
+      buffer: readFileSync(templatePath),
+      originalName: START_TRAINING_TEMPLATE_NAME,
       mimeType: DOCX_MIME_TYPE
     };
   }

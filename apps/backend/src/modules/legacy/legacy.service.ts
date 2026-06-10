@@ -27,6 +27,18 @@ const START_TRAINING_TEMPLATE_PATHS = [
   join(process.cwd(), 'apps', 'backend', 'templates', START_TRAINING_TEMPLATE_NAME),
   join(process.cwd(), 'templates', START_TRAINING_TEMPLATE_NAME)
 ];
+const SIGE_START_TEMPLATE_NAME = 'sige-ordem-servico-externa.docx';
+const SIGE_AVULSA_TEMPLATE_NAME = 'sige-ordem-servico-avulsa-externa.docx';
+const SIGE_TEMPLATE_PATHS = {
+  start: [
+    join(process.cwd(), 'apps', 'backend', 'templates', SIGE_START_TEMPLATE_NAME),
+    join(process.cwd(), 'templates', SIGE_START_TEMPLATE_NAME)
+  ],
+  avulsa: [
+    join(process.cwd(), 'apps', 'backend', 'templates', SIGE_AVULSA_TEMPLATE_NAME),
+    join(process.cwd(), 'templates', SIGE_AVULSA_TEMPLATE_NAME)
+  ]
+} as const;
 
 @Injectable()
 export class LegacyService {
@@ -423,6 +435,7 @@ export class LegacyService {
       if (!appointment) throw new NotFoundException('Agendamento não encontrado');
 
       const templateAttachment = appointment.attachments.find((attachment) => attachment.kind === ATTACHMENT_KIND.SERVICE_ORDER_TEMPLATE);
+      const bundledOfficialTemplate = this.getBundledOfficialServiceOrderTemplate(appointment.serviceType);
       const bundledStartTrainingTemplate = this.getBundledStartTrainingTemplate();
 
       if (templateAttachment?.mimeType === 'application/pdf') {
@@ -440,6 +453,27 @@ export class LegacyService {
             mimetype: 'application/pdf',
             size: reportPdf.length,
             buffer: reportPdf
+          },
+          ATTACHMENT_KIND.TECHNICAL_REPORT
+        );
+      } else if (bundledOfficialTemplate) {
+        const reportDocx = await this.buildFilledSigeServiceOrderDocx(
+          appointment,
+          bundledOfficialTemplate.buffer,
+          bundledOfficialTemplate.kind,
+          {
+            summary,
+            finishedAt: report?.finishedAt
+          }
+        );
+
+        await this.attachFile(
+          id,
+          {
+            originalname: 'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.docx',
+            mimetype: DOCX_MIME_TYPE,
+            size: reportDocx.length,
+            buffer: reportDocx
           },
           ATTACHMENT_KIND.TECHNICAL_REPORT
         );
@@ -689,6 +723,19 @@ export class LegacyService {
     };
   }
 
+  private getBundledOfficialServiceOrderTemplate(serviceType: string | null) {
+    const kind = this.isStartOrTraining(serviceType) ? 'start' : 'avulsa';
+    const candidates = kind === 'start' ? SIGE_TEMPLATE_PATHS.start : SIGE_TEMPLATE_PATHS.avulsa;
+    const templatePath = candidates.find((candidate) => existsSync(candidate));
+    if (!templatePath) return null;
+    return {
+      kind,
+      buffer: readFileSync(templatePath),
+      originalName: kind === 'start' ? SIGE_START_TEMPLATE_NAME : SIGE_AVULSA_TEMPLATE_NAME,
+      mimeType: DOCX_MIME_TYPE
+    } as const;
+  }
+
   private async buildFilledServiceOrderDocx(
     appointment: {
       id: string;
@@ -755,6 +802,103 @@ export class LegacyService {
       if (!file) continue;
       const content = await file.async('string');
       zip.file(name, this.replaceDocxPlaceholders(content, placeholders));
+    }
+
+    return Buffer.from(await zip.generateAsync({ type: 'nodebuffer' }));
+  }
+
+  private async buildFilledSigeServiceOrderDocx(
+    appointment: {
+      id: string;
+      osNumber: string | null;
+      city: string;
+      fullAddress: string;
+      serviceType: string;
+      problemDescription: string | null;
+      date: Date;
+      notes: string | null;
+      machineName: string | null;
+      machineModel: string | null;
+      machineSerial: string | null;
+      client: { name: string; phone: string | null; email: string | null; cnpj: string | null };
+      technician: { name: string } | null;
+    },
+    templateBytes: Buffer,
+    kind: 'start' | 'avulsa',
+    report: {
+      summary?: string;
+      finishedAt?: string;
+    }
+  ) {
+    const zip = await JSZip.loadAsync(templateBytes);
+    const emissionDate = new Date();
+    const visitDate = appointment.date;
+    const company = this.resolveServiceOrderCompany(appointment.serviceType);
+    const osNumber = appointment.osNumber || appointment.id;
+    const address = this.extractLocationDetails(appointment.fullAddress, appointment.city);
+    const equipmentCode = appointment.machineSerial || osNumber;
+    const equipmentName = appointment.machineName || appointment.serviceType || 'Nao informado';
+    const equipmentModel = appointment.machineModel || 'Nao informado';
+    const equipmentObservations = appointment.notes || '';
+    const technicianName = appointment.technician?.name || 'Nao informado';
+    const serviceCode = kind === 'start' ? '10021' : '10012';
+    const serviceDescription =
+      kind === 'start'
+        ? 'INSTALACAO (START / OU TREINAMENTO) TODAS AS MAQUINAS'
+        : 'MANUTENCAO CORRETIVA LASER F OU DOBRADEIRA';
+    const problemText = appointment.problemDescription?.trim() || appointment.serviceType || 'Nao informado';
+    const placeholders: Record<string, string> = {
+      Bairro: address.bairro,
+      CEP: address.cep,
+      'CPF/CNPJ': appointment.client.cnpj || 'Nao informado',
+      Cidade: address.cidade,
+      Cliente: appointment.client.name || 'Nao informado',
+      Email: appointment.client.email || 'Nao informado',
+      EnderecoCliente: appointment.fullAddress || 'Nao informado',
+      Estado: address.estado,
+      IE: 'Nao informado',
+      OsDataVisita: this.formatDateOnly(visitDate),
+      OsEquipamentoCodigo: equipmentCode,
+      OsEquipamentoFabricante: kind === 'start' ? 'METALIQUE LASER E PLASMA CNC' : company.logoText,
+      OsEquipamentoModelo: equipmentModel,
+      OsEquipamentoNome: equipmentName,
+      OsEquipamentoObservacoes: equipmentObservations,
+      OsProblema: problemText,
+      OsTecnico: technicianName,
+      Telefone: appointment.client.phone || 'Nao informado'
+    };
+
+    if (kind === 'start') {
+      Object.assign(placeholders, {
+        CodigoProduto: serviceCode,
+        DataEmissao: this.formatDateOnly(emissionDate),
+        DescricaoProduto: serviceDescription,
+        NomeDoVendedor: 'Agenda Metalique',
+        Pedido: osNumber,
+        ValidadeDoOrcamento: this.formatDateOnly(emissionDate),
+        VendedorEmail: 'agenda@metalique.com.br'
+      });
+    } else {
+      Object.assign(placeholders, {
+        CodigoServico: serviceCode,
+        DescricaoServico: serviceDescription,
+        OSCodigo: osNumber,
+        OsDataAbertura: this.formatDateOnly(emissionDate)
+      });
+    }
+
+    for (const name of Object.keys(zip.files)) {
+      if (!name.startsWith('word/') || !name.endsWith('.xml')) continue;
+      const file = zip.file(name);
+      if (!file) continue;
+      const content = await file.async('string');
+      zip.file(
+        name,
+        this.replaceDocxPlaceholders(content, placeholders, {
+          notesText: report.summary?.trim() || 'Nao informado',
+          acceptanceDate: report.finishedAt ? new Date(report.finishedAt) : new Date()
+        })
+      );
     }
 
     return Buffer.from(await zip.generateAsync({ type: 'nodebuffer' }));
@@ -905,14 +1049,82 @@ export class LegacyService {
     return pdf.embedJpg(bytes);
   }
 
-  private replaceDocxPlaceholders(xml: string, placeholders: Record<string, string>) {
+  private replaceDocxPlaceholders(
+    xml: string,
+    placeholders: Record<string, string>,
+    extra?: { notesText?: string; acceptanceDate?: Date }
+  ) {
     let result = xml;
     for (const [key, value] of Object.entries(placeholders)) {
       const escaped = this.escapeXml(value);
       const pattern = new RegExp(`\\{\\s*${key}\\s*\\}`, 'g');
       result = result.replace(pattern, escaped);
+      const sigePattern = new RegExp(`##\\s*${this.escapeRegex(key)}\\s*##`, 'g');
+      result = result.replace(sigePattern, escaped);
     }
+
+    if (placeholders.Estado) {
+      result = result.replace(/#Estado##/g, this.escapeXml(placeholders.Estado));
+    }
+
+    if (extra) {
+      result = this.fillTechnicalNotesArea(result, extra.notesText || 'Nao informado');
+      result = this.fillAcceptanceDateArea(result, extra.acceptanceDate ?? new Date());
+    }
+
     return result;
+  }
+
+  private fillTechnicalNotesArea(xml: string, notesText: string) {
+    const rows = this.wrapTechnicalNotes(notesText, 5, 80);
+    let result = xml;
+    const paragraphRegex = /(<w:p[^>]*w14:paraId="[^"]*"[^>]*>.*?CONSIDERAÇÕES DO TÉCNICO.*?<\/w:p>)([\s\S]*?)(<w:tbl[^>]*>[\s\S]*?Assinatura do T[ée]cnico)/u;
+    const match = result.match(paragraphRegex);
+    if (!match) return result;
+
+    const middle = match[2];
+    const cellRegex = /(<w:tr[\s\S]*?<w:t>)(.*?)(<\/w:t>[\s\S]*?<\/w:tr>)/g;
+    let index = 0;
+    const replacedMiddle = middle.replace(cellRegex, (_full, start, _inner, end) => {
+      if (index >= rows.length) return `${start}${''}${end}`;
+      const text = this.escapeXml(rows[index]);
+      index += 1;
+      return `${start}${text}${end}`;
+    });
+
+    return result.replace(middle, replacedMiddle);
+  }
+
+  private fillAcceptanceDateArea(xml: string, acceptanceDate: Date) {
+    const formatted = this.escapeXml(this.formatDateOnly(acceptanceDate));
+    return xml.replace(/(__\/__\/____|___\/___\/_____)/g, formatted);
+  }
+
+  private wrapTechnicalNotes(text: string, maxLines: number, maxCharsPerLine: number) {
+    const cleaned = text.replace(/\r/g, '').split('\n').map((line) => line.trim()).filter(Boolean).join(' ');
+    if (!cleaned) return Array.from({ length: maxLines }, () => '');
+    const words = cleaned.split(/\s+/);
+    const lines: string[] = [];
+    let current = '';
+
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (candidate.length <= maxCharsPerLine) {
+        current = candidate;
+        continue;
+      }
+      lines.push(current);
+      current = word;
+      if (lines.length >= maxLines - 1) break;
+    }
+
+    if (lines.length < maxLines && current) lines.push(current);
+    while (lines.length < maxLines) lines.push('');
+    return lines.slice(0, maxLines);
+  }
+
+  private escapeRegex(value: string) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   private drawWrappedText(
@@ -1140,6 +1352,30 @@ export class LegacyService {
     return {
       bairro: bairroMatch?.[1]?.trim() || 'Nao informado',
       cep: cepMatch?.[1]?.trim() || 'Nao informado'
+    };
+  }
+
+  private extractLocationDetails(fullAddress: string | null, city: string | null) {
+    const text = fullAddress || '';
+    const base = this.extractAddressDetails(fullAddress);
+    const cityText = city || '';
+    const cityStateMatch = cityText.match(/^\s*(.*?)\s*\/\s*([A-Z]{2})\s*$/i);
+    const addressCityStateMatch = text.match(/,\s*([^,]+)\s*-\s*([A-Z]{2})\b/i);
+
+    const resolvedCity =
+      cityStateMatch?.[1]?.trim() ||
+      addressCityStateMatch?.[1]?.trim() ||
+      cityText.trim() ||
+      'Nao informado';
+    const resolvedState =
+      cityStateMatch?.[2]?.trim().toUpperCase() ||
+      addressCityStateMatch?.[2]?.trim().toUpperCase() ||
+      'SP';
+
+    return {
+      ...base,
+      cidade: resolvedCity,
+      estado: resolvedState
     };
   }
 

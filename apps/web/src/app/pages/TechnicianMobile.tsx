@@ -124,10 +124,12 @@ export default function TechnicianMobile() {
   const [activeTripsView, setActiveTripsView] = useState<'WEEK' | 'FINISHED'>('WEEK');
   const [activeSection, setActiveSection] = useState<'LIST' | 'DETAILS' | 'CALENDAR'>('LIST');
   const [monthCursor, setMonthCursor] = useState(() => new Date());
+  const [serviceOrderEditorOpen, setServiceOrderEditorOpen] = useState(false);
   const knownIdsRef = useRef<Set<string>>(new Set());
   const clientSignatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const technicianSignatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingSignatureRef = useRef<'client' | 'technician' | null>(null);
+  const serviceOrderEditorRef = useRef<HTMLDivElement | null>(null);
 
   async function load(silent = false) {
     if (!silent) setLoadingAppointments(true);
@@ -191,6 +193,7 @@ export default function TechnicianMobile() {
   const current = useMemo(() => appointments.find((item) => item.id === selectedId) ?? appointments[0], [appointments, selectedId]);
   const currentServiceOrder = (current?.attachments ?? []).find((attachment) => attachment.kind === 'SERVICE_ORDER_TEMPLATE');
   const currentGeneratedReport = (current?.attachments ?? []).find((attachment) => attachment.kind === 'TECHNICAL_REPORT');
+  const currentServiceOrderUrl = currentServiceOrder?.publicUrl ? (resolveApiAssetUrl(currentServiceOrder.publicUrl) ?? undefined) : undefined;
   const upcoming = appointments.filter((item) => item.id !== current?.id && !wasFinishedByTechnician(item));
   const currentClientName = current?.client?.name ?? 'Cliente';
   const currentClientPhone = current?.client?.phone ?? '';
@@ -224,6 +227,10 @@ export default function TechnicianMobile() {
     }
     return cells;
   }, [monthAppointments, monthCursor]);
+
+  useEffect(() => {
+    setServiceOrderEditorOpen(false);
+  }, [selectedId]);
 
   async function updateStatus(status: string) {
     if (!current) return;
@@ -406,6 +413,14 @@ export default function TechnicianMobile() {
       if (found?.previewUrl) URL.revokeObjectURL(found.previewUrl);
       return prev.filter((x) => x.id !== id);
     });
+  }
+
+  function openServiceOrderEditor() {
+    setActiveSection('DETAILS');
+    setServiceOrderEditorOpen(true);
+    window.setTimeout(() => {
+      serviceOrderEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
   }
 
   if (!current) {
@@ -627,13 +642,9 @@ export default function TechnicianMobile() {
                 <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border bg-card p-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{currentServiceOrder.originalName}</p>
-                    <p className="text-[11px] text-muted-foreground">Essa OS serÃ¡ usada como modelo para preencher relato e assinaturas.</p>
+                    <p className="text-[11px] text-muted-foreground">Essa OS sera usada como base do preenchimento tecnico com consideracoes e assinaturas.</p>
                   </div>
-                  {currentServiceOrder.publicUrl && (
-                    <a href={resolveApiAssetUrl(currentServiceOrder.publicUrl) ?? undefined} target="_blank" rel="noreferrer">
-                      <Button type="button" variant="outline" size="sm">Abrir OS</Button>
-                    </a>
-                  )}
+                  <Button type="button" variant="outline" size="sm" onClick={openServiceOrderEditor}>Abrir e preencher OS</Button>
                 </div>
               ) : (
                 <p className="mt-2 text-xs text-muted-foreground">Nenhuma OS original foi anexada ainda neste atendimento.</p>
@@ -646,6 +657,29 @@ export default function TechnicianMobile() {
                 </div>
               )}
             </div>
+            {serviceOrderEditorOpen && (
+              <div ref={serviceOrderEditorRef} className="space-y-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
+                <div>
+                  <p className="text-sm font-medium">Preenchimento da OS</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Veja a OS abaixo e preencha as consideracoes, anexos e assinaturas nesta mesma tela. Ao enviar, o sistema grava tudo nessa OS.
+                  </p>
+                </div>
+                {currentServiceOrderUrl ? (
+                  <div className="overflow-hidden rounded-xl border bg-white">
+                    <iframe
+                      title={currentServiceOrder?.originalName ?? 'OS anexada'}
+                      src={currentServiceOrderUrl}
+                      className="h-[520px] w-full"
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+                    Nao foi possivel abrir a visualizacao da OS, mas o preenchimento ainda pode ser enviado.
+                  </div>
+                )}
+              </div>
+            )}
             <Textarea
               className="min-h-36 text-base"
               placeholder="Consideracoes do tecnico"

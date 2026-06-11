@@ -444,7 +444,9 @@ export class LegacyService {
           bundledOfficialTemplate.kind,
           {
             summary,
-            finishedAt: report?.finishedAt
+            finishedAt: report?.finishedAt,
+            clientSignatureDataUrl: report?.clientSignatureDataUrl,
+            technicianSignatureDataUrl: report?.technicianSignatureDataUrl
           }
         );
 
@@ -461,7 +463,9 @@ export class LegacyService {
       } else if (this.isStartOrTraining(appointment.serviceType) && bundledStartTrainingTemplate) {
         const reportDocx = await this.buildFilledServiceOrderDocx(appointment, bundledStartTrainingTemplate.buffer, {
           summary,
-          finishedAt: report?.finishedAt
+          finishedAt: report?.finishedAt,
+          clientSignatureDataUrl: report?.clientSignatureDataUrl,
+          technicianSignatureDataUrl: report?.technicianSignatureDataUrl
         });
 
         await this.attachFile(
@@ -734,6 +738,8 @@ export class LegacyService {
     report: {
       summary?: string;
       finishedAt?: string;
+      clientSignatureDataUrl?: string;
+      technicianSignatureDataUrl?: string;
     }
   ) {
     const zip = await JSZip.loadAsync(templateBytes);
@@ -769,9 +775,13 @@ export class LegacyService {
       CODIGO_SERVICO: serviceCode,
       DESCRICAO_SERVICO: serviceDescription,
       CONSIDERACOES_TECNICO: report.summary?.trim() || 'Nao informado',
+      CosideracoesDoTecnico: report.summary?.trim() || 'Nao informado',
+      ConsideracoesDoTecnico: report.summary?.trim() || 'Nao informado',
       DATA_ACEITE_DIA: String(acceptanceDate.getDate()).padStart(2, '0'),
       DATA_ACEITE_MES: String(acceptanceDate.getMonth() + 1).padStart(2, '0'),
-      DATA_ACEITE_ANO: String(acceptanceDate.getFullYear())
+      DATA_ACEITE_ANO: String(acceptanceDate.getFullYear()),
+      AssinaturaTecnico: appointment.technician?.name || '',
+      AssinaturaCliente: appointment.client.name || ''
     };
 
     for (const name of Object.keys(zip.files)) {
@@ -820,6 +830,8 @@ export class LegacyService {
     report: {
       summary?: string;
       finishedAt?: string;
+      clientSignatureDataUrl?: string;
+      technicianSignatureDataUrl?: string;
     }
   ) {
     const zip = await JSZip.loadAsync(templateBytes);
@@ -857,25 +869,39 @@ export class LegacyService {
       OsEquipamentoObservacoes: equipmentObservations,
       OsProblema: problemText,
       OsTecnico: technicianName,
-      Telefone: appointment.client.phone || 'Nao informado'
+      Telefone: appointment.client.phone || 'Nao informado',
+      CodigoProduto: serviceCode,
+      CodigoServico: serviceCode,
+      DataEmissao: this.formatDateOnly(emissionDate),
+      DescricaoProduto: serviceDescription,
+      DescricaoServico: serviceDescription,
+      NomeDoVendedor: 'Agenda Metalique',
+      Pedido: osNumber,
+      OSCodigo: osNumber,
+      OsDataAbertura: this.formatDateOnly(emissionDate),
+      ValidadeDoOrcamento: this.formatDateOnly(emissionDate),
+      VendedorEmail: 'agenda@metalique.com.br',
+      CONSIDERACOES_TECNICO: report.summary?.trim() || 'Nao informado',
+      CosideracoesDoTecnico: report.summary?.trim() || 'Nao informado',
+      ConsideracoesDoTecnico: report.summary?.trim() || 'Nao informado',
+      AssinaturaTecnico: technicianName,
+      AssinaturaCliente: appointment.client.name || 'Nao informado'
     };
 
     if (kind === 'start') {
-      Object.assign(placeholders, {
-        CodigoProduto: serviceCode,
-        DataEmissao: this.formatDateOnly(emissionDate),
-        DescricaoProduto: serviceDescription,
-        NomeDoVendedor: 'Agenda Metalique',
-        Pedido: osNumber,
-        ValidadeDoOrcamento: this.formatDateOnly(emissionDate),
-        VendedorEmail: 'agenda@metalique.com.br'
-      });
-    } else {
       Object.assign(placeholders, {
         CodigoServico: serviceCode,
         DescricaoServico: serviceDescription,
         OSCodigo: osNumber,
         OsDataAbertura: this.formatDateOnly(emissionDate)
+      });
+    } else {
+      Object.assign(placeholders, {
+        CodigoProduto: serviceCode,
+        DescricaoProduto: serviceDescription,
+        Pedido: osNumber,
+        DataEmissao: this.formatDateOnly(emissionDate),
+        ValidadeDoOrcamento: this.formatDateOnly(emissionDate)
       });
     }
 

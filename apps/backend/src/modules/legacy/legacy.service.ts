@@ -1368,15 +1368,15 @@ export class LegacyService {
         },
         technicianSignatureBox: {
           x: width * 0.035,
-          y: height * 0.047,
+          y: height * 0.082,
           width: width * 0.34,
-          height: height * 0.04
+          height: height * 0.032
         },
         clientSignatureBox: {
           x: width * 0.62,
-          y: height * 0.047,
+          y: height * 0.082,
           width: width * 0.31,
-          height: height * 0.04
+          height: height * 0.032
         }
       };
     }
@@ -1639,7 +1639,7 @@ export class LegacyService {
       result = this.fillAcceptanceDateArea(result, extra.acceptanceDate ?? new Date());
     }
 
-    return result;
+    return this.removeDocxSignaturePlaceholders(result);
   }
 
   private fillTechnicalNotesArea(xml: string, notesText: string) {

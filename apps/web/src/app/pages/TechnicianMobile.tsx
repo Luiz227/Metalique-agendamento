@@ -224,10 +224,6 @@ export default function TechnicianMobile() {
     return cells;
   }, [monthAppointments, monthCursor]);
 
-  useEffect(() => {
-    setServiceOrderEditorOpen(false);
-  }, [selectedId]);
-
   async function updateStatus(status: string) {
     if (!current) return;
     setErrorMessage('');

@@ -434,12 +434,34 @@ export class LegacyService {
       });
       if (!appointment) throw new NotFoundException('Agendamento não encontrado');
 
-      const reportPdf = await this.buildGeneratedServiceOrderPdf(appointment, {
-        summary,
-        finishedAt: report?.finishedAt,
-        clientSignatureDataUrl: report?.clientSignatureDataUrl,
-        technicianSignatureDataUrl: report?.technicianSignatureDataUrl
-      });
+      const officialTemplate = this.getBundledOfficialServiceOrderTemplate(appointment.serviceType);
+      let reportPdf: Buffer;
+
+      if (officialTemplate) {
+        const reportDocx = await this.buildFilledSigeServiceOrderDocx(
+          appointment,
+          officialTemplate.buffer,
+          officialTemplate.kind,
+          {
+            summary,
+            finishedAt: report?.finishedAt,
+            clientSignatureDataUrl: report?.clientSignatureDataUrl,
+            technicianSignatureDataUrl: report?.technicianSignatureDataUrl
+          }
+        );
+
+        reportPdf = await this.convertDocxBufferToPdf(
+          reportDocx,
+          'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10)
+        );
+      } else {
+        reportPdf = await this.buildGeneratedServiceOrderPdf(appointment, {
+          summary,
+          finishedAt: report?.finishedAt,
+          clientSignatureDataUrl: report?.clientSignatureDataUrl,
+          technicianSignatureDataUrl: report?.technicianSignatureDataUrl
+        });
+      }
 
       await this.attachFile(
         id,
@@ -1246,6 +1268,54 @@ export class LegacyService {
     });
 
     return Buffer.from(await pdf.save());
+  }
+
+  private async convertDocxBufferToPdf(docxBuffer: Buffer, baseFileName: string) {
+    const drive = this.getDriveClient();
+    const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    let temporaryGoogleDocId: string | null = null;
+
+    try {
+      const created = await drive.files.create({
+        requestBody: {
+          name: baseFileName,
+          mimeType: 'application/vnd.google-apps.document',
+          ...(rootFolderId ? { parents: [rootFolderId] } : {})
+        },
+        media: {
+          mimeType: DOCX_MIME_TYPE,
+          body: Readable.from(docxBuffer)
+        },
+        supportsAllDrives: true,
+        fields: 'id'
+      });
+
+      temporaryGoogleDocId = created.data.id ?? null;
+      if (!temporaryGoogleDocId) {
+        throw new Error('Falha ao converter o template DOCX oficial para PDF.');
+      }
+
+      const exported = await drive.files.export(
+        {
+          fileId: temporaryGoogleDocId,
+          mimeType: 'application/pdf'
+        },
+        { responseType: 'arraybuffer' }
+      );
+
+      return Buffer.from(exported.data as ArrayBuffer);
+    } finally {
+      if (temporaryGoogleDocId) {
+        try {
+          await drive.files.delete({
+            fileId: temporaryGoogleDocId,
+            supportsAllDrives: true
+          });
+        } catch {
+          // Ignora limpeza do temporario para nao mascarar o erro principal.
+        }
+      }
+    }
   }
 
   private getServiceOrderPdfLayout(width: number, height: number, originalName: string) {

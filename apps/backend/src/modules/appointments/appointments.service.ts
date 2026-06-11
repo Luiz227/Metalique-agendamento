@@ -303,7 +303,7 @@ export class AppointmentsService {
         originalName: attachment.originalName,
         mimeType: attachment.mimeType,
         size: attachment.size,
-        publicUrl: attachment.publicUrl,
+        publicUrl: `/api/attachments/files/${attachment.id}`,
         createdAt: attachment.createdAt.toISOString()
       }))
     };

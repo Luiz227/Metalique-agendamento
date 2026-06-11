@@ -1777,7 +1777,7 @@ export class LegacyService {
         originalName: attachment.originalName,
         mimeType: attachment.mimeType,
         size: attachment.size,
-        publicUrl: attachment.publicUrl,
+        publicUrl: this.buildAttachmentPublicPath(attachment.id),
         createdAt: attachment.createdAt.toISOString()
       }))
     };
@@ -1821,7 +1821,13 @@ export class LegacyService {
       };
     }
 
-    throw new NotFoundException('Este anexo nao esta disponivel para download local');
+    const buffer = await this.downloadDriveFile(attachment.driveFileId);
+    return {
+      originalName: attachment.originalName,
+      mimeType: attachment.mimeType,
+      size: buffer.length,
+      buffer
+    };
   }
 
   async deleteAttachment(attachmentId: string) {
@@ -1870,6 +1876,10 @@ export class LegacyService {
       throw new InternalServerErrorException('Conteudo inline do anexo invalido');
     }
     return Buffer.from(encoded.slice(INLINE_ATTACHMENT_PREFIX.length), 'base64');
+  }
+
+  private buildAttachmentPublicPath(attachmentId: string) {
+    return `/api/attachments/files/${attachmentId}`;
   }
 
   private tryReadLegacyInlineAttachmentBuffer(encoded: string) {

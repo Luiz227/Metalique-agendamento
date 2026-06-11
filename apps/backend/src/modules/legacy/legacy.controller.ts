@@ -153,9 +153,14 @@ export class LegacyController {
   @Get('attachments/files/:attachmentId')
   async attachmentFile(@Param('attachmentId') attachmentId: string, @Res() res: Response) {
     const file = await this.service.getAttachmentFile(attachmentId);
+    const shouldDisplayInline =
+      file.mimeType.startsWith('image/') ||
+      file.mimeType === 'application/pdf' ||
+      file.mimeType.startsWith('text/');
+    const disposition = shouldDisplayInline ? 'inline' : 'attachment';
     res.setHeader('Content-Type', file.mimeType);
     res.setHeader('Content-Length', String(file.size));
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.originalName)}"`);
+    res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(file.originalName)}"`);
     res.send(file.buffer);
   }
 

@@ -454,6 +454,12 @@ export class LegacyService {
           reportDocx,
           'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10)
         );
+
+        reportPdf = await this.applySignaturesToPdf(reportPdf, officialTemplate.originalName, {
+          finishedAt: report?.finishedAt,
+          clientSignatureDataUrl: report?.clientSignatureDataUrl,
+          technicianSignatureDataUrl: report?.technicianSignatureDataUrl
+        });
       } else {
         reportPdf = await this.buildGeneratedServiceOrderPdf(appointment, {
           summary,
@@ -763,13 +769,7 @@ export class LegacyService {
       const file = zip.file(name);
       if (!file) continue;
       const content = await file.async('string');
-      let updated = this.replaceDocxPlaceholders(content, placeholders);
-      if (name === 'word/document.xml') {
-        updated = await this.injectDocxSignatureImages(zip, updated, {
-          technicianSignatureDataUrl: report.technicianSignatureDataUrl,
-          clientSignatureDataUrl: report.clientSignatureDataUrl
-        });
-      }
+      const updated = this.replaceDocxPlaceholders(content, placeholders);
       zip.file(name, updated);
     }
 
@@ -889,16 +889,10 @@ export class LegacyService {
       const file = zip.file(name);
       if (!file) continue;
       const content = await file.async('string');
-      let updated = this.replaceDocxPlaceholders(content, placeholders, {
+      const updated = this.replaceDocxPlaceholders(content, placeholders, {
         notesText: report.summary?.trim() || 'Nao informado',
         acceptanceDate: report.finishedAt ? new Date(report.finishedAt) : new Date()
       });
-      if (name === 'word/document.xml') {
-        updated = await this.injectDocxSignatureImages(zip, updated, {
-          technicianSignatureDataUrl: report.technicianSignatureDataUrl,
-          clientSignatureDataUrl: report.clientSignatureDataUrl
-        });
-      }
       zip.file(
         name,
         updated
@@ -939,6 +933,37 @@ export class LegacyService {
       minFontSize: 8.5,
       maxFontSize: 11
     });
+
+    const acceptanceDate = report.finishedAt ? new Date(report.finishedAt) : new Date();
+    const acceptanceDateText = this.formatDateOnly(acceptanceDate);
+    page.drawText(acceptanceDateText, {
+      x: layout.acceptanceDate.x,
+      y: layout.acceptanceDate.y,
+      font: boldFont,
+      size: layout.acceptanceDate.fontSize,
+      color: rgb(0.08, 0.08, 0.08)
+    });
+
+    await this.drawSignatureOnPdf(pdf, page, report.technicianSignatureDataUrl, layout.technicianSignatureBox);
+    await this.drawSignatureOnPdf(pdf, page, report.clientSignatureDataUrl, layout.clientSignatureBox);
+
+    return Buffer.from(await pdf.save());
+  }
+
+  private async applySignaturesToPdf(
+    pdfBytes: Buffer,
+    originalName: string,
+    report: {
+      finishedAt?: string;
+      clientSignatureDataUrl?: string;
+      technicianSignatureDataUrl?: string;
+    }
+  ) {
+    const pdf = await PDFDocument.load(pdfBytes);
+    const page = pdf.getPages()[pdf.getPageCount() - 1];
+    const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold);
+    const { width, height } = page.getSize();
+    const layout = this.getServiceOrderPdfLayout(width, height, originalName);
 
     const acceptanceDate = report.finishedAt ? new Date(report.finishedAt) : new Date();
     const acceptanceDateText = this.formatDateOnly(acceptanceDate);

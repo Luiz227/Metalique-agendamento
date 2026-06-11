@@ -77,14 +77,7 @@ async function showBrowserNotification(title: string, options?: NotificationOpti
     const registration = await navigator.serviceWorker?.getRegistration();
     if (registration?.showNotification) {
       await registration.showNotification(title, options);
-      return;
     }
-  } catch {
-    // Continua para o fallback abaixo.
-  }
-
-  try {
-    new Notification(title, options);
   } catch {
     // Ignora falhas de notificacao para nao quebrar a tela do tecnico.
   }

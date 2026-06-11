@@ -7,7 +7,7 @@ import { google } from 'googleapis';
 import JSZip from 'jszip';
 import { join } from 'path';
 import { Readable } from 'stream';
-import { PDFDocument, PDFPage, PDFFont, rgb, StandardFonts } from 'pdf-lib';
+import { PDFDocument, PDFPage, PDFFont, PageSizes, rgb, StandardFonts } from 'pdf-lib';
 
 const ATTACHMENT_KIND = {
   GENERAL: 'GENERAL',
@@ -434,69 +434,23 @@ export class LegacyService {
       });
       if (!appointment) throw new NotFoundException('Agendamento não encontrado');
 
-      const bundledOfficialTemplate = this.getBundledOfficialServiceOrderTemplate(appointment.serviceType);
-      const bundledStartTrainingTemplate = this.getBundledStartTrainingTemplate();
+      const reportPdf = await this.buildGeneratedServiceOrderPdf(appointment, {
+        summary,
+        finishedAt: report?.finishedAt,
+        clientSignatureDataUrl: report?.clientSignatureDataUrl,
+        technicianSignatureDataUrl: report?.technicianSignatureDataUrl
+      });
 
-      if (bundledOfficialTemplate) {
-        const reportDocx = await this.buildFilledSigeServiceOrderDocx(
-          appointment,
-          bundledOfficialTemplate.buffer,
-          bundledOfficialTemplate.kind,
-          {
-            summary,
-            finishedAt: report?.finishedAt,
-            clientSignatureDataUrl: report?.clientSignatureDataUrl,
-            technicianSignatureDataUrl: report?.technicianSignatureDataUrl
-          }
-        );
-
-        await this.attachFile(
-          id,
-          {
-            originalname: 'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.docx',
-            mimetype: DOCX_MIME_TYPE,
-            size: reportDocx.length,
-            buffer: reportDocx
-          },
-          ATTACHMENT_KIND.TECHNICAL_REPORT
-        );
-      } else if (this.isStartOrTraining(appointment.serviceType) && bundledStartTrainingTemplate) {
-        const reportDocx = await this.buildFilledServiceOrderDocx(appointment, bundledStartTrainingTemplate.buffer, {
-          summary,
-          finishedAt: report?.finishedAt,
-          clientSignatureDataUrl: report?.clientSignatureDataUrl,
-          technicianSignatureDataUrl: report?.technicianSignatureDataUrl
-        });
-
-        await this.attachFile(
-          id,
-          {
-            originalname: 'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.docx',
-            mimetype: DOCX_MIME_TYPE,
-            size: reportDocx.length,
-            buffer: reportDocx
-          },
-          ATTACHMENT_KIND.TECHNICAL_REPORT
-        );
-      } else {
-        const reportText = this.buildServiceOrderHtml(appointment, {
-          summary,
-          finishedAt: report?.finishedAt,
-          clientSignatureDataUrl: report?.clientSignatureDataUrl,
-          technicianSignatureDataUrl: report?.technicianSignatureDataUrl
-        });
-        const reportBytes = Buffer.from(reportText, 'utf8');
-        await this.attachFile(
-          id,
-          {
-            originalname: 'ordem-servico-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.html',
-            mimetype: 'text/html',
-            size: reportBytes.length,
-            buffer: reportBytes
-          },
-          ATTACHMENT_KIND.TECHNICAL_REPORT
-        );
-      }
+      await this.attachFile(
+        id,
+        {
+          originalname: 'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.pdf',
+          mimetype: 'application/pdf',
+          size: reportPdf.length,
+          buffer: reportPdf
+        },
+        ATTACHMENT_KIND.TECHNICAL_REPORT
+      );
     }
 
     return { ok: true };
@@ -980,6 +934,320 @@ export class LegacyService {
     return Buffer.from(await pdf.save());
   }
 
+  private async buildGeneratedServiceOrderPdf(
+    appointment: {
+      id: string;
+      osNumber: string | null;
+      city: string;
+      fullAddress: string;
+      serviceType: string;
+      problemDescription: string | null;
+      date: Date;
+      notes: string | null;
+      machineCode: string | null;
+      machineName: string | null;
+      machineModel: string | null;
+      machineSerial: string | null;
+      machineManufacturer: string | null;
+      machineObservations: string | null;
+      serviceCode: string | null;
+      serviceItemDescription: string | null;
+      client: {
+        name: string;
+        phone: string | null;
+        email: string | null;
+        cnpj: string | null;
+        ie: string | null;
+        state: string | null;
+        district: string | null;
+        zipCode: string | null;
+      };
+      technician: { name: string } | null;
+    },
+    report: {
+      summary?: string;
+      finishedAt?: string;
+      clientSignatureDataUrl?: string;
+      technicianSignatureDataUrl?: string;
+    }
+  ) {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage(PageSizes.A4);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold);
+    const { width, height } = page.getSize();
+    const margin = 28;
+    const contentWidth = width - margin * 2;
+    const black = rgb(0.08, 0.08, 0.08);
+    const gray = rgb(0.35, 0.35, 0.35);
+    const company = this.resolveServiceOrderCompany(appointment.serviceType);
+    const address = this.extractLocationDetailsFromClient(appointment.client, appointment.fullAddress, appointment.city);
+    const isStart = this.isStartOrTraining(appointment.serviceType);
+    const osNumber = appointment.osNumber || appointment.id;
+    const emissionDate = new Date();
+    const visitDate = appointment.date;
+    const acceptanceDate = report.finishedAt ? new Date(report.finishedAt) : new Date();
+    const serviceCode = appointment.serviceCode || (isStart ? '10021' : '10012');
+    const serviceDescription = appointment.serviceItemDescription || (isStart
+      ? 'INSTALACAO (START / OU TREINAMENTO) TODAS AS MAQUINAS'
+      : 'MANUTENCAO CORRETIVA LASER F OU DOBRADEIRA');
+    const problemText = appointment.problemDescription?.trim() || appointment.serviceType || 'Nao informado';
+    const equipmentCode = appointment.machineCode || appointment.machineSerial || osNumber;
+    const equipmentName = appointment.machineName || appointment.serviceType || 'Nao informado';
+    const equipmentModel = appointment.machineModel || 'Nao informado';
+    const equipmentObservations = appointment.machineObservations || appointment.notes || '';
+    const equipmentManufacturer = appointment.machineManufacturer || (isStart ? 'METALIQUE LASER E PLASMA CNC' : company.logoText);
+    const notesText = report.summary?.trim() || 'Nao informado';
+    const technicianName = appointment.technician?.name || 'Nao informado';
+
+    let cursorY = height - 38;
+
+    page.drawText(company.name, {
+      x: margin + 112,
+      y: cursorY,
+      font: boldFont,
+      size: 10.5,
+      color: black
+    });
+    page.drawText(`CNPJ: ${company.cnpj} - ${company.branch}`, {
+      x: margin + 112,
+      y: cursorY - 28,
+      font: boldFont,
+      size: 9,
+      color: black
+    });
+    page.drawText(company.address, {
+      x: margin + 112,
+      y: cursorY - 56,
+      font,
+      size: 8.5,
+      color: gray
+    });
+    page.drawText(company.cityStateZip, {
+      x: margin + 112,
+      y: cursorY - 84,
+      font,
+      size: 8.5,
+      color: gray
+    });
+    page.drawText(`Fones: ${company.phones}`, {
+      x: margin + 112,
+      y: cursorY - 112,
+      font: boldFont,
+      size: 8.5,
+      color: black
+    });
+
+    page.drawText(company.logoText, {
+      x: width - margin - 150,
+      y: cursorY + 4,
+      font: boldFont,
+      size: 22,
+      color: rgb(0.75, 0.15, 0.2)
+    });
+    page.drawText(`Pedido/Orc. N° ${osNumber}`, {
+      x: width - margin - 170,
+      y: cursorY - 2,
+      font: boldFont,
+      size: 9,
+      color: black
+    });
+    page.drawText(`Emissao ${this.formatDateOnly(emissionDate)}`, {
+      x: width - margin - 170,
+      y: cursorY - 30,
+      font: boldFont,
+      size: 9,
+      color: black
+    });
+
+    cursorY -= 148;
+
+    page.drawText('DADOS DO CHAMADO/ ORDEM DE SERVICO', {
+      x: margin + 160,
+      y: cursorY,
+      font: boldFont,
+      size: 10.5,
+      color: black
+    });
+
+    cursorY -= 26;
+    const leftX = margin + 6;
+    const rightX = margin + contentWidth / 2 + 12;
+    const infoSize = 8.8;
+    const lineGap = 18;
+    const leftInfo = [
+      `Cliente: ${appointment.client.name || 'Nao informado'}`,
+      `CPF/CNPJ: ${appointment.client.cnpj || 'Nao informado'} IE: ${appointment.client.ie || 'Nao informado'}`,
+      `Endereco: ${appointment.fullAddress || 'Nao informado'}`,
+      `Cidade: ${address.cidade} - ${address.estado}`,
+      `OS Tecnico: ${technicianName}`
+    ];
+    const rightInfo = [
+      `Telefone: ${appointment.client.phone || 'Nao informado'}`,
+      `Bairro: ${address.bairro}`,
+      `E-mail: ${appointment.client.email || 'Nao informado'}`,
+      `CEP: ${address.cep}`,
+      `Data Visita: ${this.formatDateOnly(visitDate)}`
+    ];
+    leftInfo.forEach((line, index) => {
+      page.drawText(line, { x: leftX, y: cursorY - index * lineGap, font: boldFont, size: infoSize, color: black });
+    });
+    rightInfo.forEach((line, index) => {
+      page.drawText(line, { x: rightX, y: cursorY - index * lineGap, font: boldFont, size: infoSize, color: black });
+    });
+
+    cursorY -= lineGap * 5 + 8;
+
+    cursorY = this.drawLabeledFullWidthBox(page, {
+      x: margin,
+      y: cursorY,
+      width: contentWidth,
+      label: 'PROBLEMA',
+      text: problemText,
+      font,
+      boldFont
+    });
+
+    cursorY -= 18;
+
+    cursorY = this.drawEquipmentTable(page, {
+      x: margin,
+      y: cursorY,
+      width: contentWidth,
+      font,
+      boldFont,
+      values: {
+        code: equipmentCode,
+        name: equipmentName,
+        model: equipmentModel,
+        observations: equipmentObservations,
+        manufacturer: equipmentManufacturer
+      }
+    });
+
+    cursorY -= 18;
+
+    cursorY = this.drawServiceTable(page, {
+      x: margin + 18,
+      y: cursorY,
+      width: contentWidth - 36,
+      font,
+      boldFont,
+      code: serviceCode,
+      description: serviceDescription
+    });
+
+    cursorY -= 18;
+
+    page.drawText('CONSIDERACOES DO TECNICO', {
+      x: margin + 210,
+      y: cursorY,
+      font: boldFont,
+      size: 10,
+      color: black
+    });
+    cursorY -= 12;
+    page.drawRectangle({
+      x: margin,
+      y: cursorY - 118,
+      width: contentWidth,
+      height: 118,
+      borderColor: black,
+      borderWidth: 1
+    });
+    this.drawWrappedTextInBox(page, notesText, {
+      x: margin,
+      y: cursorY - 118,
+      width: contentWidth,
+      height: 118,
+      paddingX: 8,
+      paddingTop: 10,
+      maxLines: 6,
+      lineHeight: 15,
+      font,
+      color: black,
+      minFontSize: 8,
+      maxFontSize: 10.5
+    });
+
+    cursorY -= 144;
+
+    page.drawRectangle({
+      x: margin + 20,
+      y: cursorY - 40,
+      width: contentWidth - 40,
+      height: 40,
+      borderColor: black,
+      borderWidth: 1
+    });
+    const declaration = 'Declaro que os servicos descritos neste relatorio foram prestados e dados como aceitos por mim nesta data';
+    page.drawText(declaration, {
+      x: margin + 28,
+      y: cursorY - 16,
+      font,
+      size: 8.8,
+      color: black
+    });
+    page.drawText(this.formatDateOnly(acceptanceDate), {
+      x: width / 2 - 24,
+      y: cursorY - 32,
+      font: boldFont,
+      size: 9,
+      color: black
+    });
+
+    cursorY -= 86;
+
+    const signatureBoxWidth = (contentWidth - 84) / 2;
+    const signatureHeight = 42;
+    page.drawRectangle({
+      x: margin + 4,
+      y: cursorY - signatureHeight,
+      width: signatureBoxWidth,
+      height: signatureHeight,
+      borderColor: black,
+      borderWidth: 1
+    });
+    page.drawRectangle({
+      x: margin + contentWidth - signatureBoxWidth - 4,
+      y: cursorY - signatureHeight,
+      width: signatureBoxWidth,
+      height: signatureHeight,
+      borderColor: black,
+      borderWidth: 1
+    });
+
+    await this.drawSignatureOnPdf(pdf, page, report.technicianSignatureDataUrl, {
+      x: margin + 8,
+      y: cursorY - signatureHeight + 16,
+      width: signatureBoxWidth - 16,
+      height: 22
+    });
+    await this.drawSignatureOnPdf(pdf, page, report.clientSignatureDataUrl, {
+      x: margin + contentWidth - signatureBoxWidth,
+      y: cursorY - signatureHeight + 16,
+      width: signatureBoxWidth - 16,
+      height: 22
+    });
+
+    page.drawText('Assinatura do Tecnico', {
+      x: margin + 70,
+      y: cursorY - signatureHeight + 4,
+      font,
+      size: 8.5,
+      color: black
+    });
+    page.drawText('Assinatura do Cliente', {
+      x: margin + contentWidth - signatureBoxWidth + 78,
+      y: cursorY - signatureHeight + 4,
+      font,
+      size: 8.5,
+      color: black
+    });
+
+    return Buffer.from(await pdf.save());
+  }
+
   private getServiceOrderPdfLayout(width: number, height: number, originalName: string) {
     const normalized = (originalName || '')
       .normalize('NFD')
@@ -1047,6 +1315,182 @@ export class LegacyService {
         height: height * 0.045
       }
     };
+  }
+
+  private drawLabeledFullWidthBox(
+    page: PDFPage,
+    options: {
+      x: number;
+      y: number;
+      width: number;
+      label: string;
+      text: string;
+      font: PDFFont;
+      boldFont: PDFFont;
+    }
+  ) {
+    const black = rgb(0.08, 0.08, 0.08);
+    page.drawText(options.label, {
+      x: options.x + options.width / 2 - options.label.length * 2.6,
+      y: options.y,
+      font: options.boldFont,
+      size: 10,
+      color: black
+    });
+    const boxY = options.y - 16;
+    page.drawRectangle({
+      x: options.x,
+      y: boxY - 24,
+      width: options.width,
+      height: 24,
+      borderColor: black,
+      borderWidth: 1
+    });
+    page.drawText(options.text || 'Nao informado', {
+      x: options.x + 6,
+      y: boxY - 16,
+      font: options.font,
+      size: 9,
+      color: black
+    });
+    return boxY - 24;
+  }
+
+  private drawEquipmentTable(
+    page: PDFPage,
+    options: {
+      x: number;
+      y: number;
+      width: number;
+      font: PDFFont;
+      boldFont: PDFFont;
+      values: {
+        code: string;
+        name: string;
+        model: string;
+        observations: string;
+        manufacturer: string;
+      };
+    }
+  ) {
+    const black = rgb(0.08, 0.08, 0.08);
+    page.drawText('DADOS DO(S) EQUIPAMENTO(S)', {
+      x: options.x + options.width / 2 - 84,
+      y: options.y,
+      font: options.boldFont,
+      size: 10,
+      color: black
+    });
+
+    const tableTop = options.y - 14;
+    const headerHeight = 22;
+    const rowHeight = 54;
+    const widths = [0.16, 0.18, 0.2, 0.22, 0.24].map((ratio) => options.width * ratio);
+    const labels = ['Codigo', 'Nome', 'Modelo', 'Observacoes', 'Fabricante'];
+    const values = [
+      options.values.code,
+      options.values.name,
+      options.values.model,
+      options.values.observations,
+      options.values.manufacturer
+    ];
+
+    let x = options.x;
+    widths.forEach((columnWidth, index) => {
+      page.drawRectangle({
+        x,
+        y: tableTop - headerHeight,
+        width: columnWidth,
+        height: headerHeight,
+        borderColor: black,
+        borderWidth: 1
+      });
+      page.drawRectangle({
+        x,
+        y: tableTop - headerHeight - rowHeight,
+        width: columnWidth,
+        height: rowHeight,
+        borderColor: black,
+        borderWidth: 1
+      });
+      page.drawText(labels[index], {
+        x: x + 6,
+        y: tableTop - 15,
+        font: options.boldFont,
+        size: 8.3,
+        color: black
+      });
+      this.drawWrappedTextInBox(page, values[index] || 'Nao informado', {
+        x,
+        y: tableTop - headerHeight - rowHeight,
+        width: columnWidth,
+        height: rowHeight,
+        paddingX: 4,
+        paddingTop: 8,
+        maxLines: 4,
+        lineHeight: 10,
+        font: options.font,
+        color: black,
+        minFontSize: 7,
+        maxFontSize: 8.3
+      });
+      x += columnWidth;
+    });
+
+    return tableTop - headerHeight - rowHeight;
+  }
+
+  private drawServiceTable(
+    page: PDFPage,
+    options: {
+      x: number;
+      y: number;
+      width: number;
+      font: PDFFont;
+      boldFont: PDFFont;
+      code: string;
+      description: string;
+    }
+  ) {
+    const black = rgb(0.08, 0.08, 0.08);
+    page.drawText('PRODUTOS / SERVICOS:', {
+      x: options.x + options.width / 2 - 62,
+      y: options.y,
+      font: options.boldFont,
+      size: 10,
+      color: black
+    });
+
+    const tableTop = options.y - 14;
+    const headerHeight = 22;
+    const rowHeight = 28;
+    const codeWidth = options.width * 0.32;
+    const descWidth = options.width - codeWidth;
+
+    page.drawRectangle({ x: options.x, y: tableTop - headerHeight, width: codeWidth, height: headerHeight, borderColor: black, borderWidth: 1 });
+    page.drawRectangle({ x: options.x + codeWidth, y: tableTop - headerHeight, width: descWidth, height: headerHeight, borderColor: black, borderWidth: 1 });
+    page.drawRectangle({ x: options.x, y: tableTop - headerHeight - rowHeight, width: codeWidth, height: rowHeight, borderColor: black, borderWidth: 1 });
+    page.drawRectangle({ x: options.x + codeWidth, y: tableTop - headerHeight - rowHeight, width: descWidth, height: rowHeight, borderColor: black, borderWidth: 1 });
+
+    page.drawText('Codigo', { x: options.x + 8, y: tableTop - 15, font: options.boldFont, size: 8.3, color: black });
+    page.drawText('Descricao do(s) servico(s):', { x: options.x + codeWidth + 8, y: tableTop - 15, font: options.boldFont, size: 8.3, color: black });
+    page.drawText(options.code || 'Nao informado', { x: options.x + 8, y: tableTop - headerHeight - 17, font: options.font, size: 8.5, color: black });
+    this.drawWrappedTextInBox(page, options.description || 'Nao informado', {
+      x: options.x + codeWidth,
+      y: tableTop - headerHeight - rowHeight,
+      width: descWidth,
+      height: rowHeight,
+      paddingX: 5,
+      paddingTop: 6,
+      maxLines: 2,
+      lineHeight: 10,
+      font: options.font,
+      color: black,
+      minFontSize: 7.5,
+      maxFontSize: 8.3
+    });
+
+    return tableTop - headerHeight - rowHeight;
   }
 
   private async drawSignatureOnPdf(

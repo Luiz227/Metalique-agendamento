@@ -124,12 +124,10 @@ export default function TechnicianMobile() {
   const [activeTripsView, setActiveTripsView] = useState<'WEEK' | 'FINISHED'>('WEEK');
   const [activeSection, setActiveSection] = useState<'LIST' | 'DETAILS' | 'CALENDAR'>('LIST');
   const [monthCursor, setMonthCursor] = useState(() => new Date());
-  const [serviceOrderEditorOpen, setServiceOrderEditorOpen] = useState(false);
   const knownIdsRef = useRef<Set<string>>(new Set());
   const clientSignatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const technicianSignatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingSignatureRef = useRef<'client' | 'technician' | null>(null);
-  const serviceOrderEditorRef = useRef<HTMLDivElement | null>(null);
 
   async function load(silent = false) {
     if (!silent) setLoadingAppointments(true);
@@ -191,9 +189,7 @@ export default function TechnicianMobile() {
   }, [pendingAttachments]);
 
   const current = useMemo(() => appointments.find((item) => item.id === selectedId) ?? appointments[0], [appointments, selectedId]);
-  const currentServiceOrder = (current?.attachments ?? []).find((attachment) => attachment.kind === 'SERVICE_ORDER_TEMPLATE');
   const currentGeneratedReport = (current?.attachments ?? []).find((attachment) => attachment.kind === 'TECHNICAL_REPORT');
-  const currentServiceOrderUrl = currentServiceOrder?.publicUrl ? (resolveApiAssetUrl(currentServiceOrder.publicUrl) ?? undefined) : undefined;
   const upcoming = appointments.filter((item) => item.id !== current?.id && !wasFinishedByTechnician(item));
   const currentClientName = current?.client?.name ?? 'Cliente';
   const currentClientPhone = current?.client?.phone ?? '';
@@ -415,14 +411,6 @@ export default function TechnicianMobile() {
     });
   }
 
-  function openServiceOrderEditor() {
-    setActiveSection('DETAILS');
-    setServiceOrderEditorOpen(true);
-    window.setTimeout(() => {
-      serviceOrderEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 120);
-  }
-
   if (!current) {
     return (
       <div className="min-h-screen bg-background px-4 py-6">
@@ -637,18 +625,10 @@ export default function TechnicianMobile() {
           <CardHeader><CardTitle className="text-base sm:text-lg">Relatorio Tecnico</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
-              <p className="text-xs font-medium text-blue-700 dark:text-blue-200">OS anexada pelo agendamento</p>
-              {currentServiceOrder ? (
-                <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border bg-card p-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{currentServiceOrder.originalName}</p>
-                    <p className="text-[11px] text-muted-foreground">Essa OS sera usada como base do preenchimento tecnico com consideracoes e assinaturas.</p>
-                  </div>
-                  <Button type="button" variant="outline" size="sm" onClick={openServiceOrderEditor}>Abrir e preencher OS</Button>
-                </div>
-              ) : (
-                <p className="mt-2 text-xs text-muted-foreground">Nenhuma OS original foi anexada ainda neste atendimento.</p>
-              )}
+              <p className="text-xs font-medium text-blue-700 dark:text-blue-200">OS oficial do atendimento</p>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                O sistema usa o template oficial interno e preenche a OS final com os dados do agendamento, relato tecnico e assinaturas.
+              </p>
               {currentGeneratedReport?.publicUrl && (
                 <div className="mt-2">
                   <a href={resolveApiAssetUrl(currentGeneratedReport.publicUrl) ?? undefined} target="_blank" rel="noreferrer">
@@ -657,29 +637,6 @@ export default function TechnicianMobile() {
                 </div>
               )}
             </div>
-            {serviceOrderEditorOpen && (
-              <div ref={serviceOrderEditorRef} className="space-y-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
-                <div>
-                  <p className="text-sm font-medium">Preenchimento da OS</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Veja a OS abaixo e preencha as consideracoes, anexos e assinaturas nesta mesma tela. Ao enviar, o sistema grava tudo nessa OS.
-                  </p>
-                </div>
-                {currentServiceOrderUrl ? (
-                  <div className="overflow-hidden rounded-xl border bg-white">
-                    <iframe
-                      title={currentServiceOrder?.originalName ?? 'OS anexada'}
-                      src={currentServiceOrderUrl}
-                      className="h-[520px] w-full"
-                    />
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
-                    Nao foi possivel abrir a visualizacao da OS, mas o preenchimento ainda pode ser enviado.
-                  </div>
-                )}
-              </div>
-            )}
             <Textarea
               className="min-h-36 text-base"
               placeholder="Consideracoes do tecnico"
@@ -708,7 +665,7 @@ export default function TechnicianMobile() {
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
               <FileText className="h-5 w-5" />
               <span className="text-xs">Documento</span>
-              <Input type="file" multiple accept=".pdf,image/*,video/*" className="hidden" onChange={(e) => { addAttachments(e.target.files, 'documento-tecnico'); e.currentTarget.value = ''; }} />
+              <Input type="file" multiple accept=".doc,.docx,.xls,.xlsx,.txt,image/*,video/*" className="hidden" onChange={(e) => { addAttachments(e.target.files, 'documento-tecnico'); e.currentTarget.value = ''; }} />
             </label>
             </div>
             <div className="rounded-xl border bg-card p-3">

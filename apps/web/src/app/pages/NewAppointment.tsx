@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Check, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -14,13 +14,13 @@ import type { Client, Technician, Vehicle } from '../services/types';
 
 const steps = [
   'Cliente',
-  'Serviço',
-  'Técnico',
-  'Logística',
-  'Confirmação'
+  'ServiÃ§o',
+  'TÃ©cnico',
+  'LogÃ­stica',
+  'ConfirmaÃ§Ã£o'
 ];
 const DRAFT_KEY = 'agenda-metalique:new-appointment-draft:v1';
-const COMPANY_BASE_ADDRESS = 'R. Reinaldo Raulino dos Santos, 107 - Éden, Sorocaba - SP, 18086-796';
+const COMPANY_BASE_ADDRESS = 'R. Reinaldo Raulino dos Santos, 107 - Ã‰den, Sorocaba - SP, 18086-796';
 
 function normalizeCityForMaps(city?: string | null) {
   return String(city ?? '')
@@ -75,16 +75,25 @@ export default function NewAppointment() {
   const [formData, setFormData] = useState({
     companyName: '',
     cnpj: '',
+    ie: '',
     contactName: '',
     phone: '',
     email: '',
     city: '',
+    state: '',
+    district: '',
+    zipCode: '',
     address: '',
     serviceType: '',
     serviceDescription: '',
+    serviceCode: '',
+    serviceItemDescription: '',
+    machineCode: '',
     machineName: '',
     machineModel: '',
     machineSerial: '',
+    machineManufacturer: '',
+    machineObservations: '',
     serviceDate: '',
     serviceTime: '',
     daysOut: '1',
@@ -192,11 +201,16 @@ export default function NewAppointment() {
       method: 'POST',
       body: JSON.stringify({
         name: formData.companyName,
-        contact: formData.contactName || null,
+        cnpj: formData.cnpj || null,
+        ie: formData.ie || null,
         email: formData.email || null,
         city: formData.city || 'A definir',
+        state: formData.state || null,
+        district: formData.district || null,
+        zipCode: formData.zipCode || null,
+        phone: formData.phone || null,
         address: formData.address,
-        notes: formData.cnpj ? `CNPJ: ${formData.cnpj}` : null
+        notes: null
       })
     });
   }
@@ -210,8 +224,8 @@ export default function NewAppointment() {
         technicianId: formData.technicianId || null,
         city: formData.city || 'A definir',
         fullAddress: formData.address,
-        serviceType: formData.serviceType || 'Pendente definição',
-        problemDescription: formData.serviceDescription || 'Pendente descrição do serviço',
+        serviceType: formData.serviceType || 'Pendente definiÃ§Ã£o',
+        problemDescription: formData.serviceDescription || 'Pendente descriÃ§Ã£o do serviÃ§o',
         date: formData.serviceDate ? localDateNoonIso(formData.serviceDate) : localDateNoonIso(new Date().toISOString().slice(0, 10)),
         startTime: formData.serviceDate && formData.serviceTime
           ? localDateTimeIso(formData.serviceDate, formData.serviceTime)
@@ -221,9 +235,14 @@ export default function NewAppointment() {
           : new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
         daysOut: Number(formData.daysOut || '1'),
         status: 'WAITING',
+        machineCode: formData.machineCode || null,
         machineName: formData.machineName || null,
         machineModel: formData.machineModel || null,
         machineSerial: formData.machineSerial || null,
+        machineManufacturer: formData.machineManufacturer || null,
+        machineObservations: formData.machineObservations || null,
+        serviceCode: formData.serviceCode || null,
+        serviceItemDescription: formData.serviceItemDescription || null,
         hasHotel: formData.hasHotel,
         needsHotel: formData.hasHotel,
         needsTransport: formData.transportMode !== 'NONE',
@@ -239,7 +258,7 @@ export default function NewAppointment() {
         hotelDailyRate: formData.hotelDailyRate || null,
         hotelNotes: formData.hotelNotes || null,
         osNumber: '',
-        clientChecklist: formData.cnpj ? `CNPJ: ${formData.cnpj}` : '',
+        clientChecklist: '',
         notes: formData.attentionPoints,
         schedulingChecklist: isDraft
           ? {
@@ -333,7 +352,7 @@ export default function NewAppointment() {
           Salvar rascunho
         </Button>
         <h1 className="text-2xl font-bold text-white mb-2">Novo Agendamento</h1>
-        <p className="text-zinc-400">Preencha os dados da empresa, atendimento e técnico responsável.</p>
+        <p className="text-zinc-400">Preencha os dados da empresa, atendimento e tÃ©cnico responsÃ¡vel.</p>
       </div>
 
       <Card className="bg-zinc-900/50 border-zinc-800 mb-6">
@@ -372,8 +391,16 @@ export default function NewAppointment() {
                 <Input required placeholder="00.000.000/0000-00" value={formData.cnpj} onChange={(e) => setFormData({ ...formData, cnpj: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
               </div>
               <div>
+                <Label>IE</Label>
+                <Input value={formData.ie} onChange={(e) => setFormData({ ...formData, ie: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+              </div>
+              <div>
                 <Label>Contato</Label>
                 <Input required value={formData.contactName} onChange={(e) => setFormData({ ...formData, contactName: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+              </div>
+              <div>
+                <Label>Telefone</Label>
+                <Input value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
               </div>
               <div>
                 <Label>Email</Label>
@@ -384,7 +411,19 @@ export default function NewAppointment() {
                 <Input required placeholder="Ex: Indaiatuba - SP" value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
               </div>
               <div>
-                <Label>Endereço completo</Label>
+                <Label>Estado</Label>
+                <Input placeholder="SP" value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value.toUpperCase() })} className="bg-zinc-800/50 border-zinc-700" />
+              </div>
+              <div>
+                <Label>Bairro</Label>
+                <Input value={formData.district} onChange={(e) => setFormData({ ...formData, district: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+              </div>
+              <div>
+                <Label>CEP</Label>
+                <Input value={formData.zipCode} onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+              </div>
+              <div>
+                <Label>EndereÃ§o completo</Label>
                 <Input required value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
                 <p className="text-[11px] text-zinc-500 mt-1">Base fixa de sa?da: {COMPANY_BASE_ADDRESS}</p>
                 {travelLoading && <p className="text-xs text-zinc-400 mt-1">Calculando tempo de viagem...</p>}
@@ -400,14 +439,14 @@ export default function NewAppointment() {
           {currentStep === 1 && (
             <div className="space-y-4">
               <div>
-                <Label>Tipo de serviço</Label>
+                <Label>Tipo de serviÃ§o</Label>
                 <Select value={formData.serviceType} onValueChange={(value) => setFormData({ ...formData, serviceType: value })}>
                   <SelectTrigger className="bg-zinc-800/50 border-zinc-700"><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Instalação">Instalação</SelectItem>
-                    <SelectItem value="Manutenção">Manutenção</SelectItem>
+                    <SelectItem value="InstalaÃ§Ã£o">InstalaÃ§Ã£o</SelectItem>
+                    <SelectItem value="ManutenÃ§Ã£o">ManutenÃ§Ã£o</SelectItem>
                     <SelectItem value="Reparo">Reparo</SelectItem>
-                    <SelectItem value="Inspeção">Inspeção</SelectItem>
+                    <SelectItem value="InspeÃ§Ã£o">InspeÃ§Ã£o</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -417,7 +456,7 @@ export default function NewAppointment() {
                   <Input type="date" value={formData.serviceDate} onChange={(e) => setFormData({ ...formData, serviceDate: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
                 </div>
                 <div>
-                  <Label>Horário inicial</Label>
+                  <Label>HorÃ¡rio inicial</Label>
                   <Input type="time" value={formData.serviceTime} onChange={(e) => setFormData({ ...formData, serviceTime: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
                 </div>
                 <div>
@@ -426,10 +465,24 @@ export default function NewAppointment() {
                 </div>
               </div>
               <div>
-                <Label>Serviço (obrigatório)</Label>
-                <Textarea placeholder="Descreva o motivo e o serviço a executar." value={formData.serviceDescription} onChange={(e) => setFormData({ ...formData, serviceDescription: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                <Label>ServiÃ§o (obrigatÃ³rio)</Label>
+                <Textarea placeholder="Descreva o motivo e o serviÃ§o a executar." value={formData.serviceDescription} onChange={(e) => setFormData({ ...formData, serviceDescription: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+              </div>
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <Label>Codigo do servico</Label>
+                  <Input placeholder="Ex.: 10021" value={formData.serviceCode} onChange={(e) => setFormData({ ...formData, serviceCode: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                </div>
+                <div>
+                  <Label>Descricao do servico na OS</Label>
+                  <Input placeholder="Ex.: INSTALACAO (START / OU TREINAMENTO) TODAS AS MAQUINAS" value={formData.serviceItemDescription} onChange={(e) => setFormData({ ...formData, serviceItemDescription: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                </div>
               </div>
               <div className="grid md:grid-cols-3 gap-3">
+                <div>
+                  <Label>Codigo do equipamento</Label>
+                  <Input placeholder="Ex.: 125017887" value={formData.machineCode} onChange={(e) => setFormData({ ...formData, machineCode: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                </div>
                 <div>
                   <Label>Nome da maquina</Label>
                   <Input placeholder="Ex.: Mesa / corte de metais" value={formData.machineName} onChange={(e) => setFormData({ ...formData, machineName: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
@@ -443,15 +496,25 @@ export default function NewAppointment() {
                   <Input placeholder="Ex.: 1250/1709" value={formData.machineSerial} onChange={(e) => setFormData({ ...formData, machineSerial: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
                 </div>
               </div>
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <Label>Fabricante</Label>
+                  <Input placeholder="Ex.: METALIQUE LASER E PLASMA CNC" value={formData.machineManufacturer} onChange={(e) => setFormData({ ...formData, machineManufacturer: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                </div>
+                <div>
+                  <Label>Observacoes do equipamento</Label>
+                  <Input placeholder="Ex.: teste inicial / configuracao / revisao visual" value={formData.machineObservations} onChange={(e) => setFormData({ ...formData, machineObservations: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                </div>
+              </div>
             </div>
           )}
 
           {currentStep === 2 && (
             <div className="space-y-4">
               <div>
-                <Label>Técnico</Label>
+                <Label>TÃ©cnico</Label>
                 <Select value={formData.technicianId} onValueChange={(value) => setFormData({ ...formData, technicianId: value })}>
-                  <SelectTrigger className="bg-zinc-800/50 border-zinc-700"><SelectValue placeholder="Selecione o técnico" /></SelectTrigger>
+                  <SelectTrigger className="bg-zinc-800/50 border-zinc-700"><SelectValue placeholder="Selecione o tÃ©cnico" /></SelectTrigger>
                   <SelectContent>
                     {technicians.map((technician) => (
                       <SelectItem key={technician.id} value={technician.id}>{technician.name}</SelectItem>
@@ -462,13 +525,13 @@ export default function NewAppointment() {
               {selectedTechnician && (
                 <div className="flex items-center gap-2 text-sm text-zinc-300">
                   <span className="h-3 w-3 rounded-full" style={{ backgroundColor: selectedTechnician.color ?? '#3b82f6' }} />
-                  Esse técnico será identificado por essa cor no mapa.
+                  Esse tÃ©cnico serÃ¡ identificado por essa cor no mapa.
                 </div>
               )}
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
                 <div className="flex items-start gap-3">
                   <AlertCircle className="h-5 w-5 text-blue-400 mt-0.5" />
-                  <p className="text-xs text-zinc-400">As sugestões de proximidade serão calculadas automaticamente após salvar o agendamento.</p>
+                  <p className="text-xs text-zinc-400">As sugestÃµes de proximidade serÃ£o calculadas automaticamente apÃ³s salvar o agendamento.</p>
                 </div>
               </div>
             </div>
@@ -560,25 +623,25 @@ export default function NewAppointment() {
                   <div className="text-zinc-400">Empresa:</div><div className="text-white">{formData.companyName || '-'}</div>
                   <div className="text-zinc-400">Contato:</div><div className="text-white">{formData.contactName || '-'}</div>
                   <div className="text-zinc-400">Email:</div><div className="text-white">{formData.email || '-'}</div>
-                  <div className="text-zinc-400">Endereço:</div><div className="text-white">{formData.address || '-'}</div>
+                  <div className="text-zinc-400">EndereÃ§o:</div><div className="text-white">{formData.address || '-'}</div>
                   <div className="text-zinc-400">Cidade:</div><div className="text-white">{formData.city || '-'}</div>
-                  <div className="text-zinc-400">Serviço:</div><div className="text-white">{formData.serviceType || '-'}</div>
-                  <div className="text-zinc-400">Descrição do serviço:</div><div className="text-white">{formData.serviceDescription || '-'}</div>
-                  <div className="text-zinc-400">Ponto de atenção:</div><div className="text-white">{formData.attentionPoints || '-'}</div>
+                  <div className="text-zinc-400">ServiÃ§o:</div><div className="text-white">{formData.serviceType || '-'}</div>
+                  <div className="text-zinc-400">DescriÃ§Ã£o do serviÃ§o:</div><div className="text-white">{formData.serviceDescription || '-'}</div>
+                  <div className="text-zinc-400">Ponto de atenÃ§Ã£o:</div><div className="text-white">{formData.attentionPoints || '-'}</div>
                   <div className="text-zinc-400">Dias de viagem:</div><div className="text-white">{formData.daysOut || '-'}</div>
-                  <div className="text-zinc-400">Data/Hora:</div><div className="text-white">{formData.serviceDate || '-'} às {formData.serviceTime || '-'}</div>
-                  <div className="text-zinc-400">Técnico:</div><div className="text-white">{selectedTechnician?.name ?? '-'}</div>
+                  <div className="text-zinc-400">Data/Hora:</div><div className="text-white">{formData.serviceDate || '-'} Ã s {formData.serviceTime || '-'}</div>
+                  <div className="text-zinc-400">TÃ©cnico:</div><div className="text-white">{selectedTechnician?.name ?? '-'}</div>
                 </div>
               </div>
               <div className="grid md:grid-cols-2 gap-3">
                 {[
                   ['clientConfirmed', 'Cliente confirmado'],
                   ['contactConfirmed', 'Contato confirmado'],
-                  ['addressConfirmed', 'Endereço confirmado'],
-                  ['serviceTypeConfirmed', 'Tipo de serviço confirmado'],
-                  ['technicianSelected', 'Técnico selecionado'],
-                  ['technicianAvailability', 'Disponibilidade do técnico conferida'],
-                  ['dateTimeConfirmed', 'Data e horário confirmados'],
+                  ['addressConfirmed', 'EndereÃ§o confirmado'],
+                  ['serviceTypeConfirmed', 'Tipo de serviÃ§o confirmado'],
+                  ['technicianSelected', 'TÃ©cnico selecionado'],
+                  ['technicianAvailability', 'Disponibilidade do tÃ©cnico conferida'],
+                  ['dateTimeConfirmed', 'Data e horÃ¡rio confirmados'],
                   ['hotelNeedChecked', 'Necessidade de hotel conferida'],
                   ['transportNeedChecked', 'Necessidade de transporte conferida'],
                   ['osChecked', 'OS conferida ou marcada como pendente'],
@@ -611,7 +674,7 @@ export default function NewAppointment() {
                 </>
               ) : (
                 <>
-                  Próximo
+                  PrÃ³ximo
                   <ArrowRight className="h-4 w-4 ml-2" />
                 </>
               )}
@@ -623,3 +686,4 @@ export default function NewAppointment() {
     </div>
   );
 }
+

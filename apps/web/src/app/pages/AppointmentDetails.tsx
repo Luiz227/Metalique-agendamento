@@ -108,9 +108,14 @@ export default function AppointmentDetails() {
     fullAddress: '',
     serviceType: '',
     problemDescription: '',
+    serviceCode: '',
+    serviceItemDescription: '',
+    machineCode: '',
     machineName: '',
     machineModel: '',
     machineSerial: '',
+    machineManufacturer: '',
+    machineObservations: '',
     notes: '',
     osNumber: '',
     date: '',
@@ -145,8 +150,6 @@ export default function AppointmentDetails() {
   });
   const [travelEstimate, setTravelEstimate] = useState<{ distanceText: string; durationText: string } | null>(null);
   const [travelLoading, setTravelLoading] = useState(false);
-  const [uploadingServiceOrder, setUploadingServiceOrder] = useState(false);
-
   async function load(showLoading = true) {
     if (!id) {
       setAppointment(null);
@@ -208,9 +211,14 @@ export default function AppointmentDetails() {
       fullAddress: appointment.fullAddress ?? '',
       serviceType: appointment.serviceType ?? '',
       problemDescription: appointment.problemDescription ?? '',
+      serviceCode: appointment.serviceCode ?? '',
+      serviceItemDescription: appointment.serviceItemDescription ?? '',
+      machineCode: appointment.machineCode ?? '',
       machineName: appointment.machineName ?? '',
       machineModel: appointment.machineModel ?? '',
       machineSerial: appointment.machineSerial ?? '',
+      machineManufacturer: appointment.machineManufacturer ?? '',
+      machineObservations: appointment.machineObservations ?? '',
       notes: appointment.notes ?? '',
       osNumber: appointment.osNumber ?? '',
       date: safeDateInputValue(appointment.date),
@@ -297,7 +305,6 @@ export default function AppointmentDetails() {
   );
 
   const checklistProgress = checklist.length ? (checklist.filter((item) => item.done).length / checklist.length) * 100 : 0;
-  const serviceOrderTemplates = (appointment?.attachments ?? []).filter((attachment) => attachment.kind === 'SERVICE_ORDER_TEMPLATE');
   const generatedReports = (appointment?.attachments ?? []).filter((attachment) => attachment.kind === 'TECHNICAL_REPORT');
 
   async function cancelAppointment() {
@@ -389,9 +396,12 @@ export default function AppointmentDetails() {
           body: JSON.stringify({
             technicianId: form.technicianId || null,
             vehicleId: form.transportMode === 'CAR' ? form.vehicleId || null : null,
+            machineCode: form.machineCode || null,
             machineName: form.machineName || null,
             machineModel: form.machineModel || null,
             machineSerial: form.machineSerial || null,
+            machineManufacturer: form.machineManufacturer || null,
+            machineObservations: form.machineObservations || null,
             transportMode: form.transportMode || null,
             flightAirport: form.transportMode === 'AIR' ? form.flightAirport || null : null,
             flightDepartureAt: form.transportMode === 'AIR' && form.flightDepartureAt ? new Date(form.flightDepartureAt).toISOString() : null,
@@ -406,6 +416,8 @@ export default function AppointmentDetails() {
             city: form.city,
             fullAddress: form.fullAddress,
             serviceType: form.serviceType || 'Pendente definicao',
+            serviceCode: form.serviceCode || null,
+            serviceItemDescription: form.serviceItemDescription || null,
             problemDescription: form.problemDescription || 'Pendente descricao do servico',
             notes: form.notes,
             osNumber: form.osNumber || null,
@@ -443,42 +455,6 @@ export default function AppointmentDetails() {
       setError(err instanceof ApiError ? err.message : 'Nao foi possivel confirmar o agendamento.');
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function uploadServiceOrderTemplate(file: File | undefined) {
-    if (!appointment || !file) return;
-    setUploadingServiceOrder(true);
-    setError('');
-    try {
-      const formData = new FormData();
-      formData.append('file', file, file.name);
-      formData.append('type', 'service-order-template');
-      await api(`/attachments/appointments/${appointment.id}`, {
-        method: 'POST',
-        body: formData
-      });
-      await load(false);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Nao foi possivel anexar a OS do SIGE.');
-    } finally {
-      setUploadingServiceOrder(false);
-    }
-  }
-
-  async function deleteAttachment(attachmentId: string) {
-    if (!appointment) return;
-    const confirmed = window.confirm('Deseja excluir este anexo?');
-    if (!confirmed) return;
-
-    setError('');
-    try {
-      await api(`/attachments/${attachmentId}`, {
-        method: 'DELETE'
-      });
-      await load(false);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Nao foi possivel excluir o anexo.');
     }
   }
 
@@ -906,49 +882,13 @@ export default function AppointmentDetails() {
                 <Textarea value={form.problemDescription} onChange={(e) => setForm({ ...form, problemDescription: e.target.value })} disabled={!editing} />
                 <Input value={form.osNumber} placeholder="OS" onChange={(e) => setForm({ ...form, osNumber: e.target.value })} disabled={!editing} />
                 <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="text-sm font-medium">OS original do SIGE Cloud</p>
-                      <p className="text-xs text-muted-foreground">Anexe o PDF padrÃ£o para o tÃ©cnico visualizar e o sistema preencher no final do atendimento.</p>
-                    </div>
-                    <label className="inline-flex cursor-pointer items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-                      {uploadingServiceOrder ? 'Enviando...' : 'Anexar OS'}
-                      <input
-                        type="file"
-                        accept="application/pdf"
-                        className="hidden"
-                        disabled={uploadingServiceOrder}
-                        onChange={(event) => {
-                          uploadServiceOrderTemplate(event.target.files?.[0]);
-                          event.currentTarget.value = '';
-                        }}
-                      />
-                    </label>
+                  <div>
+                    <p className="text-sm font-medium">Modelo oficial de OS</p>
+                    <p className="text-xs text-muted-foreground">
+                      Este agendamento usa apenas os templates oficiais internos. Preencha abaixo os dados do equipamento e do servico para gerar a OS final do tecnico.
+                    </p>
                   </div>
                   <div className="mt-3 space-y-2">
-                    {serviceOrderTemplates.length === 0 && (
-                      <p className="text-xs text-muted-foreground">Nenhuma OS original anexada ainda.</p>
-                    )}
-                    {serviceOrderTemplates.map((attachment) => (
-                      <div key={attachment.id} className="flex items-center justify-between rounded-md border border-border/70 bg-background/60 px-3 py-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{attachment.originalName}</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            enviado em {new Date(attachment.createdAt).toLocaleString('pt-BR')}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {attachment.publicUrl && (
-                            <a href={resolveApiAssetUrl(attachment.publicUrl) ?? undefined} target="_blank" rel="noreferrer">
-                              <Button type="button" variant="outline" size="sm">Abrir</Button>
-                            </a>
-                          )}
-                          <Button type="button" variant="destructive" size="sm" onClick={() => deleteAttachment(attachment.id)}>
-                            Excluir
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
                     {generatedReports.length > 0 && (
                       <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
                         <p className="text-xs font-medium text-emerald-300">OS preenchidas geradas</p>
@@ -968,7 +908,21 @@ export default function AppointmentDetails() {
                     )}
                   </div>
                 </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <div>
+                    <p className="mb-1 text-[11px] text-muted-foreground">Codigo do servico</p>
+                    <Input value={form.serviceCode} placeholder="Codigo do servico" onChange={(e) => setForm({ ...form, serviceCode: e.target.value })} disabled={!editing} />
+                  </div>
+                  <div>
+                    <p className="mb-1 text-[11px] text-muted-foreground">Descricao do servico na OS</p>
+                    <Input value={form.serviceItemDescription} placeholder="Descricao do servico" onChange={(e) => setForm({ ...form, serviceItemDescription: e.target.value })} disabled={!editing} />
+                  </div>
+                </div>
                 <div className="grid gap-2 md:grid-cols-3">
+                  <div>
+                    <p className="mb-1 text-[11px] text-muted-foreground">Codigo do equipamento</p>
+                    <Input value={form.machineCode} placeholder="Codigo do equipamento" onChange={(e) => setForm({ ...form, machineCode: e.target.value })} disabled={!editing} />
+                  </div>
                   <div>
                     <p className="mb-1 text-[11px] text-muted-foreground">Nome da maquina</p>
                     <Input value={form.machineName} placeholder="Nome da maquina" onChange={(e) => setForm({ ...form, machineName: e.target.value })} disabled={!editing} />
@@ -980,6 +934,14 @@ export default function AppointmentDetails() {
                   <div>
                     <p className="mb-1 text-[11px] text-muted-foreground">Numero de serie</p>
                     <Input value={form.machineSerial} placeholder="Numero de serie" onChange={(e) => setForm({ ...form, machineSerial: e.target.value })} disabled={!editing} />
+                  </div>
+                  <div>
+                    <p className="mb-1 text-[11px] text-muted-foreground">Fabricante</p>
+                    <Input value={form.machineManufacturer} placeholder="Fabricante" onChange={(e) => setForm({ ...form, machineManufacturer: e.target.value })} disabled={!editing} />
+                  </div>
+                  <div>
+                    <p className="mb-1 text-[11px] text-muted-foreground">Observacoes do equipamento</p>
+                    <Input value={form.machineObservations} placeholder="Observacoes do equipamento" onChange={(e) => setForm({ ...form, machineObservations: e.target.value })} disabled={!editing} />
                   </div>
                 </div>
               </div>

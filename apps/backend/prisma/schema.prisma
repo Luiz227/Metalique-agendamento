@@ -100,9 +100,14 @@ model Appointment {
   latitude          Float?
   longitude         Float?
   daysOut           Int                @default(1)
+  machineCode       String?
   machineName       String?
   machineModel      String?
   machineSerial     String?
+  machineManufacturer String?
+  machineObservations String?
+  serviceCode       String?
+  serviceItemDescription String?
   hasHotel          Boolean            @default(false)
   hotelName         String?
   hotelAddress      String?

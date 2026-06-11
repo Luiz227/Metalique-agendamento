@@ -434,7 +434,6 @@ export class LegacyService {
       });
       if (!appointment) throw new NotFoundException('Agendamento não encontrado');
 
-      const templateAttachment = appointment.attachments.find((attachment) => attachment.kind === ATTACHMENT_KIND.SERVICE_ORDER_TEMPLATE);
       const bundledOfficialTemplate = this.getBundledOfficialServiceOrderTemplate(appointment.serviceType);
       const bundledStartTrainingTemplate = this.getBundledStartTrainingTemplate();
 
@@ -459,43 +458,8 @@ export class LegacyService {
           },
           ATTACHMENT_KIND.TECHNICAL_REPORT
         );
-      } else if (templateAttachment?.mimeType === 'application/pdf') {
-        const reportPdf = await this.buildFilledServiceOrderPdf(appointment, templateAttachment, {
-          summary,
-          finishedAt: report?.finishedAt,
-          clientSignatureDataUrl: report?.clientSignatureDataUrl,
-          technicianSignatureDataUrl: report?.technicianSignatureDataUrl
-        });
-
-        await this.attachFile(
-          id,
-          {
-            originalname: 'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.pdf',
-            mimetype: 'application/pdf',
-            size: reportPdf.length,
-            buffer: reportPdf
-          },
-          ATTACHMENT_KIND.TECHNICAL_REPORT
-        );
       } else if (this.isStartOrTraining(appointment.serviceType) && bundledStartTrainingTemplate) {
         const reportDocx = await this.buildFilledServiceOrderDocx(appointment, bundledStartTrainingTemplate.buffer, {
-          summary,
-          finishedAt: report?.finishedAt
-        });
-
-        await this.attachFile(
-          id,
-          {
-            originalname: 'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10) + '.docx',
-            mimetype: DOCX_MIME_TYPE,
-            size: reportDocx.length,
-            buffer: reportDocx
-          },
-          ATTACHMENT_KIND.TECHNICAL_REPORT
-        );
-      } else if (templateAttachment?.mimeType === DOCX_MIME_TYPE) {
-        const templateBytes = await this.downloadStoredAttachment(templateAttachment);
-        const reportDocx = await this.buildFilledServiceOrderDocx(appointment, templateBytes, {
           summary,
           finishedAt: report?.finishedAt
         });
@@ -746,9 +710,14 @@ export class LegacyService {
       problemDescription: string | null;
       date: Date;
       notes: string | null;
+      machineCode: string | null;
       machineName: string | null;
       machineModel: string | null;
       machineSerial: string | null;
+      machineManufacturer: string | null;
+      machineObservations: string | null;
+      serviceCode: string | null;
+      serviceItemDescription: string | null;
       client: {
         name: string;
         phone: string | null;
@@ -772,10 +741,10 @@ export class LegacyService {
     const company = this.resolveServiceOrderCompany(appointment.serviceType);
     const osNumber = appointment.osNumber || appointment.id;
     const addressDetails = this.extractLocationDetailsFromClient(appointment.client, appointment.fullAddress, appointment.city);
-    const serviceCode = this.isStartOrTraining(appointment.serviceType) ? '10021' : '10012';
-    const serviceDescription = this.isStartOrTraining(appointment.serviceType)
+    const serviceCode = appointment.serviceCode || (this.isStartOrTraining(appointment.serviceType) ? '10021' : '10012');
+    const serviceDescription = appointment.serviceItemDescription || (this.isStartOrTraining(appointment.serviceType)
       ? 'INSTALACAO (START / OU TREINAMENTO) TODAS AS MAQUINAS'
-      : 'MANUTENCAO CORRETIVA LASER F OU DOBRADEIRA';
+      : 'MANUTENCAO CORRETIVA LASER F OU DOBRADEIRA');
     const placeholders: Record<string, string> = {
       OS_NUMERO: osNumber,
       DATA_EMISSAO: this.formatDateOnly(new Date()),
@@ -790,13 +759,13 @@ export class LegacyService {
       CEP: addressDetails.cep,
       TECNICO: appointment.technician?.name || 'Nao informado',
       DATA_VISITA: this.formatDateOnly(appointment.date),
-      CODIGO_EQUIPAMENTO: appointment.machineSerial || osNumber,
+      CODIGO_EQUIPAMENTO: appointment.machineCode || appointment.machineSerial || osNumber,
       NOME_EQUIPAMENTO: appointment.machineName || appointment.serviceType || 'Nao informado',
       MODELO_EQUIPAMENTO: appointment.machineModel || 'Nao informado',
-      OBSERVACOES_EQUIPAMENTO: appointment.notes || '',
-      FABRICANTE_EQUIPAMENTO: this.isStartOrTraining(appointment.serviceType)
+      OBSERVACOES_EQUIPAMENTO: appointment.machineObservations || appointment.notes || '',
+      FABRICANTE_EQUIPAMENTO: appointment.machineManufacturer || (this.isStartOrTraining(appointment.serviceType)
         ? 'METALIQUE LASER E PLASMA CNC'
-        : company.logoText,
+        : company.logoText),
       CODIGO_SERVICO: serviceCode,
       DESCRICAO_SERVICO: serviceDescription,
       CONSIDERACOES_TECNICO: report.summary?.trim() || 'Nao informado',
@@ -826,9 +795,14 @@ export class LegacyService {
       problemDescription: string | null;
       date: Date;
       notes: string | null;
+      machineCode: string | null;
       machineName: string | null;
       machineModel: string | null;
       machineSerial: string | null;
+      machineManufacturer: string | null;
+      machineObservations: string | null;
+      serviceCode: string | null;
+      serviceItemDescription: string | null;
       client: {
         name: string;
         phone: string | null;
@@ -854,16 +828,16 @@ export class LegacyService {
     const company = this.resolveServiceOrderCompany(appointment.serviceType);
     const osNumber = appointment.osNumber || appointment.id;
     const address = this.extractLocationDetailsFromClient(appointment.client, appointment.fullAddress, appointment.city);
-    const equipmentCode = appointment.machineSerial || osNumber;
+    const equipmentCode = appointment.machineCode || appointment.machineSerial || osNumber;
     const equipmentName = appointment.machineName || appointment.serviceType || 'Nao informado';
     const equipmentModel = appointment.machineModel || 'Nao informado';
-    const equipmentObservations = appointment.notes || '';
+    const equipmentObservations = appointment.machineObservations || appointment.notes || '';
     const technicianName = appointment.technician?.name || 'Nao informado';
-    const serviceCode = kind === 'start' ? '10021' : '10012';
+    const serviceCode = appointment.serviceCode || (kind === 'start' ? '10021' : '10012');
     const serviceDescription =
-      kind === 'start'
+      appointment.serviceItemDescription || (kind === 'start'
         ? 'INSTALACAO (START / OU TREINAMENTO) TODAS AS MAQUINAS'
-        : 'MANUTENCAO CORRETIVA LASER F OU DOBRADEIRA';
+        : 'MANUTENCAO CORRETIVA LASER F OU DOBRADEIRA');
     const problemText = appointment.problemDescription?.trim() || appointment.serviceType || 'Nao informado';
     const placeholders: Record<string, string> = {
       Bairro: address.bairro,
@@ -877,7 +851,7 @@ export class LegacyService {
       IE: appointment.client.ie || 'Nao informado',
       OsDataVisita: this.formatDateOnly(visitDate),
       OsEquipamentoCodigo: equipmentCode,
-      OsEquipamentoFabricante: kind === 'start' ? 'METALIQUE LASER E PLASMA CNC' : company.logoText,
+      OsEquipamentoFabricante: appointment.machineManufacturer || (kind === 'start' ? 'METALIQUE LASER E PLASMA CNC' : company.logoText),
       OsEquipamentoModelo: equipmentModel,
       OsEquipamentoNome: equipmentName,
       OsEquipamentoObservacoes: equipmentObservations,
@@ -1512,9 +1486,14 @@ export class LegacyService {
     notes: string | null;
     osNumber: string | null;
     daysOut: number;
+    machineCode: string | null;
     machineName: string | null;
     machineModel: string | null;
     machineSerial: string | null;
+    machineManufacturer: string | null;
+    machineObservations: string | null;
+    serviceCode: string | null;
+    serviceItemDescription: string | null;
     transportMode: string | null;
     flightAirport: string | null;
     flightDepartureAt: Date | null;
@@ -1556,9 +1535,14 @@ export class LegacyService {
       notes: row.notes,
       osNumber: row.osNumber,
       daysOut: row.daysOut,
+      machineCode: row.machineCode,
       machineName: row.machineName,
       machineModel: row.machineModel,
       machineSerial: row.machineSerial,
+      machineManufacturer: row.machineManufacturer,
+      machineObservations: row.machineObservations,
+      serviceCode: row.serviceCode,
+      serviceItemDescription: row.serviceItemDescription,
       transportMode: row.transportMode,
       flightAirport: row.flightAirport,
       flightDepartureAt: row.flightDepartureAt?.toISOString() ?? null,

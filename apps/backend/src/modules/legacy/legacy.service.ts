@@ -1905,19 +1905,28 @@ export class LegacyService {
     const driveFileName = shouldConvertToGoogleDoc
       ? params.fileName.replace(/\.(html?|docx)$/i, '')
       : params.fileName;
-    const created = await drive.files.create({
-      requestBody: {
-        name: driveFileName,
-        parents: [osFolderId],
-        ...(shouldConvertToGoogleDoc ? { mimeType: 'application/vnd.google-apps.document' } : {})
-      },
-      media: {
-        mimeType: params.mimeType,
-        body: Readable.from(params.buffer)
-      },
-      supportsAllDrives: true,
-      fields: 'id,webViewLink,webContentLink'
-    });
+    const createFile = (convertToGoogleDoc: boolean) =>
+      drive.files.create({
+        requestBody: {
+          name: convertToGoogleDoc ? driveFileName : params.fileName,
+          parents: [osFolderId],
+          ...(convertToGoogleDoc ? { mimeType: 'application/vnd.google-apps.document' } : {})
+        },
+        media: {
+          mimeType: params.mimeType,
+          body: Readable.from(params.buffer!)
+        },
+        supportsAllDrives: true,
+        fields: 'id,webViewLink,webContentLink'
+      });
+
+    let created;
+    try {
+      created = await createFile(shouldConvertToGoogleDoc);
+    } catch (error) {
+      if (!shouldConvertToGoogleDoc) throw error;
+      created = await createFile(false);
+    }
 
     const fileId = created.data.id;
     if (!fileId) throw new Error('Falha ao criar arquivo no Google Drive');

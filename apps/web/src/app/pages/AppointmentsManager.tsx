@@ -14,16 +14,24 @@ import { formatDate, formatTime, money, statusLabel } from '../services/types';
 type QuickForm = {
   companyName: string;
   cnpj: string;
+  ie: string;
   address: string;
+  district: string;
   city: string;
+  state: string;
+  zipCode: string;
   daysOut: string;
 };
 
 const initialForm: QuickForm = {
   companyName: '',
   cnpj: '',
+  ie: '',
   address: '',
+  district: '',
   city: '',
+  state: '',
+  zipCode: '',
   daysOut: '1'
 };
 
@@ -120,7 +128,12 @@ export default function AppointmentsManager() {
       method: 'POST',
       body: JSON.stringify({
         name: form.companyName,
+        cnpj: form.cnpj || null,
+        ie: form.ie || null,
         city: form.city || 'A definir',
+        state: form.state || null,
+        district: form.district || null,
+        zipCode: form.zipCode || null,
         address: form.address,
         notes: `CNPJ: ${form.cnpj}`
       })
@@ -207,8 +220,24 @@ export default function AppointmentsManager() {
             <Input value={form.cnpj} onChange={(e) => setForm({ ...form, cnpj: e.target.value })} />
           </div>
           <div>
+            <Label>IE</Label>
+            <Input value={form.ie} onChange={(e) => setForm({ ...form, ie: e.target.value })} />
+          </div>
+          <div>
             <Label>Cidade</Label>
             <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+          </div>
+          <div>
+            <Label>Estado</Label>
+            <Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })} />
+          </div>
+          <div>
+            <Label>Bairro</Label>
+            <Input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} />
+          </div>
+          <div>
+            <Label>CEP</Label>
+            <Input value={form.zipCode} onChange={(e) => setForm({ ...form, zipCode: e.target.value })} />
           </div>
           <div>
             <Label>Endereco</Label>

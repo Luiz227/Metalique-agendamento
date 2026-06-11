@@ -1,7 +1,12 @@
 export type Client = {
   id: string;
   name: string;
+  cnpj?: string | null;
+  ie?: string | null;
   city: string;
+  state?: string | null;
+  district?: string | null;
+  zipCode?: string | null;
   address: string;
   contact?: string;
   phone?: string;

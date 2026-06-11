@@ -97,9 +97,14 @@ export default function AppointmentDetails() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     clientName: '',
+    clientCnpj: '',
+    clientIe: '',
     clientEmail: '',
     clientPhone: '',
     city: '',
+    clientState: '',
+    clientDistrict: '',
+    clientZipCode: '',
     fullAddress: '',
     serviceType: '',
     problemDescription: '',
@@ -192,9 +197,14 @@ export default function AppointmentDetails() {
     if (editing) return;
     setForm({
       clientName: appointment.client?.name ?? '',
+      clientCnpj: appointment.client?.cnpj ?? '',
+      clientIe: appointment.client?.ie ?? '',
       clientEmail: appointment.client?.email ?? '',
       clientPhone: appointment.client?.phone ?? '',
       city: appointment.city ?? '',
+      clientState: appointment.client?.state ?? '',
+      clientDistrict: appointment.client?.district ?? '',
+      clientZipCode: appointment.client?.zipCode ?? '',
       fullAddress: appointment.fullAddress ?? '',
       serviceType: appointment.serviceType ?? '',
       problemDescription: appointment.problemDescription ?? '',
@@ -363,9 +373,14 @@ export default function AppointmentDetails() {
           method: 'PUT',
           body: JSON.stringify({
             name: form.clientName,
+            cnpj: form.clientCnpj || null,
+            ie: form.clientIe || null,
             email: form.clientEmail || null,
             phone: form.clientPhone || null,
             city: form.city,
+            state: form.clientState || null,
+            district: form.clientDistrict || null,
+            zipCode: form.clientZipCode || null,
             address: form.fullAddress
           })
         }),
@@ -605,12 +620,32 @@ export default function AppointmentDetails() {
                 {editing ? <Input value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.name ?? 'Nao informado'}</p>}
               </div>
               <div>
+                <span className="text-muted-foreground">CNPJ</span>
+                {editing ? <Input value={form.clientCnpj} onChange={(e) => setForm({ ...form, clientCnpj: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.cnpj ?? 'Nao informado'}</p>}
+              </div>
+              <div>
                 <span className="text-muted-foreground">Email</span>
                 {editing ? <Input value={form.clientEmail} onChange={(e) => setForm({ ...form, clientEmail: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.email ?? 'Nao informado'}</p>}
               </div>
               <div>
                 <span className="text-muted-foreground">Telefone</span>
                 {editing ? <Input value={form.clientPhone} onChange={(e) => setForm({ ...form, clientPhone: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.phone ?? 'Nao informado'}</p>}
+              </div>
+              <div>
+                <span className="text-muted-foreground">IE</span>
+                {editing ? <Input value={form.clientIe} onChange={(e) => setForm({ ...form, clientIe: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.ie ?? 'Nao informado'}</p>}
+              </div>
+              <div>
+                <span className="text-muted-foreground">Bairro</span>
+                {editing ? <Input value={form.clientDistrict} onChange={(e) => setForm({ ...form, clientDistrict: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.district ?? 'Nao informado'}</p>}
+              </div>
+              <div>
+                <span className="text-muted-foreground">Estado</span>
+                {editing ? <Input value={form.clientState} onChange={(e) => setForm({ ...form, clientState: e.target.value.toUpperCase() })} className="mt-1" /> : <p className="font-medium">{appointment.client?.state ?? 'Nao informado'}</p>}
+              </div>
+              <div>
+                <span className="text-muted-foreground">CEP</span>
+                {editing ? <Input value={form.clientZipCode} onChange={(e) => setForm({ ...form, clientZipCode: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.zipCode ?? 'Nao informado'}</p>}
               </div>
               <div>
                 <span className="text-muted-foreground">Tipo de servico</span>

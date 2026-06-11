@@ -18,7 +18,11 @@ export class ClientsService {
       data: {
         name: String(body.name ?? ''),
         cnpj: body.cnpj ? String(body.cnpj) : null,
+        ie: body.ie ? String(body.ie) : null,
         city: String(body.city ?? ''),
+        state: body.state ? String(body.state) : null,
+        district: body.district ? String(body.district) : null,
+        zipCode: body.zipCode ? String(body.zipCode) : null,
         address: String(body.address ?? ''),
         phone: body.phone ? String(body.phone) : null,
         email: body.email ? String(body.email) : null
@@ -32,7 +36,11 @@ export class ClientsService {
       data: {
         name: body.name !== undefined ? String(body.name) : undefined,
         cnpj: body.cnpj !== undefined ? (body.cnpj ? String(body.cnpj) : null) : undefined,
+        ie: body.ie !== undefined ? (body.ie ? String(body.ie) : null) : undefined,
         city: body.city !== undefined ? String(body.city) : undefined,
+        state: body.state !== undefined ? (body.state ? String(body.state) : null) : undefined,
+        district: body.district !== undefined ? (body.district ? String(body.district) : null) : undefined,
+        zipCode: body.zipCode !== undefined ? (body.zipCode ? String(body.zipCode) : null) : undefined,
         address: body.address !== undefined ? String(body.address) : undefined,
         phone: body.phone !== undefined ? (body.phone ? String(body.phone) : null) : undefined,
         email: body.email !== undefined ? (body.email ? String(body.email) : null) : undefined

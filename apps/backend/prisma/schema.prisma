@@ -64,7 +64,11 @@ model Client {
   id            String        @id @default(cuid())
   name          String
   cnpj          String?
+  ie            String?
   city          String
+  state         String?
+  district      String?
+  zipCode       String?
   address       String
   phone         String?
   email         String?

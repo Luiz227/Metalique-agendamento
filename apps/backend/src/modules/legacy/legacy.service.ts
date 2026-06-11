@@ -749,7 +749,16 @@ export class LegacyService {
       machineName: string | null;
       machineModel: string | null;
       machineSerial: string | null;
-      client: { name: string; phone: string | null; email: string | null; cnpj: string | null };
+      client: {
+        name: string;
+        phone: string | null;
+        email: string | null;
+        cnpj: string | null;
+        ie: string | null;
+        state: string | null;
+        district: string | null;
+        zipCode: string | null;
+      };
       technician: { name: string } | null;
     },
     templateBytes: Buffer,
@@ -762,7 +771,7 @@ export class LegacyService {
     const acceptanceDate = report.finishedAt ? new Date(report.finishedAt) : new Date();
     const company = this.resolveServiceOrderCompany(appointment.serviceType);
     const osNumber = appointment.osNumber || appointment.id;
-    const { bairro, cep } = this.extractAddressDetails(appointment.fullAddress);
+    const addressDetails = this.extractLocationDetailsFromClient(appointment.client, appointment.fullAddress, appointment.city);
     const serviceCode = this.isStartOrTraining(appointment.serviceType) ? '10021' : '10012';
     const serviceDescription = this.isStartOrTraining(appointment.serviceType)
       ? 'INSTALACAO (START / OU TREINAMENTO) TODAS AS MAQUINAS'
@@ -773,12 +782,12 @@ export class LegacyService {
       CLIENTE: appointment.client.name || 'Nao informado',
       TELEFONE: appointment.client.phone || 'Nao informado',
       CPF_CNPJ: appointment.client.cnpj || 'Nao informado',
-      IE: 'Nao informado',
-      BAIRRO: bairro,
+      IE: appointment.client.ie || 'Nao informado',
+      BAIRRO: addressDetails.bairro,
       ENDERECO: appointment.fullAddress || 'Nao informado',
       EMAIL: appointment.client.email || 'Nao informado',
-      CIDADE: appointment.city || 'Nao informado',
-      CEP: cep,
+      CIDADE: addressDetails.cidade,
+      CEP: addressDetails.cep,
       TECNICO: appointment.technician?.name || 'Nao informado',
       DATA_VISITA: this.formatDateOnly(appointment.date),
       CODIGO_EQUIPAMENTO: appointment.machineSerial || osNumber,
@@ -820,7 +829,16 @@ export class LegacyService {
       machineName: string | null;
       machineModel: string | null;
       machineSerial: string | null;
-      client: { name: string; phone: string | null; email: string | null; cnpj: string | null };
+      client: {
+        name: string;
+        phone: string | null;
+        email: string | null;
+        cnpj: string | null;
+        ie: string | null;
+        state: string | null;
+        district: string | null;
+        zipCode: string | null;
+      };
       technician: { name: string } | null;
     },
     templateBytes: Buffer,
@@ -835,7 +853,7 @@ export class LegacyService {
     const visitDate = appointment.date;
     const company = this.resolveServiceOrderCompany(appointment.serviceType);
     const osNumber = appointment.osNumber || appointment.id;
-    const address = this.extractLocationDetails(appointment.fullAddress, appointment.city);
+    const address = this.extractLocationDetailsFromClient(appointment.client, appointment.fullAddress, appointment.city);
     const equipmentCode = appointment.machineSerial || osNumber;
     const equipmentName = appointment.machineName || appointment.serviceType || 'Nao informado';
     const equipmentModel = appointment.machineModel || 'Nao informado';
@@ -856,7 +874,7 @@ export class LegacyService {
       Email: appointment.client.email || 'Nao informado',
       EnderecoCliente: appointment.fullAddress || 'Nao informado',
       Estado: address.estado,
-      IE: 'Nao informado',
+      IE: appointment.client.ie || 'Nao informado',
       OsDataVisita: this.formatDateOnly(visitDate),
       OsEquipamentoCodigo: equipmentCode,
       OsEquipamentoFabricante: kind === 'start' ? 'METALIQUE LASER E PLASMA CNC' : company.logoText,
@@ -1379,6 +1397,20 @@ export class LegacyService {
     };
   }
 
+  private extractLocationDetailsFromClient(
+    client: { state: string | null; district: string | null; zipCode: string | null } | null | undefined,
+    fullAddress: string | null,
+    city: string | null
+  ) {
+    const derived = this.extractLocationDetails(fullAddress, city);
+    return {
+      ...derived,
+      bairro: client?.district?.trim() || derived.bairro,
+      cep: client?.zipCode?.trim() || derived.cep,
+      estado: client?.state?.trim().toUpperCase() || derived.estado
+    };
+  }
+
   private escapeXml(value: string | number | null | undefined) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -1492,7 +1524,19 @@ export class LegacyService {
     hotelCheckIn: Date | null;
     hotelCheckOut: Date | null;
     hotelNotes: string | null;
-    client: { id: string; name: string; city: string; address: string; phone: string | null; email: string | null };
+    client: {
+      id: string;
+      name: string;
+      cnpj: string | null;
+      ie: string | null;
+      city: string;
+      state: string | null;
+      district: string | null;
+      zipCode: string | null;
+      address: string;
+      phone: string | null;
+      email: string | null;
+    };
     technician: { id: string; name: string; baseCity: string; baseAddress: string; specialties: string[]; active: boolean; color: string } | null;
     attachments?: { id: string; kind: string; originalName: string; mimeType: string; size: number; publicUrl: string | null; createdAt: Date }[];
     statusLogs: { id: string; status: string; createdAt: Date; observation: string | null }[];

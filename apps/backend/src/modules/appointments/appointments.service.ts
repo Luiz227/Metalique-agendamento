@@ -249,7 +249,12 @@ export class AppointmentsService {
       client: {
         id: row.client.id,
         name: row.client.name,
+        cnpj: row.client.cnpj,
+        ie: row.client.ie,
         city: row.client.city,
+        state: row.client.state,
+        district: row.client.district,
+        zipCode: row.client.zipCode,
         address: row.client.address,
         phone: row.client.phone,
         email: row.client.email,

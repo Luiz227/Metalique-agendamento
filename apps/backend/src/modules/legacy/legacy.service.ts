@@ -1613,7 +1613,16 @@ export class LegacyService {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Falha ao enviar arquivo para o Google Drive';
-        if (message.includes('Service Accounts do not have storage quota')) {
+        if (kind === ATTACHMENT_KIND.TECHNICAL_REPORT && file?.buffer?.length) {
+          uploadResult = await this.saveAttachmentInline({
+            attachmentId,
+            appointmentId,
+            fileName: originalName,
+            mimeType,
+            buffer: file.buffer,
+            baseUrl: baseUrl ?? null
+          });
+        } else if (message.includes('Service Accounts do not have storage quota')) {
           throw new InternalServerErrorException(
             'Google Drive bloqueou o upload para Service Account sem cota. Compartilhe uma Unidade Compartilhada com esta Service Account ou use delegacao OAuth de usuario.'
           );

@@ -779,9 +779,7 @@ export class LegacyService {
       ConsideracoesDoTecnico: report.summary?.trim() || 'Nao informado',
       DATA_ACEITE_DIA: String(acceptanceDate.getDate()).padStart(2, '0'),
       DATA_ACEITE_MES: String(acceptanceDate.getMonth() + 1).padStart(2, '0'),
-      DATA_ACEITE_ANO: String(acceptanceDate.getFullYear()),
-      AssinaturaTecnico: appointment.technician?.name || '',
-      AssinaturaCliente: appointment.client.name || ''
+      DATA_ACEITE_ANO: String(acceptanceDate.getFullYear())
     };
 
     for (const name of Object.keys(zip.files)) {
@@ -789,7 +787,14 @@ export class LegacyService {
       const file = zip.file(name);
       if (!file) continue;
       const content = await file.async('string');
-      zip.file(name, this.replaceDocxPlaceholders(content, placeholders));
+      let updated = this.replaceDocxPlaceholders(content, placeholders);
+      if (name === 'word/document.xml') {
+        updated = await this.injectDocxSignatureImages(zip, updated, {
+          technicianSignatureDataUrl: report.technicianSignatureDataUrl,
+          clientSignatureDataUrl: report.clientSignatureDataUrl
+        });
+      }
+      zip.file(name, updated);
     }
 
     return Buffer.from(await zip.generateAsync({ type: 'nodebuffer' }));
@@ -883,9 +888,7 @@ export class LegacyService {
       VendedorEmail: 'agenda@metalique.com.br',
       CONSIDERACOES_TECNICO: report.summary?.trim() || 'Nao informado',
       CosideracoesDoTecnico: report.summary?.trim() || 'Nao informado',
-      ConsideracoesDoTecnico: report.summary?.trim() || 'Nao informado',
-      AssinaturaTecnico: technicianName,
-      AssinaturaCliente: appointment.client.name || 'Nao informado'
+      ConsideracoesDoTecnico: report.summary?.trim() || 'Nao informado'
     };
 
     if (kind === 'start') {
@@ -910,12 +913,19 @@ export class LegacyService {
       const file = zip.file(name);
       if (!file) continue;
       const content = await file.async('string');
+      let updated = this.replaceDocxPlaceholders(content, placeholders, {
+        notesText: report.summary?.trim() || 'Nao informado',
+        acceptanceDate: report.finishedAt ? new Date(report.finishedAt) : new Date()
+      });
+      if (name === 'word/document.xml') {
+        updated = await this.injectDocxSignatureImages(zip, updated, {
+          technicianSignatureDataUrl: report.technicianSignatureDataUrl,
+          clientSignatureDataUrl: report.clientSignatureDataUrl
+        });
+      }
       zip.file(
         name,
-        this.replaceDocxPlaceholders(content, placeholders, {
-          notesText: report.summary?.trim() || 'Nao informado',
-          acceptanceDate: report.finishedAt ? new Date(report.finishedAt) : new Date()
-        })
+        updated
       );
     }
 
@@ -1116,6 +1126,148 @@ export class LegacyService {
   private fillAcceptanceDateArea(xml: string, acceptanceDate: Date) {
     const formatted = this.escapeXml(this.formatDateOnly(acceptanceDate));
     return xml.replace(/(__\/__\/____|___\/___\/_____)/g, formatted);
+  }
+
+  private async injectDocxSignatureImages(
+    zip: JSZip,
+    xml: string,
+    signatures: {
+      technicianSignatureDataUrl?: string;
+      clientSignatureDataUrl?: string;
+    }
+  ) {
+    let result = xml;
+    const relsFile = zip.file('word/_rels/document.xml.rels');
+    if (!relsFile) return this.removeDocxSignaturePlaceholders(result);
+
+    let relsXml = await relsFile.async('string');
+    let contentTypesXml = await zip.file('[Content_Types].xml')?.async('string');
+    if (!contentTypesXml) return this.removeDocxSignaturePlaceholders(result);
+
+    let nextRelId = this.getNextDocxRelationshipId(relsXml);
+    let nextDocPrId = this.getNextDocxDocPrId(result);
+
+    const applySignature = async (token: string, dataUrl?: string) => {
+      if (!dataUrl) {
+        result = this.replaceDocxSignaturePlaceholder(result, token, '');
+        return;
+      }
+
+      const parsed = this.parseDocxImageDataUrl(dataUrl);
+      const ext = parsed.mimeType === 'image/png' ? 'png' : 'jpg';
+      const mediaFileName = `signature-${randomUUID()}.${ext}`;
+      const mediaPath = `word/media/${mediaFileName}`;
+      zip.file(mediaPath, parsed.bytes);
+      contentTypesXml = this.ensureDocxContentType(contentTypesXml!, ext);
+
+      const relId = `rId${nextRelId++}`;
+      relsXml = relsXml.replace(
+        '</Relationships>',
+        `<Relationship Id="${relId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${mediaFileName}"/></Relationships>`
+      );
+
+      const docPrId = nextDocPrId++;
+      const drawingXml = this.buildDocxInlineImageXml(relId, docPrId, token);
+      result = this.replaceDocxSignaturePlaceholder(result, token, drawingXml);
+    };
+
+    await applySignature('AssinaturaTecnico', signatures.technicianSignatureDataUrl);
+    await applySignature('AssinaturaCliente', signatures.clientSignatureDataUrl);
+
+    zip.file('word/_rels/document.xml.rels', relsXml);
+    zip.file('[Content_Types].xml', contentTypesXml);
+    return result;
+  }
+
+  private replaceDocxSignaturePlaceholder(xml: string, token: string, replacementXml: string) {
+    const patterns = [
+      new RegExp(
+        `<w:r[^>]*>[\\s\\S]*?<w:t[^>]*>\\s*##${this.escapeRegex(token)}##\\s*<\\/w:t>[\\s\\S]*?<\\/w:r>`,
+        'g'
+      ),
+      new RegExp(
+        `<w:r[^>]*>[\\s\\S]*?<w:t[^>]*>\\s*\\{\\s*${this.escapeRegex(token)}\\s*\\}\\s*<\\/w:t>[\\s\\S]*?<\\/w:r>`,
+        'g'
+      )
+    ];
+
+    let updated = xml;
+    for (const pattern of patterns) {
+      updated = updated.replace(pattern, replacementXml);
+    }
+    return updated;
+  }
+
+  private removeDocxSignaturePlaceholders(xml: string) {
+    return xml
+      .replace(/##\s*AssinaturaTecnico\s*##/g, '')
+      .replace(/##\s*AssinaturaCliente\s*##/g, '')
+      .replace(/\{\s*AssinaturaTecnico\s*\}/g, '')
+      .replace(/\{\s*AssinaturaCliente\s*\}/g, '');
+  }
+
+  private getNextDocxRelationshipId(relsXml: string) {
+    const matches = Array.from(relsXml.matchAll(/Id="rId(\d+)"/g)).map((match) => Number(match[1]));
+    return (matches.length ? Math.max(...matches) : 0) + 1;
+  }
+
+  private getNextDocxDocPrId(xml: string) {
+    const matches = Array.from(xml.matchAll(/<wp:docPr[^>]*id="(\d+)"/g)).map((match) => Number(match[1]));
+    return (matches.length ? Math.max(...matches) : 1000) + 1;
+  }
+
+  private parseDocxImageDataUrl(dataUrl: string) {
+    const [meta, base64] = dataUrl.split(',');
+    const mimeType = meta?.includes('image/png') ? 'image/png' : 'image/jpeg';
+    return {
+      mimeType,
+      bytes: Buffer.from(base64 ?? '', 'base64')
+    };
+  }
+
+  private ensureDocxContentType(contentTypesXml: string, ext: 'png' | 'jpg') {
+    if (ext === 'png' && !contentTypesXml.includes('Extension="png"')) {
+      return contentTypesXml.replace(
+        '</Types>',
+        '<Default Extension="png" ContentType="image/png"/></Types>'
+      );
+    }
+    if (ext === 'jpg' && !contentTypesXml.includes('Extension="jpg"')) {
+      return contentTypesXml.replace(
+        '</Types>',
+        '<Default Extension="jpg" ContentType="image/jpeg"/></Types>'
+      );
+    }
+    return contentTypesXml;
+  }
+
+  private buildDocxInlineImageXml(relId: string, docPrId: number, name: string) {
+    const widthEmu = 2_350_000;
+    const heightEmu = 650_000;
+    return [
+      '<w:r>',
+      '<w:drawing>',
+      '<wp:inline distT="0" distB="0" distL="0" distR="0">',
+      `<wp:extent cx="${widthEmu}" cy="${heightEmu}"/>`,
+      '<wp:effectExtent l="0" t="0" r="0" b="0"/>',
+      `<wp:docPr id="${docPrId}" name="${this.escapeXml(name)}"/>`,
+      '<wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>',
+      '<a:graphic>',
+      '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">',
+      '<pic:pic>',
+      `<pic:nvPicPr><pic:cNvPr id="${docPrId}" name="${this.escapeXml(name)}"/><pic:cNvPicPr/></pic:nvPicPr>`,
+      `<pic:blipFill><a:blip r:embed="${relId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>`,
+      '<pic:spPr>',
+      `<a:xfrm><a:off x="0" y="0"/><a:ext cx="${widthEmu}" cy="${heightEmu}"/></a:xfrm>`,
+      '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>',
+      '</pic:spPr>',
+      '</pic:pic>',
+      '</a:graphicData>',
+      '</a:graphic>',
+      '</wp:inline>',
+      '</w:drawing>',
+      '</w:r>'
+    ].join('');
   }
 
   private wrapTechnicalNotes(text: string, maxLines: number, maxCharsPerLine: number) {

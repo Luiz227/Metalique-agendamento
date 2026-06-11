@@ -1910,7 +1910,7 @@ export class LegacyService {
     const clientFolderId = await this.findOrCreateFolder(drive, safeClient, rootFolderId);
     const osFolderId = await this.findOrCreateFolder(drive, safeOs, clientFolderId);
 
-    const shouldConvertToGoogleDoc = params.mimeType === 'text/html' || params.mimeType === DOCX_MIME_TYPE;
+    const shouldConvertToGoogleDoc = params.mimeType === 'text/html';
     const driveFileName = shouldConvertToGoogleDoc
       ? params.fileName.replace(/\.(html?|docx)$/i, '')
       : params.fileName;

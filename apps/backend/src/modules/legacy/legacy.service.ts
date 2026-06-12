@@ -1719,7 +1719,11 @@ export class LegacyService {
     }
 
     if (placeholders.Estado) {
-      result = result.replace(/#Estado##/g, this.escapeXml(placeholders.Estado));
+      const estado = this.escapeXml(placeholders.Estado);
+      result = result
+        .replace(/#\s*#\s*Estado\s*##/g, estado)
+        .replace(/#Estado##/g, estado);
+      result = this.removeLeftoverStateHash(result, estado);
     }
 
     if (extra) {
@@ -1728,6 +1732,35 @@ export class LegacyService {
     }
 
     return this.removeDocxSignaturePlaceholders(result);
+  }
+
+  private removeLeftoverStateHash(xml: string, escapedState: string) {
+    if (!escapedState) return xml;
+
+    const escapedStateRegex = this.escapeRegex(escapedState);
+    const cityStateWithHash = new RegExp(`Cidade:[\\s\\S]*-\\s*#\\s*${escapedStateRegex}\\b`);
+
+    return xml.replace(/<w:p\b[\s\S]*?<\/w:p>/g, (paragraphXml) => {
+      const visibleText = Array.from(paragraphXml.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g))
+        .map((match) => match[1])
+        .join('');
+
+      if (!cityStateWithHash.test(visibleText)) return paragraphXml;
+
+      let removed = false;
+      return paragraphXml.replace(/<w:t([^>]*)>([\s\S]*?)<\/w:t>/g, (full, attrs, text) => {
+        if (removed) return full;
+
+        const updated = text
+          .replace(new RegExp(`#\\s*(?=${escapedStateRegex}\\b)`), '')
+          .replace(/#\s*$/u, '');
+
+        if (updated === text) return full;
+
+        removed = true;
+        return `<w:t${attrs}>${updated}</w:t>`;
+      });
+    });
   }
 
   private replaceStandaloneSplitDocxPlaceholder(xml: string, key: string, escapedValue: string) {

@@ -454,6 +454,13 @@ export class LegacyService {
           reportDocx,
           'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10)
         );
+
+        reportPdf = await this.applySignaturesToPdf(reportPdf, officialTemplate.originalName, {
+          finishedAt: report?.finishedAt,
+          clientSignatureDataUrl: report?.clientSignatureDataUrl,
+          technicianSignatureDataUrl: report?.technicianSignatureDataUrl,
+          technicianName: appointment.technician?.name
+        });
       } else {
         reportPdf = await this.buildGeneratedServiceOrderPdf(appointment, {
           summary,
@@ -1378,21 +1385,21 @@ export class LegacyService {
           y: height * 0.112,
           fontSize: 11
         },
-        clientSignatureBox: {
-          x: width * 0.12,
-          y: height * 0.228,
-          width: width * 0.23,
-          height: height * 0.045
-        },
         technicianSignatureBox: {
-          x: width * 0.6,
-          y: height * 0.228,
-          width: width * 0.22,
-          height: height * 0.045
+          x: width * 0.055,
+          y: height * 0.09,
+          width: width * 0.31,
+          height: height * 0.06
+        },
+        clientSignatureBox: {
+          x: width * 0.62,
+          y: height * 0.09,
+          width: width * 0.29,
+          height: height * 0.06
         },
         technicianName: {
-          x: width * 0.68,
-          y: height * 0.184,
+          x: width * 0.14,
+          y: height * 0.06,
           fontSize: 9
         }
       };
@@ -1732,7 +1739,7 @@ export class LegacyService {
             signatureRelationshipIds.AssinaturaTecnico,
             nextDocPrId++,
             'AssinaturaTecnico',
-            { widthEmu: 1_900_000, heightEmu: 520_000 }
+            { widthEmu: 1_650_000, heightEmu: 360_000 }
           )
         : undefined,
       clientDrawingXml: signatureRelationshipIds.AssinaturaCliente
@@ -1740,7 +1747,7 @@ export class LegacyService {
             signatureRelationshipIds.AssinaturaCliente,
             nextDocPrId++,
             'AssinaturaCliente',
-            { widthEmu: 1_900_000, heightEmu: 520_000 }
+            { widthEmu: 1_650_000, heightEmu: 360_000 }
           )
         : undefined
     });
@@ -1756,7 +1763,7 @@ export class LegacyService {
             signatureRelationshipIds.AssinaturaTecnico,
             nextDocPrId++,
             'AssinaturaTecnico',
-            { widthEmu: 1_900_000, heightEmu: 520_000 }
+            { widthEmu: 1_650_000, heightEmu: 360_000 }
           )
         );
       } else {
@@ -1771,7 +1778,7 @@ export class LegacyService {
             signatureRelationshipIds.AssinaturaCliente,
             nextDocPrId++,
             'AssinaturaCliente',
-            { widthEmu: 1_900_000, heightEmu: 520_000 }
+            { widthEmu: 1_650_000, heightEmu: 360_000 }
           )
         );
       } else {
@@ -1821,7 +1828,8 @@ export class LegacyService {
       replacements[lastCellIndex] = this.buildDocxSignatureCellBody(signatures.clientDrawingXml);
     }
 
-    const updatedSignatureRow = this.replaceDocxTableCellBodies(rows[signatureRowIndex], replacements);
+    let updatedSignatureRow = this.replaceDocxTableCellBodies(rows[signatureRowIndex], replacements);
+    updatedSignatureRow = this.setDocxTableRowHeight(updatedSignatureRow, 920);
 
     if (updatedSignatureRow === rows[signatureRowIndex]) return xml;
 
@@ -1847,6 +1855,18 @@ export class LegacyService {
 
       return cellXml;
     });
+  }
+
+  private setDocxTableRowHeight(rowXml: string, heightTwips: number) {
+    if (/<w:trHeight\b/.test(rowXml)) {
+      return rowXml.replace(/<w:trHeight\b[^>]*w:val="[^"]*"[^/]*\/>/, `<w:trHeight w:val="${heightTwips}"/>`);
+    }
+
+    if (/<w:trPr>/.test(rowXml)) {
+      return rowXml.replace('<w:trPr>', `<w:trPr><w:trHeight w:val="${heightTwips}"/>`);
+    }
+
+    return rowXml.replace('<w:tr', `<w:tr><w:trPr><w:trHeight w:val="${heightTwips}"/></w:trPr>`);
   }
 
   private buildDocxSignatureCellBody(drawingXml: string) {

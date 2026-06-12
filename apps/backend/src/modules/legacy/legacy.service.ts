@@ -1777,7 +1777,31 @@ export class LegacyService {
 
   private fillAcceptanceDateArea(xml: string, acceptanceDate: Date) {
     const formatted = this.escapeXml(this.formatDateOnly(acceptanceDate));
-    return xml.replace(/(__\/__\/____|___\/___\/_____)/g, formatted);
+    let result = xml.replace(/(__\/__\/____|___\/___\/_____)/g, formatted);
+    if (result !== xml) return result;
+
+    const declarationParagraphRegex =
+      /(<w:p\b[\s\S]*?<w:t[^>]*>[\s\S]*?nesta data[\s\S]*?<\/w:t>[\s\S]*?<\/w:p>)(?![\s\S]{0,800}?<w:t[^>]*>\d{2}\/\d{2}\/\d{4}<\/w:t>)/u;
+
+    return result.replace(declarationParagraphRegex, (_match, declarationParagraph) => {
+      return `${declarationParagraph}${this.buildDocxAcceptanceDateParagraph(formatted)}`;
+    });
+  }
+
+  private buildDocxAcceptanceDateParagraph(formattedDate: string) {
+    return [
+      '<w:p>',
+      '<w:pPr>',
+      '<w:jc w:val="center"/>',
+      '<w:spacing w:before="80" w:after="120" w:line="240" w:lineRule="auto"/>',
+      '<w:rPr><w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>',
+      '</w:pPr>',
+      '<w:r>',
+      '<w:rPr><w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>',
+      `<w:t>${formattedDate}</w:t>`,
+      '</w:r>',
+      '</w:p>'
+    ].join('');
   }
 
   private async injectDocxSignatureImages(

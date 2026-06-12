@@ -458,7 +458,8 @@ export class LegacyService {
         reportPdf = await this.applySignaturesToPdf(reportPdf, officialTemplate.originalName, {
           finishedAt: report?.finishedAt,
           clientSignatureDataUrl: report?.clientSignatureDataUrl,
-          technicianSignatureDataUrl: report?.technicianSignatureDataUrl
+          technicianSignatureDataUrl: report?.technicianSignatureDataUrl,
+          technicianName: appointment.technician?.name
         });
       } else {
         reportPdf = await this.buildGeneratedServiceOrderPdf(appointment, {
@@ -957,10 +958,12 @@ export class LegacyService {
       finishedAt?: string;
       clientSignatureDataUrl?: string;
       technicianSignatureDataUrl?: string;
+      technicianName?: string | null;
     }
   ) {
     const pdf = await PDFDocument.load(pdfBytes);
     const page = pdf.getPages()[pdf.getPageCount() - 1];
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold);
     const { width, height } = page.getSize();
     const layout = this.getServiceOrderPdfLayout(width, height, originalName);
@@ -975,8 +978,18 @@ export class LegacyService {
       color: rgb(0.08, 0.08, 0.08)
     });
 
-    await this.drawSignatureOnPdf(pdf, page, report.technicianSignatureDataUrl, layout.technicianSignatureBox);
     await this.drawSignatureOnPdf(pdf, page, report.clientSignatureDataUrl, layout.clientSignatureBox);
+    await this.drawSignatureOnPdf(pdf, page, report.technicianSignatureDataUrl, layout.technicianSignatureBox);
+
+    if (layout.technicianName && report.technicianName) {
+      page.drawText(report.technicianName, {
+        x: layout.technicianName.x,
+        y: layout.technicianName.y,
+        font,
+        size: layout.technicianName.fontSize,
+        color: rgb(0.08, 0.08, 0.08)
+      });
+    }
 
     return Buffer.from(await pdf.save());
   }
@@ -1366,17 +1379,22 @@ export class LegacyService {
           y: height * 0.112,
           fontSize: 11
         },
-        technicianSignatureBox: {
-          x: width * 0.04,
-          y: height * 0.214,
-          width: width * 0.33,
-          height: height * 0.038
-        },
         clientSignatureBox: {
-          x: width * 0.615,
-          y: height * 0.214,
-          width: width * 0.305,
-          height: height * 0.038
+          x: width * 0.12,
+          y: height * 0.228,
+          width: width * 0.23,
+          height: height * 0.045
+        },
+        technicianSignatureBox: {
+          x: width * 0.6,
+          y: height * 0.228,
+          width: width * 0.22,
+          height: height * 0.045
+        },
+        technicianName: {
+          x: width * 0.68,
+          y: height * 0.184,
+          fontSize: 9
         }
       };
     }
@@ -1386,14 +1404,14 @@ export class LegacyService {
         x: width * 0.025,
         y: height * 0.185,
         width: width * 0.95,
-        height: height * 0.12,
-        paddingX: 10,
-        paddingTop: 12,
-        maxLines: 4,
-        lineHeight: 14
+        height: height * 0.115,
+        paddingX: 8,
+        paddingTop: 10,
+        maxLines: 5,
+        lineHeight: 13
       },
       acceptanceDate: {
-        x: width * 0.47,
+        x: width * 0.485,
         y: height * 0.135,
         fontSize: 11
       },
@@ -1408,7 +1426,8 @@ export class LegacyService {
         y: height * 0.038,
         width: width * 0.3,
         height: height * 0.045
-      }
+      },
+      technicianName: undefined
     };
   }
 

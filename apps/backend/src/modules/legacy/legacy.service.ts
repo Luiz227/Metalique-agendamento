@@ -454,6 +454,12 @@ export class LegacyService {
           reportDocx,
           'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10)
         );
+
+        reportPdf = await this.applySignaturesToPdf(reportPdf, officialTemplate.originalName, {
+          finishedAt: report?.finishedAt,
+          clientSignatureDataUrl: report?.clientSignatureDataUrl,
+          technicianSignatureDataUrl: report?.technicianSignatureDataUrl
+        });
       } else {
         reportPdf = await this.buildGeneratedServiceOrderPdf(appointment, {
           summary,
@@ -883,18 +889,10 @@ export class LegacyService {
       const file = zip.file(name);
       if (!file) continue;
       const content = await file.async('string');
-      let updated = this.replaceDocxPlaceholders(content, placeholders, {
+      const updated = this.replaceDocxPlaceholders(content, placeholders, {
         notesText: report.summary?.trim() || 'Nao informado',
         acceptanceDate: report.finishedAt ? new Date(report.finishedAt) : new Date()
-      }, {
-        preserveSignaturePlaceholders: name === 'word/document.xml'
       });
-      if (name === 'word/document.xml') {
-        updated = await this.injectDocxSignatureImages(zip, updated, {
-          technicianSignatureDataUrl: report.technicianSignatureDataUrl,
-          clientSignatureDataUrl: report.clientSignatureDataUrl
-        });
-      }
       zip.file(
         name,
         updated
@@ -1370,15 +1368,15 @@ export class LegacyService {
         },
         technicianSignatureBox: {
           x: width * 0.035,
-          y: height * 0.118,
+          y: height * 0.168,
           width: width * 0.34,
-          height: height * 0.024
+          height: height * 0.03
         },
         clientSignatureBox: {
           x: width * 0.62,
-          y: height * 0.118,
+          y: height * 0.168,
           width: width * 0.31,
-          height: height * 0.024
+          height: height * 0.03
         }
       };
     }
@@ -1621,8 +1619,7 @@ export class LegacyService {
   private replaceDocxPlaceholders(
     xml: string,
     placeholders: Record<string, string>,
-    extra?: { notesText?: string; acceptanceDate?: Date },
-    options?: { preserveSignaturePlaceholders?: boolean }
+    extra?: { notesText?: string; acceptanceDate?: Date }
   ) {
     let result = xml;
     for (const [key, value] of Object.entries(placeholders)) {
@@ -1642,7 +1639,7 @@ export class LegacyService {
       result = this.fillAcceptanceDateArea(result, extra.acceptanceDate ?? new Date());
     }
 
-    return options?.preserveSignaturePlaceholders ? result : this.removeDocxSignaturePlaceholders(result);
+    return this.removeDocxSignaturePlaceholders(result);
   }
 
   private fillTechnicalNotesArea(xml: string, notesText: string) {

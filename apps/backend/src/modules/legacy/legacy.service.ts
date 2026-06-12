@@ -454,13 +454,6 @@ export class LegacyService {
           reportDocx,
           'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10)
         );
-
-        reportPdf = await this.applySignaturesToPdf(reportPdf, officialTemplate.originalName, {
-          finishedAt: report?.finishedAt,
-          clientSignatureDataUrl: report?.clientSignatureDataUrl,
-          technicianSignatureDataUrl: report?.technicianSignatureDataUrl,
-          technicianName: appointment.technician?.name
-        });
       } else {
         reportPdf = await this.buildGeneratedServiceOrderPdf(appointment, {
           summary,
@@ -1869,40 +1862,49 @@ export class LegacyService {
   ) {
     if (!signatures.technicianDrawingXml && !signatures.clientDrawingXml) return xml;
 
-    const tableRegex =
-      /<w:tbl[\s\S]*?Assinatura do T(?:écnico|ecnico|TÃ©cnico)[\s\S]*?Assinatura do Cliente[\s\S]*?<\/w:tbl>/u;
-    const tableMatch = xml.match(tableRegex);
+    const technicianLabelPattern = /Assinatura do T(?:écnico|ecnico|TÃ©cnico)/u;
+    const clientLabelPattern = /Assinatura do Cliente/u;
+    const tableMatch = Array.from(xml.matchAll(/<w:tbl[\s\S]*?<\/w:tbl>/g)).find(
+      (match) => technicianLabelPattern.test(match[0]) && clientLabelPattern.test(match[0])
+    );
     if (!tableMatch) return xml;
 
     const tableXml = tableMatch[0];
     const rows = Array.from(tableXml.matchAll(/<w:tr\b[\s\S]*?<\/w:tr>/g)).map((match) => match[0]);
     const labelRowIndex = rows.findIndex(
-      (row) =>
-        /Assinatura do T(?:écnico|ecnico|TÃ©cnico)/u.test(row) &&
-        /Assinatura do Cliente/u.test(row)
+      (row) => technicianLabelPattern.test(row) && clientLabelPattern.test(row)
     );
 
-    if (labelRowIndex <= 0) return xml;
+    if (labelRowIndex < 0) return xml;
 
-    const signatureRowIndex = labelRowIndex - 1;
-    const cellMatches = Array.from(rows[signatureRowIndex].matchAll(/<w:tc\b[\s\S]*?<\/w:tc>/g));
+    const cellMatches = Array.from(rows[labelRowIndex].matchAll(/<w:tc\b[\s\S]*?<\/w:tc>/g));
     if (!cellMatches.length) return xml;
 
-    const lastCellIndex = cellMatches.length - 1;
     const replacements: Record<number, string> = {};
-    if (signatures.technicianDrawingXml) {
-      replacements[0] = this.buildDocxSignatureCellBody(signatures.technicianDrawingXml);
-    }
-    if (signatures.clientDrawingXml) {
-      replacements[lastCellIndex] = this.buildDocxSignatureCellBody(signatures.clientDrawingXml);
-    }
+    cellMatches.forEach((cellMatch, index) => {
+      const cellXml = cellMatch[0];
+      if (clientLabelPattern.test(cellXml) && signatures.clientDrawingXml) {
+        replacements[index] = this.buildDocxSignatureLabeledCellBody(
+          'Assinatura do Cliente:',
+          signatures.clientDrawingXml
+        );
+      }
+      if (technicianLabelPattern.test(cellXml) && signatures.technicianDrawingXml) {
+        replacements[index] = this.buildDocxSignatureLabeledCellBody(
+          'Assinatura do T\u00e9cnico:',
+          signatures.technicianDrawingXml
+        );
+      }
+    });
 
-    let updatedSignatureRow = this.replaceDocxTableCellBodies(rows[signatureRowIndex], replacements);
-    updatedSignatureRow = this.setDocxTableRowHeight(updatedSignatureRow, 920);
+    if (!Object.keys(replacements).length) return xml;
 
-    if (updatedSignatureRow === rows[signatureRowIndex]) return xml;
+    let updatedSignatureRow = this.replaceDocxTableCellBodies(rows[labelRowIndex], replacements);
+    updatedSignatureRow = this.setDocxTableRowHeight(updatedSignatureRow, 1700);
 
-    const updatedTableXml = tableXml.replace(rows[signatureRowIndex], updatedSignatureRow);
+    if (updatedSignatureRow === rows[labelRowIndex]) return xml;
+
+    const updatedTableXml = tableXml.replace(rows[labelRowIndex], updatedSignatureRow);
     return xml.replace(tableXml, updatedTableXml);
   }
 
@@ -1944,6 +1946,24 @@ export class LegacyService {
       '<w:pPr>',
       '<w:jc w:val="center"/>',
       '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/>',
+      '</w:pPr>',
+      drawingXml,
+      '</w:p>'
+    ].join('');
+  }
+
+  private buildDocxSignatureLabeledCellBody(label: string, drawingXml: string) {
+    return [
+      '<w:p>',
+      '<w:pPr><w:spacing w:after="120"/></w:pPr>',
+      '<w:r>',
+      `<w:t>${this.escapeXml(label)}</w:t>`,
+      '</w:r>',
+      '</w:p>',
+      '<w:p>',
+      '<w:pPr>',
+      '<w:jc w:val="center"/>',
+      '<w:spacing w:before="120" w:after="0" w:line="240" w:lineRule="auto"/>',
       '</w:pPr>',
       drawingXml,
       '</w:p>'

@@ -1715,6 +1715,7 @@ export class LegacyService {
       result = result.replace(pattern, escaped);
       const sigePattern = new RegExp(`##\\s*${this.escapeRegex(key)}\\s*##`, 'g');
       result = result.replace(sigePattern, escaped);
+      result = this.replaceStandaloneSplitDocxPlaceholder(result, key, escaped);
     }
 
     if (placeholders.Estado) {
@@ -1727,6 +1728,31 @@ export class LegacyService {
     }
 
     return this.removeDocxSignaturePlaceholders(result);
+  }
+
+  private replaceStandaloneSplitDocxPlaceholder(xml: string, key: string, escapedValue: string) {
+    const tokens = [`##${key}##`, `{${key}}`];
+    return xml.replace(/<w:p\b[\s\S]*?<\/w:p>/g, (paragraphXml) => {
+      const visibleText = Array.from(paragraphXml.matchAll(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g))
+        .map((match) => match[1])
+        .join('')
+        .trim();
+
+      if (!tokens.includes(visibleText)) return paragraphXml;
+
+      const paragraphStart = paragraphXml.match(/^(<w:p\b[^>]*>)([\s\S]*)(<\/w:p>)$/u);
+      if (!paragraphStart) return paragraphXml;
+
+      const paragraphProperties = paragraphStart[2].match(/^(<w:pPr[\s\S]*?<\/w:pPr>)/u)?.[1] ?? '';
+      return [
+        paragraphStart[1],
+        paragraphProperties,
+        '<w:r><w:t xml:space="preserve">',
+        escapedValue,
+        '</w:t></w:r>',
+        paragraphStart[3]
+      ].join('');
+    });
   }
 
   private fillTechnicalNotesArea(xml: string, notesText: string) {

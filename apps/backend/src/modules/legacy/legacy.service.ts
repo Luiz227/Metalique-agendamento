@@ -454,13 +454,6 @@ export class LegacyService {
           reportDocx,
           'ordem-servico-preenchida-' + (appointment.osNumber || appointment.id) + '-' + new Date().toISOString().slice(0, 10)
         );
-
-        reportPdf = await this.applySignaturesToPdf(reportPdf, officialTemplate.originalName, {
-          finishedAt: report?.finishedAt,
-          clientSignatureDataUrl: report?.clientSignatureDataUrl,
-          technicianSignatureDataUrl: report?.technicianSignatureDataUrl,
-          technicianName: appointment.technician?.name
-        });
       } else {
         reportPdf = await this.buildGeneratedServiceOrderPdf(appointment, {
           summary,
@@ -890,10 +883,16 @@ export class LegacyService {
       const file = zip.file(name);
       if (!file) continue;
       const content = await file.async('string');
-      const updated = this.replaceDocxPlaceholders(content, placeholders, {
+      let updated = this.replaceDocxPlaceholders(content, placeholders, {
         notesText: report.summary?.trim() || 'Nao informado',
         acceptanceDate: report.finishedAt ? new Date(report.finishedAt) : new Date()
       });
+      if (name === 'word/document.xml') {
+        updated = await this.injectDocxSignatureImages(zip, updated, {
+          technicianSignatureDataUrl: report.technicianSignatureDataUrl,
+          clientSignatureDataUrl: report.clientSignatureDataUrl
+        });
+      }
       zip.file(
         name,
         updated
@@ -1704,12 +1703,10 @@ export class LegacyService {
 
     let nextRelId = this.getNextDocxRelationshipId(relsXml);
     let nextDocPrId = this.getNextDocxDocPrId(result);
+    const signatureRelationshipIds: Partial<Record<'AssinaturaTecnico' | 'AssinaturaCliente', string>> = {};
 
-    const applySignature = async (token: string, dataUrl?: string) => {
-      if (!dataUrl) {
-        result = this.replaceDocxSignaturePlaceholder(result, token, '');
-        return;
-      }
+    const applySignature = async (token: 'AssinaturaTecnico' | 'AssinaturaCliente', dataUrl?: string) => {
+      if (!dataUrl) return;
 
       const parsed = this.parseDocxImageDataUrl(dataUrl);
       const ext = parsed.mimeType === 'image/png' ? 'png' : 'jpg';
@@ -1723,18 +1720,145 @@ export class LegacyService {
         '</Relationships>',
         `<Relationship Id="${relId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${mediaFileName}"/></Relationships>`
       );
-
-      const docPrId = nextDocPrId++;
-      const drawingXml = this.buildDocxInlineImageXml(relId, docPrId, token);
-      result = this.replaceDocxSignaturePlaceholder(result, token, drawingXml);
+      signatureRelationshipIds[token] = relId;
     };
 
     await applySignature('AssinaturaTecnico', signatures.technicianSignatureDataUrl);
     await applySignature('AssinaturaCliente', signatures.clientSignatureDataUrl);
 
+    const withTableInjection = this.injectDocxSignatureTableImages(result, {
+      technicianDrawingXml: signatureRelationshipIds.AssinaturaTecnico
+        ? this.buildDocxInlineImageXml(
+            signatureRelationshipIds.AssinaturaTecnico,
+            nextDocPrId++,
+            'AssinaturaTecnico',
+            { widthEmu: 1_900_000, heightEmu: 520_000 }
+          )
+        : undefined,
+      clientDrawingXml: signatureRelationshipIds.AssinaturaCliente
+        ? this.buildDocxInlineImageXml(
+            signatureRelationshipIds.AssinaturaCliente,
+            nextDocPrId++,
+            'AssinaturaCliente',
+            { widthEmu: 1_900_000, heightEmu: 520_000 }
+          )
+        : undefined
+    });
+
+    if (withTableInjection !== result) {
+      result = this.removeDocxSignaturePlaceholders(withTableInjection);
+    } else {
+      if (signatureRelationshipIds.AssinaturaTecnico) {
+        result = this.replaceDocxSignaturePlaceholder(
+          result,
+          'AssinaturaTecnico',
+          this.buildDocxInlineImageXml(
+            signatureRelationshipIds.AssinaturaTecnico,
+            nextDocPrId++,
+            'AssinaturaTecnico',
+            { widthEmu: 1_900_000, heightEmu: 520_000 }
+          )
+        );
+      } else {
+        result = this.replaceDocxSignaturePlaceholder(result, 'AssinaturaTecnico', '');
+      }
+
+      if (signatureRelationshipIds.AssinaturaCliente) {
+        result = this.replaceDocxSignaturePlaceholder(
+          result,
+          'AssinaturaCliente',
+          this.buildDocxInlineImageXml(
+            signatureRelationshipIds.AssinaturaCliente,
+            nextDocPrId++,
+            'AssinaturaCliente',
+            { widthEmu: 1_900_000, heightEmu: 520_000 }
+          )
+        );
+      } else {
+        result = this.replaceDocxSignaturePlaceholder(result, 'AssinaturaCliente', '');
+      }
+    }
+
     zip.file('word/_rels/document.xml.rels', relsXml);
     zip.file('[Content_Types].xml', contentTypesXml);
     return result;
+  }
+
+  private injectDocxSignatureTableImages(
+    xml: string,
+    signatures: {
+      technicianDrawingXml?: string;
+      clientDrawingXml?: string;
+    }
+  ) {
+    if (!signatures.technicianDrawingXml && !signatures.clientDrawingXml) return xml;
+
+    const tableRegex =
+      /<w:tbl[\s\S]*?Assinatura do T(?:écnico|ecnico|TÃ©cnico)[\s\S]*?Assinatura do Cliente[\s\S]*?<\/w:tbl>/u;
+    const tableMatch = xml.match(tableRegex);
+    if (!tableMatch) return xml;
+
+    const tableXml = tableMatch[0];
+    const rows = Array.from(tableXml.matchAll(/<w:tr\b[\s\S]*?<\/w:tr>/g)).map((match) => match[0]);
+    const labelRowIndex = rows.findIndex(
+      (row) =>
+        /Assinatura do T(?:écnico|ecnico|TÃ©cnico)/u.test(row) &&
+        /Assinatura do Cliente/u.test(row)
+    );
+
+    if (labelRowIndex <= 0) return xml;
+
+    const signatureRowIndex = labelRowIndex - 1;
+    const cellMatches = Array.from(rows[signatureRowIndex].matchAll(/<w:tc\b[\s\S]*?<\/w:tc>/g));
+    if (!cellMatches.length) return xml;
+
+    const lastCellIndex = cellMatches.length - 1;
+    const replacements: Record<number, string> = {};
+    if (signatures.technicianDrawingXml) {
+      replacements[0] = this.buildDocxSignatureCellBody(signatures.technicianDrawingXml);
+    }
+    if (signatures.clientDrawingXml) {
+      replacements[lastCellIndex] = this.buildDocxSignatureCellBody(signatures.clientDrawingXml);
+    }
+
+    const updatedSignatureRow = this.replaceDocxTableCellBodies(rows[signatureRowIndex], replacements);
+
+    if (updatedSignatureRow === rows[signatureRowIndex]) return xml;
+
+    const updatedTableXml = tableXml.replace(rows[signatureRowIndex], updatedSignatureRow);
+    return xml.replace(tableXml, updatedTableXml);
+  }
+
+  private replaceDocxTableCellBodies(rowXml: string, replacements: Record<number, string>) {
+    let cellIndex = 0;
+    return rowXml.replace(/<w:tc\b[\s\S]*?<\/w:tc>/g, (cellXml) => {
+      const replacementBody = replacements[cellIndex++];
+      if (!replacementBody) return cellXml;
+
+      const withTcPr = cellXml.match(/^(<w:tc\b[\s\S]*?<w:tcPr[\s\S]*?<\/w:tcPr>)([\s\S]*)(<\/w:tc>)$/u);
+      if (withTcPr) {
+        return `${withTcPr[1]}${replacementBody}${withTcPr[3]}`;
+      }
+
+      const plainCell = cellXml.match(/^(<w:tc\b[^>]*>)([\s\S]*)(<\/w:tc>)$/u);
+      if (plainCell) {
+        return `${plainCell[1]}${replacementBody}${plainCell[3]}`;
+      }
+
+      return cellXml;
+    });
+  }
+
+  private buildDocxSignatureCellBody(drawingXml: string) {
+    return [
+      '<w:p>',
+      '<w:pPr>',
+      '<w:jc w:val="center"/>',
+      '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/>',
+      '</w:pPr>',
+      drawingXml,
+      '</w:p>'
+    ].join('');
   }
 
   private replaceDocxSignaturePlaceholder(xml: string, token: string, replacementXml: string) {
@@ -1799,9 +1923,14 @@ export class LegacyService {
     return contentTypesXml;
   }
 
-  private buildDocxInlineImageXml(relId: string, docPrId: number, name: string) {
-    const widthEmu = 2_350_000;
-    const heightEmu = 650_000;
+  private buildDocxInlineImageXml(
+    relId: string,
+    docPrId: number,
+    name: string,
+    size: { widthEmu?: number; heightEmu?: number } = {}
+  ) {
+    const widthEmu = size.widthEmu ?? 2_350_000;
+    const heightEmu = size.heightEmu ?? 650_000;
     return [
       '<w:r>',
       '<w:drawing>',

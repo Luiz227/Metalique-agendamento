@@ -1367,16 +1367,16 @@ export class LegacyService {
           fontSize: 11
         },
         technicianSignatureBox: {
-          x: width * 0.035,
-          y: height * 0.168,
-          width: width * 0.34,
-          height: height * 0.03
+          x: width * 0.04,
+          y: height * 0.214,
+          width: width * 0.33,
+          height: height * 0.038
         },
         clientSignatureBox: {
-          x: width * 0.62,
-          y: height * 0.168,
-          width: width * 0.31,
-          height: height * 0.03
+          x: width * 0.615,
+          y: height * 0.214,
+          width: width * 0.305,
+          height: height * 0.038
         }
       };
     }

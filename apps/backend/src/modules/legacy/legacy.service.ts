@@ -973,27 +973,60 @@ export class LegacyService {
     const boldFont = await pdf.embedFont(StandardFonts.HelveticaBold);
     const { width, height } = page.getSize();
     const layout = this.getServiceOrderPdfLayout(width, height, originalName);
+    const black = rgb(0.08, 0.08, 0.08);
 
     const acceptanceDate = report.finishedAt ? new Date(report.finishedAt) : new Date();
     const acceptanceDateText = this.formatDateOnly(acceptanceDate);
+    if (layout.signatureSection) {
+      page.drawRectangle({
+        x: layout.signatureSection.mask.x,
+        y: layout.signatureSection.mask.y,
+        width: layout.signatureSection.mask.width,
+        height: layout.signatureSection.mask.height,
+        color: rgb(1, 1, 1)
+      });
+
+      this.drawCenteredPdfText(page, layout.signatureSection.declarationText, {
+        text: 'Declaro que os servicos descritos neste relatorio foram prestados e dados como aceitos por mim nesta data',
+        font,
+        size: 10,
+        color: black
+      });
+
+      this.drawCenteredPdfText(page, layout.signatureSection.technicianLabel, {
+        text: 'Assinatura do Tecnico',
+        font,
+        size: 11,
+        color: black
+      });
+
+      this.drawCenteredPdfText(page, layout.signatureSection.clientLabel, {
+        text: 'Assinatura do Cliente',
+        font,
+        size: 11,
+        color: black
+      });
+    }
+
     page.drawText(acceptanceDateText, {
       x: layout.acceptanceDate.x,
       y: layout.acceptanceDate.y,
       font: boldFont,
       size: layout.acceptanceDate.fontSize,
-      color: rgb(0.08, 0.08, 0.08)
+      color: black
     });
 
     await this.drawSignatureOnPdf(pdf, page, report.clientSignatureDataUrl, layout.clientSignatureBox);
     await this.drawSignatureOnPdf(pdf, page, report.technicianSignatureDataUrl, layout.technicianSignatureBox);
 
     if (layout.technicianName && report.technicianName) {
+      const technicianNameWidth = font.widthOfTextAtSize(report.technicianName, layout.technicianName.fontSize);
       page.drawText(report.technicianName, {
-        x: layout.technicianName.x,
+        x: layout.technicianName.centerX - technicianNameWidth / 2,
         y: layout.technicianName.y,
         font,
         size: layout.technicianName.fontSize,
-        color: rgb(0.08, 0.08, 0.08)
+        color: black
       });
     }
 
@@ -1381,26 +1414,46 @@ export class LegacyService {
           lineHeight: 13
         },
         acceptanceDate: {
-          x: width * 0.485,
-          y: height * 0.112,
+          x: width * 0.487,
+          y: height * 0.153,
           fontSize: 11
         },
         technicianSignatureBox: {
-          x: width * 0.055,
-          y: height * 0.09,
+          x: width * 0.07,
+          y: height * 0.045,
           width: width * 0.31,
           height: height * 0.06
         },
         clientSignatureBox: {
-          x: width * 0.62,
-          y: height * 0.09,
+          x: width * 0.61,
+          y: height * 0.045,
           width: width * 0.29,
           height: height * 0.06
         },
         technicianName: {
-          x: width * 0.14,
-          y: height * 0.06,
+          centerX: width * 0.225,
+          y: height * 0.03,
           fontSize: 9
+        },
+        signatureSection: {
+          mask: {
+            x: width * 0.015,
+            y: height * 0.025,
+            width: width * 0.95,
+            height: height * 0.17
+          },
+          declarationText: {
+            centerX: width * 0.49,
+            y: height * 0.2
+          },
+          technicianLabel: {
+            centerX: width * 0.225,
+            y: height * 0.145
+          },
+          clientLabel: {
+            centerX: width * 0.755,
+            y: height * 0.145
+          }
         }
       };
     }
@@ -1433,8 +1486,24 @@ export class LegacyService {
         width: width * 0.3,
         height: height * 0.045
       },
-      technicianName: undefined
+      technicianName: undefined,
+      signatureSection: undefined
     };
+  }
+
+  private drawCenteredPdfText(
+    page: PDFPage,
+    position: { centerX: number; y: number },
+    options: { text: string; font: PDFFont; size: number; color: ReturnType<typeof rgb> }
+  ) {
+    const textWidth = options.font.widthOfTextAtSize(options.text, options.size);
+    page.drawText(options.text, {
+      x: position.centerX - textWidth / 2,
+      y: position.y,
+      font: options.font,
+      size: options.size,
+      color: options.color
+    });
   }
 
   private drawLabeledFullWidthBox(

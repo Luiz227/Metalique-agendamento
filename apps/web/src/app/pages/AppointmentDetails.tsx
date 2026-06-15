@@ -314,7 +314,7 @@ export default function AppointmentDetails() {
     setServiceOrderImporting(true);
     setServiceOrderImportMessage('');
     try {
-      const result = await parseServiceOrderPdf(file);
+      const result = await parseServiceOrderPdf(file, { analyzeWithAi: true });
       if (!result.found) {
         setServiceOrderImportMessage('Nao encontrei dados reconheciveis nesse PDF. Confira se ele veio do Sige Cloud.');
         return;
@@ -333,7 +333,12 @@ export default function AppointmentDetails() {
         machineObservations: fields.machineObservations || prev.machineObservations,
         problemDescription: prev.problemDescription || fields.problemDescription || prev.problemDescription
       }));
-      setServiceOrderImportMessage('Dados importados. Confira os campos antes de salvar.');
+      const sourceMessage = result.aiUsed
+        ? 'IA analisou a OS e preencheu os campos. Confira antes de salvar.'
+        : result.aiAvailable
+          ? 'A IA nao conseguiu melhorar a leitura; usei o parser de reserva. Confira os campos.'
+          : 'Dados importados pelo parser. Para usar IA, configure OPENAI_API_KEY no backend.';
+      setServiceOrderImportMessage(sourceMessage);
     } catch (err) {
       setServiceOrderImportMessage(err instanceof ApiError ? err.message : 'Erro ao importar a OS.');
     } finally {
@@ -926,11 +931,11 @@ export default function AppointmentDetails() {
                     <div className="mt-3 rounded-md border border-blue-500/20 bg-blue-500/5 p-3">
                       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
-                          <p className="text-sm font-medium text-blue-100">Importar dados da OS do Sige</p>
-                          <p className="text-xs text-muted-foreground">Anexe o PDF original para preencher servico e equipamento automaticamente.</p>
+                          <p className="text-sm font-medium text-blue-100">Analisar OS do Sige com IA</p>
+                          <p className="text-xs text-muted-foreground">Anexe o PDF original para a IA separar servico, equipamento e relato nos campos corretos.</p>
                         </div>
                         <label className="inline-flex cursor-pointer items-center justify-center rounded-md border border-blue-500/30 px-4 py-2 text-sm font-semibold text-blue-100 hover:bg-blue-500/10">
-                          {serviceOrderImporting ? 'Lendo PDF...' : 'Importar PDF'}
+                          {serviceOrderImporting ? 'Analisando...' : 'Analisar com IA'}
                           <Input
                             type="file"
                             accept="application/pdf"

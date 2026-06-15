@@ -90,10 +90,11 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return payload as T;
 }
 
-export async function parseServiceOrderPdf(file: File) {
+export async function parseServiceOrderPdf(file: File, options: { analyzeWithAi?: boolean } = {}) {
   const formData = new FormData();
   formData.append('file', file);
-  return api<{ fields: ParsedServiceOrderFields; found: boolean }>('/service-orders/parse', {
+  if (options.analyzeWithAi) formData.append('analyzeWithAi', 'true');
+  return api<{ fields: ParsedServiceOrderFields; found: boolean; aiAvailable?: boolean; aiUsed?: boolean; source?: string }>('/service-orders/parse', {
     method: 'POST',
     body: formData
   });

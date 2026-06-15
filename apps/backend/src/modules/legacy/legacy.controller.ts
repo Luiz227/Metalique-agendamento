@@ -141,8 +141,11 @@ export class LegacyController {
       storage: memoryStorage()
     })
   )
-  parseServiceOrder(@UploadedFile() file: { originalname?: string; mimetype?: string; size?: number; buffer?: Buffer } | undefined) {
-    return this.service.parseServiceOrderPdf(file);
+  parseServiceOrder(
+    @UploadedFile() file: { originalname?: string; mimetype?: string; size?: number; buffer?: Buffer } | undefined,
+    @Body('analyzeWithAi') analyzeWithAi?: string
+  ) {
+    return this.service.parseServiceOrderPdf(file, { preferAi: analyzeWithAi === 'true' || analyzeWithAi === '1' });
   }
 
   @Post('attachments/appointments/:id')

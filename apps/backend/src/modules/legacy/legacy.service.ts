@@ -70,7 +70,10 @@ export class LegacyService {
 
   private driveClient: ReturnType<typeof google.drive> | null = null;
 
-  async parseServiceOrderPdf(file?: { originalname?: string; mimetype?: string; size?: number; buffer?: Buffer }) {
+  async parseServiceOrderPdf(
+    file?: { originalname?: string; mimetype?: string; size?: number; buffer?: Buffer },
+    options: { preferAi?: boolean } = {}
+  ) {
     if (!file?.buffer?.length) {
       throw new BadRequestException('Envie o PDF da OS do Sige para importar os dados.');
     }
@@ -93,9 +96,14 @@ export class LegacyService {
       const parserFields = this.extractSigeServiceOrderFields(text);
       const aiFields = await this.extractSigeServiceOrderFieldsWithAi(text, parserFields);
       const fields = this.mergeParsedServiceOrderFields(parserFields, aiFields);
+      const aiAvailable = Boolean(process.env.OPENAI_API_KEY?.trim());
+      const aiUsed = Object.values(aiFields).some(Boolean);
       return {
         fields,
-        found: Object.values(fields).some(Boolean)
+        found: Object.values(fields).some(Boolean),
+        aiAvailable,
+        aiUsed,
+        source: aiUsed ? 'ai' : options.preferAi && aiAvailable ? 'parser_fallback' : 'parser'
       };
     } catch {
       throw new BadRequestException('Nao foi possivel ler o PDF da OS. Confira se o arquivo veio do Sige e tente novamente.');

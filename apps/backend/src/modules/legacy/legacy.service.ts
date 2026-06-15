@@ -1790,8 +1790,11 @@ export class LegacyService {
 
   private fillTechnicalNotesArea(xml: string, notesText: string) {
     const rows = this.wrapTechnicalNotes(notesText, 5, 80);
+    const directTitleResult = this.fillTechnicalNotesTableAfterTitle(xml, rows);
+    if (directTitleResult !== xml) return directTitleResult;
+
     let result = xml;
-    const paragraphRegex = /(<w:p[^>]*w14:paraId="[^"]*"[^>]*>.*?CONSIDERAÇÕES DO TÉCNICO.*?<\/w:p>)([\s\S]*?)(<w:tbl[^>]*>[\s\S]*?Assinatura do T[ée]cnico)/u;
+    const paragraphRegex = /(<w:p[^>]*w14:paraId="[^"]*"[^>]*>.*?CONSIDERA[\s\S]*?<\/w:p>)([\s\S]*?)(<w:tbl[^>]*>[\s\S]*?Assinatura do T[ée]cnico)/u;
     const match = result.match(paragraphRegex);
     if (!match) return result;
 
@@ -1818,6 +1821,23 @@ export class LegacyService {
     return result.replace(tableMatch[1], filledNotesTable);
   }
 
+  private fillTechnicalNotesTableAfterTitle(xml: string, rows: string[]) {
+    const titleIndex = xml.indexOf('CONSIDERA');
+    if (titleIndex < 0) return xml;
+
+    const declarationIndex = xml.indexOf('Declaro que os servi', titleIndex);
+    const tableStart = xml.indexOf('<w:tbl', titleIndex);
+    if (tableStart < 0 || (declarationIndex >= 0 && tableStart > declarationIndex)) return xml;
+
+    const tableEnd = xml.indexOf('</w:tbl>', tableStart);
+    if (tableEnd < 0) return xml;
+
+    const tableXml = xml.slice(tableStart, tableEnd + '</w:tbl>'.length);
+    const filledNotesTable = this.fillFirstDocxTableCellWithParagraphs(tableXml, rows);
+    if (filledNotesTable === tableXml) return xml;
+
+    return `${xml.slice(0, tableStart)}${filledNotesTable}${xml.slice(tableEnd + '</w:tbl>'.length)}`;
+  }
   private fillFirstDocxTableCellWithParagraphs(tableXml: string, rows: string[]) {
     const paragraphs = rows.map((row) => this.buildDocxTechnicalNoteParagraph(this.escapeXml(row))).join('');
     const firstCellRegex = /(<w:tc\b[^>]*>)(<w:tcPr[\s\S]*?<\/w:tcPr>)([\s\S]*?)(<\/w:tc>)/u;

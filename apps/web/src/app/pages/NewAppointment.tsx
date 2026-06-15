@@ -534,14 +534,14 @@ export default function NewAppointment() {
                     <p className="mt-2 text-xs text-blue-100">{serviceOrderImportMessage}</p>
                   )}
                 </div>
-                <div className="grid md:grid-cols-[220px_1fr] gap-3">
-                  <div>
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[220px_1fr]">
+                  <div className="min-w-0">
                     <Label>Codigo do servico</Label>
-                    <Input placeholder="Ex.: 10021" value={formData.serviceCode} onChange={(e) => setFormData({ ...formData, serviceCode: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                    <Input placeholder="Ex.: 10021" value={formData.serviceCode} onChange={(e) => setFormData({ ...formData, serviceCode: e.target.value })} className="w-full bg-zinc-800/50 border-zinc-700" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <Label>Descricao do servico na OS</Label>
-                    <Input placeholder="Ex.: INSTALACAO (START / OU TREINAMENTO) TODAS AS MAQUINAS" value={formData.serviceItemDescription} onChange={(e) => setFormData({ ...formData, serviceItemDescription: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                    <Textarea placeholder="Ex.: INSTALACAO (START / OU TREINAMENTO) TODAS AS MAQUINAS" value={formData.serviceItemDescription} onChange={(e) => setFormData({ ...formData, serviceItemDescription: e.target.value })} className="min-h-20 w-full bg-zinc-800/50 border-zinc-700" />
                   </div>
                 </div>
               </div>
@@ -550,26 +550,26 @@ export default function NewAppointment() {
                   <p className="text-sm font-semibold text-white">Dados do equipamento</p>
                   <p className="text-xs text-zinc-400">Preencha aqui exatamente como voce quer que apareca na OS.</p>
                 </div>
-                <div className="grid md:grid-cols-3 gap-3">
-                  <div>
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+                  <div className="min-w-0">
                     <Label>Codigo do equipamento</Label>
-                    <Input placeholder="Ex.: 125017887" value={formData.machineCode} onChange={(e) => setFormData({ ...formData, machineCode: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                    <Input placeholder="Ex.: 125017887" value={formData.machineCode} onChange={(e) => setFormData({ ...formData, machineCode: e.target.value })} className="w-full bg-zinc-800/50 border-zinc-700" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <Label>Nome da maquina</Label>
-                    <Input placeholder="Ex.: Mesa / corte de metais" value={formData.machineName} onChange={(e) => setFormData({ ...formData, machineName: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                    <Input placeholder="Ex.: Mesa / corte de metais" value={formData.machineName} onChange={(e) => setFormData({ ...formData, machineName: e.target.value })} className="w-full bg-zinc-800/50 border-zinc-700" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <Label>Modelo da maquina</Label>
-                    <Input placeholder="Ex.: ML5030 tubo laser" value={formData.machineModel} onChange={(e) => setFormData({ ...formData, machineModel: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                    <Textarea placeholder="Ex.: ML5030 tubo laser" value={formData.machineModel} onChange={(e) => setFormData({ ...formData, machineModel: e.target.value })} className="min-h-20 w-full bg-zinc-800/50 border-zinc-700" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <Label>Numero de serie</Label>
-                    <Input placeholder="Ex.: 1250/1709" value={formData.machineSerial} onChange={(e) => setFormData({ ...formData, machineSerial: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                    <Input placeholder="Ex.: 1250/1709" value={formData.machineSerial} onChange={(e) => setFormData({ ...formData, machineSerial: e.target.value })} className="w-full bg-zinc-800/50 border-zinc-700" />
                   </div>
-                  <div className="md:col-span-2">
+                  <div className="min-w-0 xl:col-span-2">
                     <Label>Fabricante</Label>
-                    <Input placeholder="Ex.: METALIQUE LASER E PLASMA CNC" value={formData.machineManufacturer} onChange={(e) => setFormData({ ...formData, machineManufacturer: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                    <Input placeholder="Ex.: METALIQUE LASER E PLASMA CNC" value={formData.machineManufacturer} onChange={(e) => setFormData({ ...formData, machineManufacturer: e.target.value })} className="w-full bg-zinc-800/50 border-zinc-700" />
                   </div>
                 </div>
                 <div>

@@ -21,6 +21,18 @@ type ParsedServiceOrderFields = {
   problemDescription?: string;
 };
 
+const SERVICE_ORDER_FIELD_KEYS = [
+  'serviceCode',
+  'serviceItemDescription',
+  'machineCode',
+  'machineName',
+  'machineModel',
+  'machineSerial',
+  'machineManufacturer',
+  'machineObservations',
+  'problemDescription'
+] as const;
+
 const ATTACHMENT_KIND = {
   GENERAL: 'GENERAL',
   SERVICE_ORDER_TEMPLATE: 'SERVICE_ORDER_TEMPLATE',
@@ -78,7 +90,9 @@ export class LegacyService {
       const parsed = await parser.getText();
       await parser.destroy();
       const text = this.normalizePdfText(parsed.text ?? '');
-      const fields = this.extractSigeServiceOrderFields(text);
+      const parserFields = this.extractSigeServiceOrderFields(text);
+      const aiFields = await this.extractSigeServiceOrderFieldsWithAi(text, parserFields);
+      const fields = this.mergeParsedServiceOrderFields(parserFields, aiFields);
       return {
         fields,
         found: Object.values(fields).some(Boolean)
@@ -3100,6 +3114,92 @@ export class LegacyService {
     Object.assign(fields, this.extractServiceFields(serviceSegment));
 
     return fields;
+  }
+
+  private async extractSigeServiceOrderFieldsWithAi(text: string, parserFields: ParsedServiceOrderFields): Promise<ParsedServiceOrderFields> {
+    const apiKey = process.env.OPENAI_API_KEY?.trim();
+    if (!apiKey || !text) return {};
+
+    const model = process.env.OPENAI_SERVICE_ORDER_MODEL?.trim() || 'gpt-4o-mini';
+    const prompt = [
+      'Voce extrai dados de ordens de servico do Sige Cloud para um sistema de agendamento.',
+      'Responda somente JSON valido, sem markdown e sem explicacoes.',
+      'Use somente informacoes presentes no texto. Se nao encontrar um campo, use string vazia.',
+      'Nao misture campos: descricao do servico nao pode ir em codigo, observacao nao pode ir em modelo.',
+      'Campos esperados:',
+      JSON.stringify(SERVICE_ORDER_FIELD_KEYS),
+      'Significado dos campos:',
+      '- serviceCode: codigo da linha de PRODUTOS / SERVICOS.',
+      '- serviceItemDescription: descricao da linha de PRODUTOS / SERVICOS.',
+      '- machineCode: codigo do equipamento em DADOS DO(S) EQUIPAMENTO(S).',
+      '- machineName: nome do equipamento.',
+      '- machineModel: modelo do equipamento.',
+      '- machineSerial: numero de serie, se existir.',
+      '- machineManufacturer: fabricante do equipamento.',
+      '- machineObservations: observacoes do equipamento.',
+      '- problemDescription: texto do bloco PROBLEMA ou RELATO TECNICO antes dos dados do equipamento.',
+      'Extraido pelo parser atual, use apenas como pista e corrija se estiver errado:',
+      JSON.stringify(parserFields),
+      'Texto extraido do PDF:',
+      text.slice(0, 14000)
+    ].join('\n\n');
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: 'Voce e um extrator de dados. Retorne apenas JSON com os campos solicitados. Nunca invente valores.'
+            },
+            { role: 'user', content: prompt }
+          ]
+        })
+      });
+
+      if (!response.ok) return {};
+      const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      const content = payload.choices?.[0]?.message?.content;
+      if (!content) return {};
+      return this.sanitizeAiServiceOrderFields(JSON.parse(content));
+    } catch {
+      return {};
+    }
+  }
+
+  private sanitizeAiServiceOrderFields(input: unknown): ParsedServiceOrderFields {
+    if (!input || typeof input !== 'object') return {};
+    const source = input as Record<string, unknown>;
+    const fields: ParsedServiceOrderFields = {};
+
+    for (const key of SERVICE_ORDER_FIELD_KEYS) {
+      const value = this.cleanExtractedValue(source[key] == null ? '' : String(source[key]));
+      if (value && value.toLowerCase() !== 'nao informado' && value.toLowerCase() !== 'não informado') {
+        fields[key] = value;
+      }
+    }
+
+    return this.stripEmptyFields(fields);
+  }
+
+  private mergeParsedServiceOrderFields(parserFields: ParsedServiceOrderFields, aiFields: ParsedServiceOrderFields) {
+    if (!Object.values(aiFields).some(Boolean)) return parserFields;
+
+    const fields: ParsedServiceOrderFields = { ...parserFields };
+    for (const key of SERVICE_ORDER_FIELD_KEYS) {
+      const aiValue = aiFields[key];
+      if (aiValue) fields[key] = aiValue;
+    }
+
+    return this.stripEmptyFields(fields);
   }
 
   private extractTextBetween(text: string, startPattern: RegExp, endPattern: RegExp) {

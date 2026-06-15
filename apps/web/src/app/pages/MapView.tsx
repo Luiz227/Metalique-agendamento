@@ -33,12 +33,45 @@ function normalizeColor(value?: string | null) {
   return value.startsWith('#') ? value : `#${value}`;
 }
 
+function normalizeNamePart(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function nameParts(name?: string | null) {
+  return String(name ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function firstNameKey(name?: string | null) {
+  return normalizeNamePart(nameParts(name)[0] ?? '');
+}
+
+function technicianInitials(name?: string | null, includeSurname = false) {
+  const parts = nameParts(name);
+  const first = parts[0]?.[0] ?? 'T';
+  const ignored = new Set(['da', 'de', 'di', 'do', 'dos', 'das', 'e']);
+  const surname = parts.slice(1).find((part) => !ignored.has(normalizeNamePart(part)));
+
+  if (!includeSurname || !surname) return first.toUpperCase();
+  return `${first}${surname[0]}`.toUpperCase();
+}
+
+function technicianKey(appointment: Appointment) {
+  return appointment.technician?.id ?? appointment.technician?.name ?? 'sem-tecnico';
+}
+
 function markerIcon(color: string, label: string): google.maps.Icon {
-  const safeLabel = (label || 'T').slice(0, 1).toUpperCase();
+  const safeLabel = (label || 'T').replace(/[^A-Za-zÀ-ÿ0-9]/g, '').slice(0, 2).toUpperCase() || 'T';
+  const fontSize = safeLabel.length > 1 ? 13 : 14;
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
       <circle cx="20" cy="20" r="18" fill="${color}" stroke="#0b0f19" stroke-width="2" />
-      <text x="20" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff">${safeLabel}</text>
+      <text x="20" y="25" text-anchor="middle" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="700" fill="#ffffff">${safeLabel}</text>
     </svg>
   `;
   return {
@@ -285,6 +318,26 @@ export default function MapView() {
 
   const selectedData = selectedMarker ? markers.find((marker) => marker.id === selectedMarker) : null;
   const technicians = Array.from(new Set(filteredAppointments.map((appointment) => appointment.technician?.name).filter(Boolean))) as string[];
+  const technicianMarkerLabels = useMemo(() => {
+    const uniqueTechnicians = new Map<string, { name: string; firstKey: string }>();
+
+    markers.forEach((marker) => {
+      const name = marker.technician?.name ?? 'Sem tecnico';
+      uniqueTechnicians.set(technicianKey(marker), { name, firstKey: firstNameKey(name) });
+    });
+
+    const firstNameCount = new Map<string, number>();
+    uniqueTechnicians.forEach((technician) => {
+      firstNameCount.set(technician.firstKey, (firstNameCount.get(technician.firstKey) ?? 0) + 1);
+    });
+
+    const labels = new Map<string, string>();
+    uniqueTechnicians.forEach((technician, key) => {
+      labels.set(key, technicianInitials(technician.name, (firstNameCount.get(technician.firstKey) ?? 0) > 1));
+    });
+
+    return labels;
+  }, [markers]);
 
   const scheduleByTechnician = useMemo(
     () =>
@@ -398,11 +451,12 @@ export default function MapView() {
     const bounds = new google.maps.LatLngBounds();
     markers.forEach((marker) => {
       const techName = marker.technician?.name ?? 'Sem técnico';
+      const techLabel = technicianMarkerLabels.get(technicianKey(marker)) ?? technicianInitials(techName);
       const techColor = normalizeColor(marker.technician?.color);
       const pin = new google.maps.Marker({
         position: { lat: marker.lat, lng: marker.lng },
         map,
-        icon: markerIcon(techColor, techName),
+        icon: markerIcon(techColor, techLabel),
         title: `${marker.client?.name ?? 'Cliente'} - ${techName}`
       });
       pin.addListener('click', () => {
@@ -468,7 +522,7 @@ export default function MapView() {
     });
 
     if (!bounds.isEmpty()) map.fitBounds(bounds, 80);
-  }, [markers, visibleSuggestions, nearbyMapSuggestions]);
+  }, [markers, visibleSuggestions, nearbyMapSuggestions, technicianMarkerLabels]);
 
   useEffect(() => {
     const map = mapRef.current;

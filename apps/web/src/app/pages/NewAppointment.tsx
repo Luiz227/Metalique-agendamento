@@ -534,7 +534,7 @@ export default function NewAppointment() {
                     <p className="mt-2 text-xs text-blue-100">{serviceOrderImportMessage}</p>
                   )}
                 </div>
-                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[220px_1fr]">
+                <div className="grid grid-cols-1 gap-3">
                   <div className="min-w-0">
                     <Label>Codigo do servico</Label>
                     <Input placeholder="Ex.: 10021" value={formData.serviceCode} onChange={(e) => setFormData({ ...formData, serviceCode: e.target.value })} className="w-full bg-zinc-800/50 border-zinc-700" />
@@ -550,7 +550,7 @@ export default function NewAppointment() {
                   <p className="text-sm font-semibold text-white">Dados do equipamento</p>
                   <p className="text-xs text-zinc-400">Preencha aqui exatamente como voce quer que apareca na OS.</p>
                 </div>
-                <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3">
                   <div className="min-w-0">
                     <Label>Codigo do equipamento</Label>
                     <Input placeholder="Ex.: 125017887" value={formData.machineCode} onChange={(e) => setFormData({ ...formData, machineCode: e.target.value })} className="w-full bg-zinc-800/50 border-zinc-700" />
@@ -567,7 +567,7 @@ export default function NewAppointment() {
                     <Label>Numero de serie</Label>
                     <Input placeholder="Ex.: 1250/1709" value={formData.machineSerial} onChange={(e) => setFormData({ ...formData, machineSerial: e.target.value })} className="w-full bg-zinc-800/50 border-zinc-700" />
                   </div>
-                  <div className="min-w-0 xl:col-span-2">
+                  <div className="min-w-0">
                     <Label>Fabricante</Label>
                     <Input placeholder="Ex.: METALIQUE LASER E PLASMA CNC" value={formData.machineManufacturer} onChange={(e) => setFormData({ ...formData, machineManufacturer: e.target.value })} className="w-full bg-zinc-800/50 border-zinc-700" />
                   </div>

@@ -973,7 +973,7 @@ export default function AppointmentDetails() {
                     <p className="text-sm font-semibold">Servico na OS</p>
                     <p className="text-xs text-muted-foreground">Esses dados entram direto na ordem de servico final.</p>
                   </div>
-                  <div className="grid grid-cols-1 gap-3 xl:grid-cols-[220px_1fr]">
+                  <div className="grid grid-cols-1 gap-3">
                     <div className="min-w-0">
                       <p className="mb-1 text-[11px] text-muted-foreground">Codigo do servico</p>
                       <Input value={form.serviceCode} placeholder="Codigo do servico" onChange={(e) => setForm({ ...form, serviceCode: e.target.value })} disabled={!editing} className="w-full" />
@@ -989,7 +989,7 @@ export default function AppointmentDetails() {
                     <p className="text-sm font-semibold">Dados do equipamento</p>
                     <p className="text-xs text-muted-foreground">Organize aqui exatamente como o tecnico deve ver e como a OS deve sair.</p>
                   </div>
-                  <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-3">
                     <div className="min-w-0">
                       <p className="mb-1 text-[11px] text-muted-foreground">Codigo do equipamento</p>
                       <Input value={form.machineCode} placeholder="Codigo do equipamento" onChange={(e) => setForm({ ...form, machineCode: e.target.value })} disabled={!editing} className="w-full" />
@@ -1006,7 +1006,7 @@ export default function AppointmentDetails() {
                       <p className="mb-1 text-[11px] text-muted-foreground">Numero de serie</p>
                       <Input value={form.machineSerial} placeholder="Numero de serie" onChange={(e) => setForm({ ...form, machineSerial: e.target.value })} disabled={!editing} className="w-full" />
                     </div>
-                    <div className="min-w-0 xl:col-span-2">
+                    <div className="min-w-0">
                       <p className="mb-1 text-[11px] text-muted-foreground">Fabricante</p>
                       <Input value={form.machineManufacturer} placeholder="Fabricante" onChange={(e) => setForm({ ...form, machineManufacturer: e.target.value })} disabled={!editing} className="w-full" />
                     </div>

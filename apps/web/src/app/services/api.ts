@@ -5,6 +5,18 @@ export type ApiUser = {
   role: 'ADMIN' | 'LOGISTICS' | 'TECHNICIAN' | 'VALIDATOR' | 'SALES';
 };
 
+export type ParsedServiceOrderFields = {
+  serviceCode?: string;
+  serviceItemDescription?: string;
+  machineCode?: string;
+  machineName?: string;
+  machineModel?: string;
+  machineSerial?: string;
+  machineManufacturer?: string;
+  machineObservations?: string;
+  problemDescription?: string;
+};
+
 export class ApiError extends Error {
   status: number;
 
@@ -76,4 +88,13 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError(payload?.message ?? 'Erro na API', response.status);
   }
   return payload as T;
+}
+
+export async function parseServiceOrderPdf(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return api<{ fields: ParsedServiceOrderFields; found: boolean }>('/service-orders/parse', {
+    method: 'POST',
+    body: formData
+  });
 }

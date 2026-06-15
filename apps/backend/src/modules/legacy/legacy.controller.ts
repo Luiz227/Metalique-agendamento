@@ -135,6 +135,16 @@ export class LegacyController {
     return this.service.technicianReport(id, body);
   }
 
+  @Post('service-orders/parse')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage()
+    })
+  )
+  parseServiceOrder(@UploadedFile() file: { originalname?: string; mimetype?: string; size?: number; buffer?: Buffer } | undefined) {
+    return this.service.parseServiceOrderPdf(file);
+  }
+
   @Post('attachments/appointments/:id')
   @UseInterceptors(
     FileInterceptor('file', {

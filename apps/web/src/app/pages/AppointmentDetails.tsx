@@ -8,7 +8,7 @@ import { Progress } from '../components/ui/progress';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
-import { ApiError, api, connectRealtime, resolveApiAssetUrl } from '../services/api';
+import { ApiError, api, connectRealtime, parseServiceOrderPdf, resolveApiAssetUrl } from '../services/api';
 import type { Appointment, Technician, Vehicle } from '../services/types';
 import { formatDate, formatTime, statusLabel, statusTone } from '../services/types';
 
@@ -88,6 +88,8 @@ export default function AppointmentDetails() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [serviceOrderImporting, setServiceOrderImporting] = useState(false);
+  const [serviceOrderImportMessage, setServiceOrderImportMessage] = useState('');
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -306,6 +308,38 @@ export default function AppointmentDetails() {
 
   const checklistProgress = checklist.length ? (checklist.filter((item) => item.done).length / checklist.length) * 100 : 0;
   const generatedReports = (appointment?.attachments ?? []).filter((attachment) => attachment.kind === 'TECHNICAL_REPORT');
+
+  async function handleServiceOrderImport(file?: File | null) {
+    if (!file) return;
+    setServiceOrderImporting(true);
+    setServiceOrderImportMessage('');
+    try {
+      const result = await parseServiceOrderPdf(file);
+      if (!result.found) {
+        setServiceOrderImportMessage('Nao encontrei dados reconheciveis nesse PDF. Confira se ele veio do Sige Cloud.');
+        return;
+      }
+
+      const fields = result.fields;
+      setForm((prev) => ({
+        ...prev,
+        serviceCode: fields.serviceCode || prev.serviceCode,
+        serviceItemDescription: fields.serviceItemDescription || prev.serviceItemDescription,
+        machineCode: fields.machineCode || prev.machineCode,
+        machineName: fields.machineName || prev.machineName,
+        machineModel: fields.machineModel || prev.machineModel,
+        machineSerial: fields.machineSerial || prev.machineSerial,
+        machineManufacturer: fields.machineManufacturer || prev.machineManufacturer,
+        machineObservations: fields.machineObservations || prev.machineObservations,
+        problemDescription: prev.problemDescription || fields.problemDescription || prev.problemDescription
+      }));
+      setServiceOrderImportMessage('Dados importados. Confira os campos antes de salvar.');
+    } catch (err) {
+      setServiceOrderImportMessage(err instanceof ApiError ? err.message : 'Erro ao importar a OS.');
+    } finally {
+      setServiceOrderImporting(false);
+    }
+  }
 
   async function cancelAppointment() {
     if (!appointment) return;
@@ -888,6 +922,32 @@ export default function AppointmentDetails() {
                       Este agendamento usa apenas os templates oficiais internos. Preencha abaixo os dados do equipamento e do servico para gerar a OS final do tecnico.
                     </p>
                   </div>
+                  {editing && (
+                    <div className="mt-3 rounded-md border border-blue-500/20 bg-blue-500/5 p-3">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-blue-100">Importar dados da OS do Sige</p>
+                          <p className="text-xs text-muted-foreground">Anexe o PDF original para preencher servico e equipamento automaticamente.</p>
+                        </div>
+                        <label className="inline-flex cursor-pointer items-center justify-center rounded-md border border-blue-500/30 px-4 py-2 text-sm font-semibold text-blue-100 hover:bg-blue-500/10">
+                          {serviceOrderImporting ? 'Lendo PDF...' : 'Importar PDF'}
+                          <Input
+                            type="file"
+                            accept="application/pdf"
+                            disabled={serviceOrderImporting}
+                            className="hidden"
+                            onChange={(event) => {
+                              void handleServiceOrderImport(event.target.files?.[0]);
+                              event.target.value = '';
+                            }}
+                          />
+                        </label>
+                      </div>
+                      {serviceOrderImportMessage && (
+                        <p className="mt-2 text-xs text-blue-100">{serviceOrderImportMessage}</p>
+                      )}
+                    </div>
+                  )}
                   <div className="mt-3 space-y-2">
                     {generatedReports.length > 0 && (
                       <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
@@ -908,40 +968,52 @@ export default function AppointmentDetails() {
                     )}
                   </div>
                 </div>
-                <div className="grid gap-2 md:grid-cols-2">
-                  <div>
-                    <p className="mb-1 text-[11px] text-muted-foreground">Codigo do servico</p>
-                    <Input value={form.serviceCode} placeholder="Codigo do servico" onChange={(e) => setForm({ ...form, serviceCode: e.target.value })} disabled={!editing} />
+                <div className="rounded-xl border border-border/70 bg-muted/10 p-4 space-y-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold">Servico na OS</p>
+                    <p className="text-xs text-muted-foreground">Esses dados entram direto na ordem de servico final.</p>
                   </div>
-                  <div>
-                    <p className="mb-1 text-[11px] text-muted-foreground">Descricao do servico na OS</p>
-                    <Input value={form.serviceItemDescription} placeholder="Descricao do servico" onChange={(e) => setForm({ ...form, serviceItemDescription: e.target.value })} disabled={!editing} />
+                  <div className="grid gap-3 md:grid-cols-[220px_1fr]">
+                    <div>
+                      <p className="mb-1 text-[11px] text-muted-foreground">Codigo do servico</p>
+                      <Input value={form.serviceCode} placeholder="Codigo do servico" onChange={(e) => setForm({ ...form, serviceCode: e.target.value })} disabled={!editing} />
+                    </div>
+                    <div>
+                      <p className="mb-1 text-[11px] text-muted-foreground">Descricao do servico na OS</p>
+                      <Input value={form.serviceItemDescription} placeholder="Descricao do servico" onChange={(e) => setForm({ ...form, serviceItemDescription: e.target.value })} disabled={!editing} />
+                    </div>
                   </div>
                 </div>
-                <div className="grid gap-2 md:grid-cols-3">
-                  <div>
-                    <p className="mb-1 text-[11px] text-muted-foreground">Codigo do equipamento</p>
-                    <Input value={form.machineCode} placeholder="Codigo do equipamento" onChange={(e) => setForm({ ...form, machineCode: e.target.value })} disabled={!editing} />
+                <div className="rounded-xl border border-border/70 bg-muted/10 p-4 space-y-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold">Dados do equipamento</p>
+                    <p className="text-xs text-muted-foreground">Organize aqui exatamente como o tecnico deve ver e como a OS deve sair.</p>
                   </div>
-                  <div>
-                    <p className="mb-1 text-[11px] text-muted-foreground">Nome da maquina</p>
-                    <Input value={form.machineName} placeholder="Nome da maquina" onChange={(e) => setForm({ ...form, machineName: e.target.value })} disabled={!editing} />
-                  </div>
-                  <div>
-                    <p className="mb-1 text-[11px] text-muted-foreground">Modelo da maquina</p>
-                    <Input value={form.machineModel} placeholder="Modelo" onChange={(e) => setForm({ ...form, machineModel: e.target.value })} disabled={!editing} />
-                  </div>
-                  <div>
-                    <p className="mb-1 text-[11px] text-muted-foreground">Numero de serie</p>
-                    <Input value={form.machineSerial} placeholder="Numero de serie" onChange={(e) => setForm({ ...form, machineSerial: e.target.value })} disabled={!editing} />
-                  </div>
-                  <div>
-                    <p className="mb-1 text-[11px] text-muted-foreground">Fabricante</p>
-                    <Input value={form.machineManufacturer} placeholder="Fabricante" onChange={(e) => setForm({ ...form, machineManufacturer: e.target.value })} disabled={!editing} />
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div>
+                      <p className="mb-1 text-[11px] text-muted-foreground">Codigo do equipamento</p>
+                      <Input value={form.machineCode} placeholder="Codigo do equipamento" onChange={(e) => setForm({ ...form, machineCode: e.target.value })} disabled={!editing} />
+                    </div>
+                    <div>
+                      <p className="mb-1 text-[11px] text-muted-foreground">Nome da maquina</p>
+                      <Input value={form.machineName} placeholder="Nome da maquina" onChange={(e) => setForm({ ...form, machineName: e.target.value })} disabled={!editing} />
+                    </div>
+                    <div>
+                      <p className="mb-1 text-[11px] text-muted-foreground">Modelo da maquina</p>
+                      <Input value={form.machineModel} placeholder="Modelo" onChange={(e) => setForm({ ...form, machineModel: e.target.value })} disabled={!editing} />
+                    </div>
+                    <div>
+                      <p className="mb-1 text-[11px] text-muted-foreground">Numero de serie</p>
+                      <Input value={form.machineSerial} placeholder="Numero de serie" onChange={(e) => setForm({ ...form, machineSerial: e.target.value })} disabled={!editing} />
+                    </div>
+                    <div className="md:col-span-2">
+                      <p className="mb-1 text-[11px] text-muted-foreground">Fabricante</p>
+                      <Input value={form.machineManufacturer} placeholder="Fabricante" onChange={(e) => setForm({ ...form, machineManufacturer: e.target.value })} disabled={!editing} />
+                    </div>
                   </div>
                   <div>
                     <p className="mb-1 text-[11px] text-muted-foreground">Observacoes do equipamento</p>
-                    <Input value={form.machineObservations} placeholder="Observacoes do equipamento" onChange={(e) => setForm({ ...form, machineObservations: e.target.value })} disabled={!editing} />
+                    <Textarea value={form.machineObservations} placeholder="Observacoes do equipamento" onChange={(e) => setForm({ ...form, machineObservations: e.target.value })} disabled={!editing} className="min-h-24" />
                   </div>
                 </div>
               </div>

@@ -9,7 +9,7 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Progress } from '../components/ui/progress';
-import { ApiError, api } from '../services/api';
+import { ApiError, api, parseServiceOrderPdf } from '../services/api';
 import type { Client, Technician, Vehicle } from '../services/types';
 
 const steps = [
@@ -59,6 +59,8 @@ export default function NewAppointment() {
   const [saving, setSaving] = useState(false);
   const [travelEstimate, setTravelEstimate] = useState<{ distanceText: string; durationText: string } | null>(null);
   const [travelLoading, setTravelLoading] = useState(false);
+  const [serviceOrderImporting, setServiceOrderImporting] = useState(false);
+  const [serviceOrderImportMessage, setServiceOrderImportMessage] = useState('');
   const [checklist, setChecklist] = useState({
     clientConfirmed: false,
     contactConfirmed: false,
@@ -195,6 +197,41 @@ export default function NewAppointment() {
     if (currentStep === 4) return requiredChecklistDone && !saving;
     return true;
   }, [currentStep, formData, requiredChecklistDone, saving]);
+
+  async function handleServiceOrderImport(file?: File | null) {
+    if (!file) return;
+    setServiceOrderImporting(true);
+    setServiceOrderImportMessage('');
+    try {
+      const result = await parseServiceOrderPdf(file);
+      if (!result.found) {
+        setServiceOrderImportMessage('Nao encontrei dados reconheciveis nesse PDF. Confira se ele veio do Sige Cloud.');
+        toast.warning('Nao foi possivel preencher automaticamente.');
+        return;
+      }
+
+      const fields = result.fields;
+      setFormData((prev) => ({
+        ...prev,
+        serviceCode: fields.serviceCode || prev.serviceCode,
+        serviceItemDescription: fields.serviceItemDescription || prev.serviceItemDescription,
+        machineCode: fields.machineCode || prev.machineCode,
+        machineName: fields.machineName || prev.machineName,
+        machineModel: fields.machineModel || prev.machineModel,
+        machineSerial: fields.machineSerial || prev.machineSerial,
+        machineManufacturer: fields.machineManufacturer || prev.machineManufacturer,
+        machineObservations: fields.machineObservations || prev.machineObservations,
+        serviceDescription: prev.serviceDescription || fields.problemDescription || prev.serviceDescription
+      }));
+      setServiceOrderImportMessage('Dados importados. Confira os campos antes de salvar.');
+      toast.success('Dados da OS importados.');
+    } catch (err) {
+      setServiceOrderImportMessage(err instanceof ApiError ? err.message : 'Erro ao importar a OS.');
+      toast.error('Erro ao importar a OS.');
+    } finally {
+      setServiceOrderImporting(false);
+    }
+  }
 
   async function createClient() {
     return api<Client>('/clients', {
@@ -468,42 +505,76 @@ export default function NewAppointment() {
                 <Label>ServiÃ§o (obrigatÃ³rio)</Label>
                 <Textarea placeholder="Descreva o motivo e o serviÃ§o a executar." value={formData.serviceDescription} onChange={(e) => setFormData({ ...formData, serviceDescription: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
               </div>
-              <div className="grid md:grid-cols-2 gap-3">
-                <div>
-                  <Label>Codigo do servico</Label>
-                  <Input placeholder="Ex.: 10021" value={formData.serviceCode} onChange={(e) => setFormData({ ...formData, serviceCode: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 space-y-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-white">Servico na OS</p>
+                  <p className="text-xs text-zinc-400">Esses campos vao direto para a ordem de servico gerada pelo sistema.</p>
                 </div>
-                <div>
-                  <Label>Descricao do servico na OS</Label>
-                  <Input placeholder="Ex.: INSTALACAO (START / OU TREINAMENTO) TODAS AS MAQUINAS" value={formData.serviceItemDescription} onChange={(e) => setFormData({ ...formData, serviceItemDescription: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-blue-100">Importar dados da OS do Sige</p>
+                      <p className="text-xs text-zinc-400">Anexe o PDF original para preencher servico e equipamento automaticamente.</p>
+                    </div>
+                    <Label className="inline-flex cursor-pointer items-center justify-center rounded-md border border-blue-500/30 px-4 py-2 text-sm font-semibold text-blue-100 hover:bg-blue-500/10">
+                      {serviceOrderImporting ? 'Lendo PDF...' : 'Importar PDF'}
+                      <Input
+                        type="file"
+                        accept="application/pdf"
+                        disabled={serviceOrderImporting}
+                        className="hidden"
+                        onChange={(event) => {
+                          void handleServiceOrderImport(event.target.files?.[0]);
+                          event.target.value = '';
+                        }}
+                      />
+                    </Label>
+                  </div>
+                  {serviceOrderImportMessage && (
+                    <p className="mt-2 text-xs text-blue-100">{serviceOrderImportMessage}</p>
+                  )}
+                </div>
+                <div className="grid md:grid-cols-[220px_1fr] gap-3">
+                  <div>
+                    <Label>Codigo do servico</Label>
+                    <Input placeholder="Ex.: 10021" value={formData.serviceCode} onChange={(e) => setFormData({ ...formData, serviceCode: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                  </div>
+                  <div>
+                    <Label>Descricao do servico na OS</Label>
+                    <Input placeholder="Ex.: INSTALACAO (START / OU TREINAMENTO) TODAS AS MAQUINAS" value={formData.serviceItemDescription} onChange={(e) => setFormData({ ...formData, serviceItemDescription: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                  </div>
                 </div>
               </div>
-              <div className="grid md:grid-cols-3 gap-3">
-                <div>
-                  <Label>Codigo do equipamento</Label>
-                  <Input placeholder="Ex.: 125017887" value={formData.machineCode} onChange={(e) => setFormData({ ...formData, machineCode: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 space-y-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-white">Dados do equipamento</p>
+                  <p className="text-xs text-zinc-400">Preencha aqui exatamente como voce quer que apareca na OS.</p>
                 </div>
-                <div>
-                  <Label>Nome da maquina</Label>
-                  <Input placeholder="Ex.: Mesa / corte de metais" value={formData.machineName} onChange={(e) => setFormData({ ...formData, machineName: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
-                </div>
-                <div>
-                  <Label>Modelo da maquina</Label>
-                  <Input placeholder="Ex.: ML5030 tubo laser" value={formData.machineModel} onChange={(e) => setFormData({ ...formData, machineModel: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
-                </div>
-                <div>
-                  <Label>Numero de serie</Label>
-                  <Input placeholder="Ex.: 1250/1709" value={formData.machineSerial} onChange={(e) => setFormData({ ...formData, machineSerial: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
-                </div>
-              </div>
-              <div className="grid md:grid-cols-2 gap-3">
-                <div>
-                  <Label>Fabricante</Label>
-                  <Input placeholder="Ex.: METALIQUE LASER E PLASMA CNC" value={formData.machineManufacturer} onChange={(e) => setFormData({ ...formData, machineManufacturer: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                <div className="grid md:grid-cols-3 gap-3">
+                  <div>
+                    <Label>Codigo do equipamento</Label>
+                    <Input placeholder="Ex.: 125017887" value={formData.machineCode} onChange={(e) => setFormData({ ...formData, machineCode: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                  </div>
+                  <div>
+                    <Label>Nome da maquina</Label>
+                    <Input placeholder="Ex.: Mesa / corte de metais" value={formData.machineName} onChange={(e) => setFormData({ ...formData, machineName: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                  </div>
+                  <div>
+                    <Label>Modelo da maquina</Label>
+                    <Input placeholder="Ex.: ML5030 tubo laser" value={formData.machineModel} onChange={(e) => setFormData({ ...formData, machineModel: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                  </div>
+                  <div>
+                    <Label>Numero de serie</Label>
+                    <Input placeholder="Ex.: 1250/1709" value={formData.machineSerial} onChange={(e) => setFormData({ ...formData, machineSerial: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>Fabricante</Label>
+                    <Input placeholder="Ex.: METALIQUE LASER E PLASMA CNC" value={formData.machineManufacturer} onChange={(e) => setFormData({ ...formData, machineManufacturer: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                  </div>
                 </div>
                 <div>
                   <Label>Observacoes do equipamento</Label>
-                  <Input placeholder="Ex.: teste inicial / configuracao / revisao visual" value={formData.machineObservations} onChange={(e) => setFormData({ ...formData, machineObservations: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                  <Textarea placeholder="Ex.: teste inicial / configuracao / revisao visual" value={formData.machineObservations} onChange={(e) => setFormData({ ...formData, machineObservations: e.target.value })} className="min-h-24 bg-zinc-800/50 border-zinc-700" />
                 </div>
               </div>
             </div>

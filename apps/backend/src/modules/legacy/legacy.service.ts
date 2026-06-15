@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { AppointmentStatus, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { randomUUID } from 'crypto';
@@ -8,6 +8,18 @@ import JSZip from 'jszip';
 import { join } from 'path';
 import { Readable } from 'stream';
 import { PDFDocument, PDFPage, PDFFont, PageSizes, rgb, StandardFonts } from 'pdf-lib';
+
+type ParsedServiceOrderFields = {
+  serviceCode?: string;
+  serviceItemDescription?: string;
+  machineCode?: string;
+  machineName?: string;
+  machineModel?: string;
+  machineSerial?: string;
+  machineManufacturer?: string;
+  machineObservations?: string;
+  problemDescription?: string;
+};
 
 const ATTACHMENT_KIND = {
   GENERAL: 'GENERAL',
@@ -45,6 +57,36 @@ export class LegacyService {
   constructor(private readonly prisma: PrismaService) {}
 
   private driveClient: ReturnType<typeof google.drive> | null = null;
+
+  async parseServiceOrderPdf(file?: { originalname?: string; mimetype?: string; size?: number; buffer?: Buffer }) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Envie o PDF da OS do Sige para importar os dados.');
+    }
+
+    const originalName = file.originalname ?? '';
+    const mimeType = file.mimetype ?? '';
+    if (!mimeType.includes('pdf') && !originalName.toLowerCase().endsWith('.pdf')) {
+      throw new BadRequestException('O importador aceita apenas arquivos PDF.');
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { PDFParse } = require('pdf-parse') as {
+        PDFParse: new (options: { data: Buffer }) => { getText: () => Promise<{ text?: string }>; destroy: () => Promise<void> };
+      };
+      const parser = new PDFParse({ data: file.buffer });
+      const parsed = await parser.getText();
+      await parser.destroy();
+      const text = this.normalizePdfText(parsed.text ?? '');
+      const fields = this.extractSigeServiceOrderFields(text);
+      return {
+        fields,
+        found: Object.values(fields).some(Boolean)
+      };
+    } catch {
+      throw new BadRequestException('Nao foi possivel ler o PDF da OS. Confira se o arquivo veio do Sige e tente novamente.');
+    }
+  }
 
   async resourcesVehicles() {
     return this.prisma.vehicle.findMany({ orderBy: { name: 'asc' } });
@@ -3029,6 +3071,143 @@ export class LegacyService {
       .replace(/\s+/g, ' ')
       .trim();
     return [String(address ?? '').trim(), normalizedCity, 'Brasil'].filter(Boolean).join(', ');
+  }
+
+  private normalizePdfText(text: string) {
+    return text
+      .replace(/\r/g, '\n')
+      .replace(/[ \t]+/g, ' ')
+      .replace(/\n[ \t]+/g, '\n')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  private extractSigeServiceOrderFields(text: string): ParsedServiceOrderFields {
+    const fields: ParsedServiceOrderFields = {};
+    const problemSegment = this.extractTextBetween(text, /PROBLEMA/i, /DADOS\s+DO\(S\)\s+EQUIPAMENTO/i);
+    const equipmentSegment = this.extractTextBetween(text, /DADOS\s+DO\(S\)\s+EQUIPAMENTO\(S\)/i, /PRODUTOS\s*\/\s*SERVI/i);
+    const serviceSegment = this.extractTextBetween(text, /PRODUTOS\s*\/\s*SERVI[CÇ]OS/i, /CONSIDERA[CÇ][OÕ]ES\s+DO\s+T[EÉ]CNICO|Declaro que os servi/i);
+
+    const problem = this.cleanExtractedValue(
+      problemSegment
+        .replace(/RELATO\s+T[EÉ]CNICO/gi, '')
+        .replace(/^PROBLEMA\b/gi, '')
+    );
+    if (problem) fields.problemDescription = problem;
+
+    Object.assign(fields, this.extractEquipmentFields(equipmentSegment));
+    Object.assign(fields, this.extractServiceFields(serviceSegment));
+
+    return fields;
+  }
+
+  private extractTextBetween(text: string, startPattern: RegExp, endPattern: RegExp) {
+    const start = text.search(startPattern);
+    if (start < 0) return '';
+    const afterStart = text.slice(start);
+    const end = afterStart.search(endPattern);
+    return end > 0 ? afterStart.slice(0, end) : afterStart;
+  }
+
+  private extractEquipmentFields(segment: string): ParsedServiceOrderFields {
+    const fields: ParsedServiceOrderFields = {};
+    const cleaned = this.cleanExtractedBlock(
+      segment
+        .replace(/DADOS\s+DO\(S\)\s+EQUIPAMENTO\(S\)/gi, '')
+        .replace(/\bC[oó]digo\b/gi, '')
+        .replace(/\bNome\b/gi, '')
+        .replace(/\bModelo\b/gi, '')
+        .replace(/\bObserva[cç][oõ]es\b/gi, '')
+        .replace(/\bFabricante\b/gi, '')
+    );
+    if (!cleaned) return fields;
+
+    const lines = cleaned
+      .split('\n')
+      .map((line) => this.cleanExtractedValue(line))
+      .filter(Boolean);
+    const firstCodeLine = lines.find((line) => /^\d{3,}[\w/-]*$/.test(line));
+    if (firstCodeLine) fields.machineCode = firstCodeLine;
+
+    const valueLines = lines.filter((line) => line !== firstCodeLine);
+    if (valueLines.length >= 2) {
+      fields.machineName = valueLines[0];
+      fields.machineModel = valueLines[1];
+      if (valueLines.length >= 4) {
+        fields.machineObservations = valueLines.slice(2, -1).join(' ');
+        fields.machineManufacturer = valueLines[valueLines.length - 1];
+      } else if (valueLines.length === 3) {
+        fields.machineManufacturer = valueLines[2];
+      }
+      return this.stripEmptyFields(fields);
+    }
+
+    const withoutCode = this.cleanExtractedValue(cleaned.replace(/^\d{3,}[\w/-]*\s*/, ''));
+    const manufacturerMatch = withoutCode.match(/\b(METALIQUE(?:\s+LASER\s+E\s+PLASMA\s+CNC)?|VISACUT(?:\s+[A-Z0-9./ -]+)?|[A-Z0-9./ -]+(?:CNC|LTDA|EIRELI))\b$/i);
+    if (manufacturerMatch) {
+      fields.machineManufacturer = this.cleanExtractedValue(manufacturerMatch[0]);
+    }
+    const beforeManufacturer = this.cleanExtractedValue(
+      fields.machineManufacturer ? withoutCode.slice(0, withoutCode.length - fields.machineManufacturer.length) : withoutCode
+    );
+    const modelStart = beforeManufacturer.search(/\b(M\d{3,}|ML\d{3,}|TUBE|DOBRADEIRA|LASER|CNC|FIBRA)\b/i);
+    if (modelStart > 0) {
+      fields.machineName = this.cleanExtractedValue(beforeManufacturer.slice(0, modelStart));
+      fields.machineModel = this.cleanExtractedValue(beforeManufacturer.slice(modelStart));
+    } else if (beforeManufacturer) {
+      fields.machineName = beforeManufacturer;
+    }
+    return this.stripEmptyFields(fields);
+  }
+
+  private extractServiceFields(segment: string): ParsedServiceOrderFields {
+    const fields: ParsedServiceOrderFields = {};
+    const cleaned = this.cleanExtractedBlock(
+      segment
+        .replace(/PRODUTOS\s*\/\s*SERVI[CÇ]OS:?/gi, '')
+        .replace(/\bC[oó]digo\b/gi, '')
+        .replace(/Descri[cç][aã]o\s+do\(s\)\s+servi[cç]o\(s\):?/gi, '')
+    );
+    if (!cleaned) return fields;
+
+    const lines = cleaned
+      .split('\n')
+      .map((line) => this.cleanExtractedValue(line))
+      .filter(Boolean);
+    const codeLineIndex = lines.findIndex((line) => /^\d{3,}$/.test(line));
+    if (codeLineIndex >= 0) {
+      fields.serviceCode = lines[codeLineIndex];
+      fields.serviceItemDescription = this.cleanExtractedValue(lines.slice(codeLineIndex + 1).join(' '));
+      return this.stripEmptyFields(fields);
+    }
+
+    const match = cleaned.match(/\b(\d{3,})\b\s+([\s\S]+)/);
+    if (match) {
+      fields.serviceCode = match[1];
+      fields.serviceItemDescription = this.cleanExtractedValue(match[2]);
+    }
+    return this.stripEmptyFields(fields);
+  }
+
+  private cleanExtractedValue(value?: string | null) {
+    return String(value ?? '')
+      .replace(/\s+/g, ' ')
+      .replace(/\s+([,.;:])/g, '$1')
+      .trim();
+  }
+
+  private cleanExtractedBlock(value?: string | null) {
+    return String(value ?? '')
+      .split('\n')
+      .map((line) => this.cleanExtractedValue(line))
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+  }
+
+  private stripEmptyFields(fields: ParsedServiceOrderFields) {
+    return Object.fromEntries(Object.entries(fields).filter(([, value]) => Boolean(value))) as ParsedServiceOrderFields;
   }
 
   private async geocodeAddress(address?: string | null, city?: string | null) {

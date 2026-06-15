@@ -3164,6 +3164,7 @@ export class LegacyService {
       'Significado dos campos:',
       '- serviceCode: codigo da linha de PRODUTOS / SERVICOS.',
       '- serviceItemDescription: descricao da linha de PRODUTOS / SERVICOS.',
+      '- Se existirem varios produtos/servicos, retorne serviceCode com todos os codigos separados por " / " e serviceItemDescription com uma linha para cada servico no formato "CODIGO - DESCRICAO".',
       '- machineCode: codigo do equipamento em DADOS DO(S) EQUIPAMENTO(S).',
       '- machineName: nome do equipamento.',
       '- machineModel: modelo do equipamento.',
@@ -3363,6 +3364,54 @@ export class LegacyService {
       .split('\n')
       .map((line) => this.cleanExtractedValue(line))
       .filter(Boolean);
+
+    const serviceRows: Array<{ code: string; description: string }> = [];
+    const usedIndexes = new Set<number>();
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      const sameLineMatch = line.match(/^(\d{3,})\s*(?:[-–:]|\s)\s*(.+)$/);
+      if (sameLineMatch && /[A-Za-zÃÀ-ÿ]/.test(sameLineMatch[2])) {
+        serviceRows.push({
+          code: sameLineMatch[1],
+          description: this.cleanExtractedValue(sameLineMatch[2])
+        });
+        usedIndexes.add(index);
+      }
+    }
+
+    const codeOnlyIndexes = lines
+      .map((line, index) => ({ line, index }))
+      .filter(({ line, index }) => !usedIndexes.has(index) && /^\d{3,}$/.test(line));
+
+    for (const { line: code, index } of codeOnlyIndexes) {
+      const existingRow = serviceRows.find((row) => row.code === code);
+      if (existingRow) continue;
+
+      const descriptionParts: string[] = [];
+      for (let next = index + 1; next < lines.length; next += 1) {
+        if (usedIndexes.has(next)) continue;
+        if (/^\d{3,}$/.test(lines[next])) break;
+        descriptionParts.push(lines[next]);
+      }
+
+      if (descriptionParts.length) {
+        serviceRows.push({
+          code,
+          description: this.cleanExtractedValue(descriptionParts.join(' '))
+        });
+      }
+    }
+
+    if (serviceRows.length) {
+      const uniqueCodes = [...new Set(serviceRows.map((row) => row.code))];
+      fields.serviceCode = uniqueCodes.join(' / ');
+      fields.serviceItemDescription = serviceRows
+        .map((row) => `${row.code} - ${row.description}`)
+        .join('\n');
+      return this.stripEmptyFields(fields);
+    }
+
     const codeLineIndex = lines.findIndex((line) => /^\d{3,}$/.test(line));
     if (codeLineIndex >= 0) {
       fields.serviceCode = lines[codeLineIndex];

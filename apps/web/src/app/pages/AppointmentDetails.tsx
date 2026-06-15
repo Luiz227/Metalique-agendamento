@@ -323,6 +323,18 @@ export default function AppointmentDetails() {
       const fields = result.fields;
       setForm((prev) => ({
         ...prev,
+        clientName: fields.clientName || prev.clientName,
+        clientCnpj: fields.clientCnpj || prev.clientCnpj,
+        clientIe: fields.clientIe || prev.clientIe,
+        clientEmail: fields.clientEmail || prev.clientEmail,
+        clientPhone: fields.clientPhone || prev.clientPhone,
+        city: fields.clientCity || prev.city,
+        clientState: fields.clientState || prev.clientState,
+        clientDistrict: fields.clientDistrict || prev.clientDistrict,
+        clientZipCode: fields.clientZipCode || prev.clientZipCode,
+        fullAddress: fields.clientAddress || prev.fullAddress,
+        serviceType: fields.serviceType || prev.serviceType,
+        osNumber: fields.osNumber || prev.osNumber,
         serviceCode: fields.serviceCode || prev.serviceCode,
         serviceItemDescription: fields.serviceItemDescription || prev.serviceItemDescription,
         machineCode: fields.machineCode || prev.machineCode,

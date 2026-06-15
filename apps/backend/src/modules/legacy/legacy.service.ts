@@ -10,6 +10,18 @@ import { Readable } from 'stream';
 import { PDFDocument, PDFPage, PDFFont, PageSizes, rgb, StandardFonts } from 'pdf-lib';
 
 type ParsedServiceOrderFields = {
+  osNumber?: string;
+  clientName?: string;
+  clientCnpj?: string;
+  clientIe?: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  clientAddress?: string;
+  clientCity?: string;
+  clientState?: string;
+  clientDistrict?: string;
+  clientZipCode?: string;
+  serviceType?: string;
   serviceCode?: string;
   serviceItemDescription?: string;
   machineCode?: string;
@@ -22,6 +34,18 @@ type ParsedServiceOrderFields = {
 };
 
 const SERVICE_ORDER_FIELD_KEYS = [
+  'osNumber',
+  'clientName',
+  'clientCnpj',
+  'clientIe',
+  'clientEmail',
+  'clientPhone',
+  'clientAddress',
+  'clientCity',
+  'clientState',
+  'clientDistrict',
+  'clientZipCode',
+  'serviceType',
   'serviceCode',
   'serviceItemDescription',
   'machineCode',
@@ -3120,6 +3144,7 @@ export class LegacyService {
 
     Object.assign(fields, this.extractEquipmentFields(equipmentSegment));
     Object.assign(fields, this.extractServiceFields(serviceSegment));
+    Object.assign(fields, this.extractClientAndHeaderFields(text));
 
     return fields;
   }
@@ -3146,6 +3171,18 @@ export class LegacyService {
       '- machineManufacturer: fabricante do equipamento.',
       '- machineObservations: observacoes do equipamento.',
       '- problemDescription: texto do bloco PROBLEMA ou RELATO TECNICO antes dos dados do equipamento.',
+      '- osNumber: numero do Pedido/Orc/OS, normalmente no cabecalho.',
+      '- clientName: nome do cliente do chamado.',
+      '- clientCnpj: CNPJ ou CPF do cliente.',
+      '- clientIe: inscricao estadual IE do cliente, se existir.',
+      '- clientEmail: email do cliente.',
+      '- clientPhone: telefone do cliente.',
+      '- clientAddress: rua, numero e complemento do cliente.',
+      '- clientCity: cidade do cliente.',
+      '- clientState: UF do cliente, somente duas letras se existir.',
+      '- clientDistrict: bairro do cliente.',
+      '- clientZipCode: CEP do cliente.',
+      '- serviceType: tipo do servico, por exemplo START E TREINAMENTO, MANUTENCAO CORRETIVA, MANUTENCAO PREVENTIVA.',
       'Extraido pelo parser atual, use apenas como pista e corrija se estiver errado:',
       JSON.stringify(parserFields),
       'Texto extraido do PDF:',
@@ -3216,6 +3253,49 @@ export class LegacyService {
     const afterStart = text.slice(start);
     const end = afterStart.search(endPattern);
     return end > 0 ? afterStart.slice(0, end) : afterStart;
+  }
+
+  private extractClientAndHeaderFields(text: string): ParsedServiceOrderFields {
+    const fields: ParsedServiceOrderFields = {};
+    const headerSegment = this.extractTextBetween(text, /DADOS\s+DO\s+CHAMADO|DADOS\s+DO\(S\)\s+CHAMADO/i, /PROBLEMA/i) || text.slice(0, 5000);
+
+    const osMatch = text.match(/(?:Pedido\/Or[cç]\.?\s*N[ºo.]?|Pedido\/Orc\s*N[ºo.]?|OS\s*N[ºo.]?)\s*:?\s*([A-Z0-9./-]+)/i);
+    if (osMatch) fields.osNumber = this.cleanExtractedValue(osMatch[1]);
+
+    const serviceTypeMatch = text.match(/\b(START\s*(?:E|\/|OU)?\s*TREINAMENTO|MANUTEN[CÇ][AÃ]O\s+(?:CORRETIVA|PREVENTIVA)|INSTALA[CÇ][AÃ]O|TREINAMENTO)\b/i);
+    if (serviceTypeMatch) fields.serviceType = this.cleanExtractedValue(serviceTypeMatch[1]).toUpperCase();
+
+    const clientMatch = headerSegment.match(/Cliente:\s*([^\n\r]+?)(?=\s+Telefone:|\n|CPF\/CNPJ|$)/i);
+    if (clientMatch) fields.clientName = this.cleanExtractedValue(clientMatch[1]);
+
+    const phoneMatch = headerSegment.match(/Telefone:\s*([+()\d\s.-]{8,})/i);
+    if (phoneMatch) fields.clientPhone = this.cleanExtractedValue(phoneMatch[1]);
+
+    const cnpjMatch = headerSegment.match(/CPF\/CNPJ:\s*([0-9./-]+)/i);
+    if (cnpjMatch) fields.clientCnpj = this.cleanExtractedValue(cnpjMatch[1]);
+
+    const ieMatch = headerSegment.match(/\bIE:\s*([A-Z0-9./-]+)/i);
+    if (ieMatch) fields.clientIe = this.cleanExtractedValue(ieMatch[1]);
+
+    const emailMatch = headerSegment.match(/E-?mail:\s*([^\s]+@[^\s]+)/i);
+    if (emailMatch) fields.clientEmail = this.cleanExtractedValue(emailMatch[1]);
+
+    const addressMatch = headerSegment.match(/Endere[cç]o:\s*([\s\S]*?)(?=\s+E-?mail:|\nCidade:|\nBairro:|\nCEP:|$)/i);
+    if (addressMatch) fields.clientAddress = this.cleanExtractedValue(addressMatch[1]);
+
+    const cityMatch = headerSegment.match(/Cidade:\s*([^\n\r]+?)(?:\s*-\s*([A-Z]{2})\b|\n|$)/i);
+    if (cityMatch) {
+      fields.clientCity = this.cleanExtractedValue(cityMatch[1]);
+      if (cityMatch[2]) fields.clientState = this.cleanExtractedValue(cityMatch[2]).toUpperCase();
+    }
+
+    const districtMatch = headerSegment.match(/Bairro:\s*([^\n\r]+?)(?=\s+E-?mail:|\s+CEP:|\n|$)/i);
+    if (districtMatch) fields.clientDistrict = this.cleanExtractedValue(districtMatch[1]);
+
+    const cepMatch = headerSegment.match(/CEP:\s*([0-9.-]{8,})/i);
+    if (cepMatch) fields.clientZipCode = this.cleanExtractedValue(cepMatch[1]);
+
+    return this.stripEmptyFields(fields);
   }
 
   private extractEquipmentFields(segment: string): ParsedServiceOrderFields {

@@ -6,6 +6,18 @@ export type ApiUser = {
 };
 
 export type ParsedServiceOrderFields = {
+  osNumber?: string;
+  clientName?: string;
+  clientCnpj?: string;
+  clientIe?: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  clientAddress?: string;
+  clientCity?: string;
+  clientState?: string;
+  clientDistrict?: string;
+  clientZipCode?: string;
+  serviceType?: string;
   serviceCode?: string;
   serviceItemDescription?: string;
   machineCode?: string;

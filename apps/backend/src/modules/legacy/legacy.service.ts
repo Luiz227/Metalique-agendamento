@@ -1805,9 +1805,43 @@ export class LegacyService {
       return `${start}${text}${end}`;
     });
 
-    return result.replace(middle, replacedMiddle);
+    if (replacedMiddle !== middle && index > 0) {
+      return result.replace(middle, replacedMiddle);
+    }
+
+    const tableMatch = middle.match(/(<w:tbl\b[\s\S]*?<\/w:tbl>)/u);
+    if (!tableMatch) return result;
+
+    const filledNotesTable = this.fillFirstDocxTableCellWithParagraphs(tableMatch[1], rows);
+    if (filledNotesTable === tableMatch[1]) return result;
+
+    return result.replace(tableMatch[1], filledNotesTable);
   }
 
+  private fillFirstDocxTableCellWithParagraphs(tableXml: string, rows: string[]) {
+    const paragraphs = rows.map((row) => this.buildDocxTechnicalNoteParagraph(this.escapeXml(row))).join('');
+    const firstCellRegex = /(<w:tc\b[^>]*>)(<w:tcPr[\s\S]*?<\/w:tcPr>)([\s\S]*?)(<\/w:tc>)/u;
+    return tableXml.replace(firstCellRegex, (_full, cellStart, cellProperties, _cellContent, cellEnd) => {
+      return `${cellStart}${cellProperties}${paragraphs}${cellEnd}`;
+    });
+  }
+
+  private buildDocxTechnicalNoteParagraph(text: string) {
+    return [
+      '<w:p>',
+      '<w:pPr>',
+      '<w:spacing w:after="0" w:line="240" w:lineRule="auto"/>',
+      '<w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>',
+      '</w:pPr>',
+      '<w:r>',
+      '<w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>',
+      '<w:t xml:space="preserve">',
+      text,
+      '</w:t>',
+      '</w:r>',
+      '</w:p>'
+    ].join('');
+  }
   private fillAcceptanceDateArea(xml: string, acceptanceDate: Date) {
     const formatted = this.escapeXml(this.formatDateOnly(acceptanceDate));
     let result = xml.replace(/(__\/__\/____|___\/___\/_____)/g, formatted);

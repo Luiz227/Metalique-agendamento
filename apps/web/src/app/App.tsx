@@ -49,9 +49,9 @@ export default function App() {
     <BrowserRouter>
       <Toaster />
       <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/" element={<RequireAuth />}>
-          <Route index element={<Navigate to={homeByRole(user?.role)} replace />} />
+        <Route element={<RequireAuth />}>
           <Route path="dashboard" element={<RequireRole roles={['ADMIN']}><Dashboard /></RequireRole>} />
           <Route path="map" element={<RequireRole roles={['ADMIN', 'LOGISTICS', 'SALES']}><MapView /></RequireRole>} />
           <Route path="schedule" element={<RequireRole roles={['ADMIN', 'LOGISTICS', 'SALES']}><Schedule /></RequireRole>} />

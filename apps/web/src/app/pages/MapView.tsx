@@ -195,6 +195,7 @@ export default function MapView() {
   const [selectedMarker, setSelectedMarker] = useState<string | null>(null);
   const [filterTechnician, setFilterTechnician] = useState<string>('all');
   const [period, setPeriod] = useState<'week' | 'month'>('week');
+  const [showFinishedOnMap, setShowFinishedOnMap] = useState(false);
   const [referenceDate, setReferenceDate] = useState(() => new Date());
   const [searchAddress, setSearchAddress] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
@@ -256,13 +257,13 @@ export default function MapView() {
       end.setHours(23, 59, 59, 999);
     }
     return appointments.filter((appointment) => {
-      if (appointment.status === 'CRITICAL') return false;
+      if (!showFinishedOnMap && appointment.status === 'CRITICAL') return false;
       const date = new Date(appointment.date);
       if (date < start || date > end) return false;
       if (filterTechnician !== 'all' && appointment.technician?.name !== filterTechnician) return false;
       return true;
     });
-  }, [appointments, filterTechnician, period, referenceDate]);
+  }, [appointments, filterTechnician, period, referenceDate, showFinishedOnMap]);
 
   useEffect(() => {
     let cancelled = false;
@@ -664,6 +665,14 @@ export default function MapView() {
               </SelectContent>
             </Select>
           </div>
+          <Button
+            type="button"
+            variant={showFinishedOnMap ? 'default' : 'outline'}
+            className="w-full justify-start"
+            onClick={() => setShowFinishedOnMap((value) => !value)}
+          >
+            {showFinishedOnMap ? 'Ocultar finalizados no mapa' : 'Mostrar finalizados no mapa'}
+          </Button>
           <div>
             <label className="text-sm text-zinc-400 mb-1.5 block">Pesquisar endereço</label>
             <div className="flex gap-2">

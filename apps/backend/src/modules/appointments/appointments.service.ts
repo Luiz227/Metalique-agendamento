@@ -198,6 +198,17 @@ export class AppointmentsService {
     return { ok: true };
   }
 
+  async reopen(id: string) {
+    await this.prisma.appointment.update({
+      where: { id },
+      data: { status: AppointmentStatus.READY }
+    });
+    await this.prisma.statusLog.create({
+      data: { appointmentId: id, status: 'REOPENED', observation: 'Agendamento reaberto para pronto' }
+    });
+    return { ok: true, status: 'READY' };
+  }
+
   private parseStatus(input: unknown): AppointmentStatus {
     const value = String(input ?? 'WAITING').toUpperCase();
     if (value === 'READY') return AppointmentStatus.READY;

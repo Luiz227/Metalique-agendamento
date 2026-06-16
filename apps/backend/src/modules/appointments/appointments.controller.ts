@@ -59,4 +59,9 @@ export class AppointmentsController {
   confirm(@Param('id') id: string) {
     return this.service.confirm(id);
   }
+
+  @Post(':id/reopen')
+  reopen(@Param('id') id: string) {
+    return this.service.reopen(id);
+  }
 }

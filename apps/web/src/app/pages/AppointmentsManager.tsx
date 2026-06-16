@@ -123,6 +123,16 @@ export default function AppointmentsManager() {
     [items]
   );
 
+  async function handleReopen(id: string) {
+    try {
+      await api(`/appointments/${id}/reopen`, { method: 'POST' });
+      toast.success('Agendamento reaberto e movido para Pronto.');
+      await load();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Erro ao reabrir agendamento');
+    }
+  }
+
   async function createClient() {
     return api<Client>('/clients', {
       method: 'POST',
@@ -401,9 +411,14 @@ export default function AppointmentsManager() {
                 )}
 
                 <div>
-                  <Link to={`/appointments/${item.id}`}>
-                    <Button size="sm" variant="outline">Visualizar campos do agendamento</Button>
-                  </Link>
+                  <div className="flex flex-wrap gap-2">
+                    <Link to={`/appointments/${item.id}`}>
+                      <Button size="sm" variant="outline">Visualizar campos do agendamento</Button>
+                    </Link>
+                    <Button size="sm" onClick={() => handleReopen(item.id)}>
+                      Reabrir agendamento
+                    </Button>
+                  </div>
                 </div>
               </div>
             );

@@ -50,12 +50,13 @@ function missingItems(appointment: Appointment): string[] {
 }
 
 function wasFinishedByTechnician(appointment: Appointment) {
+  if (appointment.status === 'READY') return false;
   return (appointment.statusLogs ?? []).some((log) => log.status === 'COMPLETED_SUCCESS' || log.status === 'COMPLETED_PARTIAL');
 }
 
 function columnOf(appointment: Appointment): KanbanColumn['key'] {
-  if (appointment.status === 'CRITICAL' || wasFinishedByTechnician(appointment)) return 'critical';
   if (appointment.status === 'READY') return 'ready';
+  if (appointment.status === 'CRITICAL' || wasFinishedByTechnician(appointment)) return 'critical';
 
   const hasCoreDataMissing =
     !appointment.city?.trim() ||

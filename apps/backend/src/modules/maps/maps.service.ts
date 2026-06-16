@@ -29,15 +29,22 @@ export class MapsService {
     const trimmed = this.normalizeQuery(query);
     if (!trimmed) return { ok: false, query, lat: null, lng: null, formattedAddress: null };
 
+    const candidates = this.buildGeocodeCandidates(trimmed);
     const key = process.env.GOOGLE_MAPS_API_KEY;
+
     if (key) {
-      const google = await this.tryGoogle(trimmed, key);
-      if (google.ok) return google;
+      for (const candidate of candidates) {
+        const google = await this.tryGoogle(candidate, key);
+        if (google.ok) return google;
+      }
     }
 
-    const nominatim = await this.tryNominatim(trimmed);
-    if (!nominatim.ok) return { ok: false, query: trimmed, lat: null, lng: null, formattedAddress: null };
-    return nominatim;
+    for (const candidate of candidates) {
+      const nominatim = await this.tryNominatim(candidate);
+      if (nominatim.ok) return nominatim;
+    }
+
+    return { ok: false, query: trimmed, lat: null, lng: null, formattedAddress: null };
   }
 
   async travelTime(originInput: string, destinationInput: string): Promise<TravelTimeResult> {
@@ -89,7 +96,7 @@ export class MapsService {
   }
 
   private async tryGoogle(query: string, key: string): Promise<GeocodeResult> {
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${encodeURIComponent(key)}`;
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&region=br&components=country:BR&key=${encodeURIComponent(key)}`;
     const response = await fetch(url);
     if (!response.ok) return { ok: false, query, lat: null, lng: null, formattedAddress: null };
 
@@ -114,7 +121,7 @@ export class MapsService {
   }
 
   private async tryNominatim(query: string): Promise<GeocodeResult> {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&addressdetails=1`;
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&addressdetails=1&countrycodes=br`;
     const response = await fetch(url, {
       headers: { 'User-Agent': 'metalique-agendamento/1.0 (ops@metalique.com.br)' }
     });
@@ -137,7 +144,7 @@ export class MapsService {
   }
 
   private async tryGoogleRoute(origin: string, destination: string, key: string): Promise<TravelTimeResult> {
-    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=driving&key=${encodeURIComponent(key)}`;
+    const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=driving&region=br&key=${encodeURIComponent(key)}`;
     const response = await fetch(url);
     if (!response.ok) {
       return {
@@ -191,19 +198,61 @@ export class MapsService {
   }
 
   private haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-    const R = 6371;
+    const radius = 6371;
     const dLat = ((lat2 - lat1) * Math.PI) / 180;
     const dLon = ((lon2 - lon1) * Math.PI) / 180;
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return 2 * radius * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
   private normalizeQuery(input: string): string {
     return input
-      .replace(/t[eé]cnico\s*:/i, '')
+      .replace(/t[eéê]cnico\s*:/i, '')
+      .replace(/cep\s*:\s*/gi, ' ')
+      .replace(/bairro\s*:\s*/gi, ', ')
+      .replace(/\s*\/\s*/g, '/')
+      .replace(/\s*-\s*/g, ' - ')
+      .replace(/\s*,\s*/g, ', ')
       .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  private buildGeocodeCandidates(input: string) {
+    const normalized = input.trim();
+    const withoutCountry = normalized.replace(/,?\s*brasil$/i, '').trim();
+    const base = withoutCountry
+      .replace(/\b([A-ZÀ-ÿ][A-Za-zÀ-ÿ]+)\s*\/\s*([A-Z]{2})\b/g, '$1, $2')
+      .replace(/\b([A-ZÀ-ÿ][A-Za-zÀ-ÿ]+)\s*-\s*([A-Z]{2})\b/g, '$1, $2')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+    const withoutZipCode = base
+      .replace(/\b\d{5}-?\d{3}\b/g, ' ')
+      .replace(/\s+,/g, ',')
+      .replace(/,\s*,+/g, ', ')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+      .replace(/,\s*$/, '');
+
+    return Array.from(
+      new Set(
+        [
+          `${base}, Brasil`,
+          base,
+          `${withoutZipCode}, Brasil`,
+          withoutZipCode
+        ]
+          .map((value) =>
+            value
+              .replace(/,\s*,+/g, ', ')
+              .replace(/\s{2,}/g, ' ')
+              .trim()
+              .replace(/,\s*$/, '')
+          )
+          .filter(Boolean)
+      )
+    );
   }
 }

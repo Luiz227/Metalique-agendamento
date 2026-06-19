@@ -79,6 +79,20 @@ const checklistLabels: Record<ChecklistKey, string> = {
   clientChecklistChecked: 'Checklist cliente recebido'
 };
 
+type LogisticsSuggestion = {
+  ok: boolean;
+  distanceText: string | null;
+  durationText: string | null;
+  durationSeconds: number | null;
+  suggestedMode: 'CAR' | 'AIR' | null;
+  suggestedReason: string | null;
+  nearestAirport: {
+    name: string | null;
+    formattedAddress: string | null;
+    distanceText: string | null;
+  } | null;
+};
+
 export default function AppointmentDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -151,6 +165,7 @@ export default function AppointmentDetails() {
     clientChecklistChecked: false
   });
   const [travelEstimate, setTravelEstimate] = useState<{ distanceText: string; durationText: string } | null>(null);
+  const [logisticsSuggestion, setLogisticsSuggestion] = useState<LogisticsSuggestion | null>(null);
   const [travelLoading, setTravelLoading] = useState(false);
   async function load(showLoading = true) {
     if (!id) {
@@ -261,22 +276,45 @@ export default function AppointmentDetails() {
     const destination = buildMapsDestination(fullAddress, city);
     if (destination.length < 6) {
       setTravelEstimate(null);
+      setLogisticsSuggestion(null);
       return;
     }
 
     const timer = setTimeout(async () => {
       try {
         setTravelLoading(true);
-        const route = await api<{ ok: boolean; distanceText: string | null; durationText: string | null }>(
-          `/maps/travel-time?origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(destination)}`
+        const route = await api<LogisticsSuggestion>(
+          `/maps/logistics-suggestion?origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(destination)}`
         );
+        setLogisticsSuggestion(route);
         if (route.ok && route.distanceText && route.durationText) {
           setTravelEstimate({ distanceText: route.distanceText, durationText: route.durationText });
+          if (editing) {
+            setForm((prev) => {
+              const airportLabel =
+                route.nearestAirport?.name && route.nearestAirport?.formattedAddress
+                  ? `${route.nearestAirport.name} - ${route.nearestAirport.formattedAddress}`
+                  : route.nearestAirport?.name || route.nearestAirport?.formattedAddress || '';
+              const nextTransportMode = route.suggestedMode ?? prev.transportMode;
+              const nextFlightAirport =
+                nextTransportMode === 'AIR' ? airportLabel || prev.flightAirport : '';
+              if (prev.transportMode === nextTransportMode && prev.flightAirport === nextFlightAirport) {
+                return prev;
+              }
+              return {
+                ...prev,
+                transportMode: nextTransportMode,
+                flightAirport: nextFlightAirport
+              };
+            });
+          }
         } else {
           setTravelEstimate(null);
+          setLogisticsSuggestion(null);
         }
       } catch {
         setTravelEstimate(null);
+        setLogisticsSuggestion(null);
       } finally {
         setTravelLoading(false);
       }
@@ -289,12 +327,16 @@ export default function AppointmentDetails() {
     editing ? form.fullAddress : appointment?.fullAddress,
     editing ? form.city : appointment?.city
   );
-  const routeExternalUrl = logisticsDestination
-    ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(logisticsDestination)}&travelmode=driving`
+  const airportDestination = logisticsSuggestion?.suggestedMode === 'AIR'
+    ? [logisticsSuggestion.nearestAirport?.name, logisticsSuggestion.nearestAirport?.formattedAddress].filter(Boolean).join(', ')
+    : '';
+  const effectiveRouteDestination = airportDestination || logisticsDestination;
+  const routeExternalUrl = effectiveRouteDestination
+    ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(effectiveRouteDestination)}&travelmode=driving`
     : '';
   const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
-  const routeEmbedUrl = logisticsDestination && googleMapsKey
-    ? `https://www.google.com/maps/embed/v1/directions?key=${encodeURIComponent(googleMapsKey)}&origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(logisticsDestination)}&mode=driving`
+  const routeEmbedUrl = effectiveRouteDestination && googleMapsKey
+    ? `https://www.google.com/maps/embed/v1/directions?key=${encodeURIComponent(googleMapsKey)}&origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(effectiveRouteDestination)}&mode=driving`
     : '';
   const checklist = useMemo(
     () =>
@@ -776,6 +818,12 @@ export default function AppointmentDetails() {
                 {editing ? (
                   <>
                     <Input placeholder="Aeroporto" value={form.flightAirport} onChange={(e) => setForm({ ...form, flightAirport: e.target.value })} />
+                    {logisticsSuggestion?.nearestAirport && (
+                      <p className="text-xs text-muted-foreground">
+                        Sugestao do sistema: {logisticsSuggestion.nearestAirport.name}
+                        {logisticsSuggestion.nearestAirport.distanceText ? ` (${logisticsSuggestion.nearestAirport.distanceText} do cliente)` : ''}
+                      </p>
+                    )}
                     <div className="grid gap-2 sm:grid-cols-2">
                       <div>
                         <p className="mb-1 text-[11px] text-muted-foreground">Ida - data e hora</p>
@@ -841,6 +889,27 @@ export default function AppointmentDetails() {
                 <div className="mt-3 space-y-3">
                   <p className="text-[11px] text-muted-foreground">Base fixa de saida: {COMPANY_BASE_ADDRESS}</p>
                   {travelLoading && <p className="text-xs text-muted-foreground">Calculando tempo de viagem...</p>}
+                  {logisticsSuggestion?.suggestedMode && (
+                    <div className="rounded-md border border-blue-500/20 bg-blue-500/10 p-3">
+                      <p className="text-sm font-semibold text-blue-200">
+                        Sugestao automatica: {logisticsSuggestion.suggestedMode === 'AIR' ? 'viagem aerea' : 'viagem de carro'}
+                      </p>
+                      {logisticsSuggestion.suggestedReason && (
+                        <p className="mt-1 text-xs text-muted-foreground">{logisticsSuggestion.suggestedReason}</p>
+                      )}
+                      {logisticsSuggestion.nearestAirport && (
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          <p>Aeroporto mais proximo: {logisticsSuggestion.nearestAirport.name || 'Nao identificado'}</p>
+                          {logisticsSuggestion.nearestAirport.formattedAddress && (
+                            <p>{logisticsSuggestion.nearestAirport.formattedAddress}</p>
+                          )}
+                          {logisticsSuggestion.nearestAirport.distanceText && (
+                            <p>Distancia do cliente ate o aeroporto: {logisticsSuggestion.nearestAirport.distanceText}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {travelEstimate && (
                     <div className="grid gap-2 sm:grid-cols-2">
                       <div className="rounded-md border bg-muted/30 p-3">
@@ -863,7 +932,7 @@ export default function AppointmentDetails() {
                     <a href={routeExternalUrl} target="_blank" rel="noreferrer">
                       <Button type="button" variant="outline" className="w-full">
                         <Navigation className="mr-2 h-4 w-4" />
-                        Abrir rota no Google Maps
+                        {logisticsSuggestion?.suggestedMode === 'AIR' ? 'Abrir rota ate o aeroporto' : 'Abrir rota no Google Maps'}
                       </Button>
                     </a>
                   )}

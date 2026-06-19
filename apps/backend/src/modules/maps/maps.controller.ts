@@ -19,4 +19,9 @@ export class MapsController {
   travelTime(@Query('origin') origin?: string, @Query('destination') destination?: string) {
     return this.service.travelTime(origin ?? '', destination ?? '');
   }
+
+  @Get('logistics-suggestion')
+  logisticsSuggestion(@Query('origin') origin?: string, @Query('destination') destination?: string) {
+    return this.service.logisticsSuggestion(origin ?? '', destination ?? '');
+  }
 }

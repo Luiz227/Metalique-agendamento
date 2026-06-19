@@ -19,6 +19,21 @@ type TravelTimeResult = {
   durationText: string | null;
 };
 
+type AirportSuggestion = {
+  name: string | null;
+  formattedAddress: string | null;
+  lat: number | null;
+  lng: number | null;
+  distanceMeters: number | null;
+  distanceText: string | null;
+};
+
+type LogisticsSuggestionResult = TravelTimeResult & {
+  suggestedMode: 'CAR' | 'AIR' | null;
+  suggestedReason: string | null;
+  nearestAirport: AirportSuggestion | null;
+};
+
 @Injectable()
 export class MapsService {
   health() {
@@ -92,6 +107,30 @@ export class MapsService {
       distanceText: `${(meters / 1000).toFixed(1)} km`,
       durationSeconds: minutes * 60,
       durationText: `${minutes} min`
+    };
+  }
+
+  async logisticsSuggestion(originInput: string, destinationInput: string): Promise<LogisticsSuggestionResult> {
+    const route = await this.travelTime(originInput, destinationInput);
+    if (!route.ok) {
+      return {
+        ...route,
+        suggestedMode: null,
+        suggestedReason: null,
+        nearestAirport: null
+      };
+    }
+
+    const mustFly = (route.durationSeconds ?? 0) > 10 * 60 * 60;
+    const nearestAirport = mustFly ? await this.findNearestAirport(route.destination) : null;
+
+    return {
+      ...route,
+      suggestedMode: mustFly ? 'AIR' : 'CAR',
+      suggestedReason: mustFly
+        ? 'Tempo estimado de carro acima de 10 horas. Recomendo viagem aerea.'
+        : 'Tempo estimado de carro abaixo de 10 horas. Recomendo viagem de carro.',
+      nearestAirport
     };
   }
 
@@ -194,6 +233,64 @@ export class MapsService {
       distanceText,
       durationSeconds,
       durationText
+    };
+  }
+
+  private async findNearestAirport(destination: string): Promise<AirportSuggestion | null> {
+    const place = await this.geocode(destination);
+    if (!place.ok || place.lat == null || place.lng == null) return null;
+
+    const key = process.env.GOOGLE_MAPS_API_KEY;
+    if (key) {
+      const googleAirport = await this.tryGoogleNearbyAirport(place.lat, place.lng, key);
+      if (googleAirport) return googleAirport;
+    }
+
+    const fallback = await this.geocode(`Aeroporto, ${destination}`);
+    if (!fallback.ok || fallback.lat == null || fallback.lng == null) return null;
+
+    const meters = this.haversineKm(place.lat, place.lng, fallback.lat, fallback.lng) * 1000;
+    return {
+      name: fallback.formattedAddress?.split(',')[0] ?? 'Aeroporto sugerido',
+      formattedAddress: fallback.formattedAddress,
+      lat: fallback.lat,
+      lng: fallback.lng,
+      distanceMeters: Math.round(meters),
+      distanceText: `${(meters / 1000).toFixed(1)} km`
+    };
+  }
+
+  private async tryGoogleNearbyAirport(lat: number, lng: number, key: string): Promise<AirportSuggestion | null> {
+    const url =
+      `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${encodeURIComponent(`${lat},${lng}`)}` +
+      `&rankby=distance&type=airport&key=${encodeURIComponent(key)}`;
+    const response = await fetch(url);
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as {
+      status?: string;
+      results?: Array<{
+        name?: string;
+        vicinity?: string;
+        formatted_address?: string;
+        geometry?: { location?: { lat?: number; lng?: number } };
+      }>;
+    };
+
+    if (payload.status !== 'OK' && payload.status !== 'ZERO_RESULTS') return null;
+    const first = payload.results?.[0];
+    const airportLat = first?.geometry?.location?.lat;
+    const airportLng = first?.geometry?.location?.lng;
+    if (typeof airportLat !== 'number' || typeof airportLng !== 'number') return null;
+
+    const meters = this.haversineKm(lat, lng, airportLat, airportLng) * 1000;
+    return {
+      name: first?.name ?? 'Aeroporto sugerido',
+      formattedAddress: first?.formatted_address ?? first?.vicinity ?? null,
+      lat: airportLat,
+      lng: airportLng,
+      distanceMeters: Math.round(meters),
+      distanceText: `${(meters / 1000).toFixed(1)} km`
     };
   }
 

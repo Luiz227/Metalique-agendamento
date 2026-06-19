@@ -1,5 +1,5 @@
 import { type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, Camera, CheckCircle, Clock, FileText, MapPin, Navigation, Phone, Play, RefreshCw } from 'lucide-react';
+import { Calendar, Camera, Clock, FileText, MapPin, Navigation, Phone, Play, RefreshCw, Video } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -14,7 +14,8 @@ type PendingAttachment = {
   id: string;
   file: File;
   displayName: string;
-  type: 'midia-tecnica' | 'documento-tecnico';
+  type: 'midia-tecnica' | 'documento-tecnico' | 'video-retirada-veiculo' | 'video-devolucao-veiculo';
+  category: 'general-media' | 'general-document' | 'car-pickup-video' | 'car-return-video';
   previewUrl?: string;
 };
 
@@ -81,6 +82,15 @@ async function showBrowserNotification(title: string, options?: NotificationOpti
   } catch {
     // Ignora falhas de notificacao para nao quebrar a tela do tecnico.
   }
+}
+
+function buildDefaultAttachmentName(
+  fileName: string,
+  category: PendingAttachment['category']
+) {
+  if (category === 'car-pickup-video') return `retirada-veiculo-${fileName}`;
+  if (category === 'car-return-video') return `devolucao-veiculo-${fileName}`;
+  return fileName;
 }
 
 function isInCurrentWeek(dateValue: string) {
@@ -187,6 +197,18 @@ export default function TechnicianMobile() {
   const currentClientName = current?.client?.name ?? 'Cliente';
   const currentClientPhone = current?.client?.phone ?? '';
   const currentAddress = current?.fullAddress ?? 'Endereco nao informado';
+  const isCarTrip = current?.transportMode === 'CAR';
+  const pickupVehicleVideo = pendingAttachments.find((item) => item.category === 'car-pickup-video');
+  const returnVehicleVideo = pendingAttachments.find((item) => item.category === 'car-return-video');
+  const missingVehiclePickupVideo = isCarTrip && !pickupVehicleVideo;
+  const missingVehicleReturnVideo = isCarTrip && !returnVehicleVideo;
+  const canSendReport =
+    Boolean(report.summary) &&
+    Boolean(clientSignatureDataUrl) &&
+    Boolean(technicianSignatureDataUrl) &&
+    !savingReport &&
+    !missingVehiclePickupVideo &&
+    !missingVehicleReturnVideo;
   const weeklyTrips = useMemo(
     () => appointments.filter((item) => isInCurrentWeek(item.date) && !wasFinishedByTechnician(item)),
     [appointments]
@@ -230,6 +252,10 @@ export default function TechnicianMobile() {
 
   async function saveReport() {
     if (!current) return;
+    if (isCarTrip && (!pickupVehicleVideo || !returnVehicleVideo)) {
+      setErrorMessage('Para viagens de carro, envie o video da retirada e o video da devolucao do veiculo antes de finalizar.');
+      return;
+    }
     setSavingReport(true);
     setMessage('');
     setErrorMessage('');
@@ -260,7 +286,7 @@ export default function TechnicianMobile() {
       clearSignature('client');
       clearSignature('technician');
       setReport({ summary: '' });
-      setMessage('Relatório e anexos enviados com sucesso.');
+      setMessage('Relatório enviado com sucesso e atendimento finalizado.');
       await load();
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : String(err || 'Erro ao enviar relatório/anexos'));
@@ -294,7 +320,11 @@ export default function TechnicianMobile() {
     }
   }
 
-  function addAttachment(file: File | undefined, type: 'midia-tecnica' | 'documento-tecnico') {
+  function addAttachment(
+    file: File | undefined,
+    type: PendingAttachment['type'],
+    category: PendingAttachment['category'] = type === 'documento-tecnico' ? 'general-document' : 'general-media'
+  ) {
     if (!file) return;
     setMessage('');
     setErrorMessage('');
@@ -303,16 +333,28 @@ export default function TechnicianMobile() {
     const item: PendingAttachment = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       file,
-      displayName: file.name,
+      displayName: buildDefaultAttachmentName(file.name, category),
       type,
+      category,
       previewUrl
     };
-    setPendingAttachments((prev) => [...prev, item]);
+    setPendingAttachments((prev) => {
+      if (category === 'car-pickup-video' || category === 'car-return-video') {
+        const previous = prev.find((entry) => entry.category === category);
+        if (previous?.previewUrl) URL.revokeObjectURL(previous.previewUrl);
+        return [...prev.filter((entry) => entry.category !== category), item];
+      }
+      return [...prev, item];
+    });
   }
 
-  function addAttachments(files: FileList | null, type: 'midia-tecnica' | 'documento-tecnico') {
+  function addAttachments(
+    files: FileList | null,
+    type: 'midia-tecnica' | 'documento-tecnico',
+    category: PendingAttachment['category'] = type === 'documento-tecnico' ? 'general-document' : 'general-media'
+  ) {
     if (!files?.length) return;
-    Array.from(files).forEach((file) => addAttachment(file, type));
+    Array.from(files).forEach((file) => addAttachment(file, type, category));
   }
 
   function renameAttachment(id: string, displayName: string) {
@@ -640,11 +682,74 @@ export default function TechnicianMobile() {
         <Card className="rounded-2xl">
           <CardHeader><CardTitle className="text-base sm:text-lg">Fotos, Videos e Documentos</CardTitle></CardHeader>
           <CardContent className="space-y-3">
+            {isCarTrip && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                <p className="text-sm font-semibold text-amber-300">Controle obrigatorio do veiculo</p>
+                <p className="mt-1 text-xs text-amber-100/90">
+                  Para viagens de carro, grave um video mostrando como o carro foi retirado e outro video mostrando como ele foi devolvido na empresa.
+                </p>
+                <div className="mt-3 grid grid-cols-1 gap-3">
+                  <label className="flex min-h-20 cursor-pointer items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-background/70 px-4 py-3 text-left">
+                    <div>
+                      <p className="text-sm font-medium">Video de retirada do veiculo</p>
+                      <p className="text-xs text-muted-foreground">
+                        {pickupVehicleVideo ? pickupVehicleVideo.displayName : 'Ainda nao enviado'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={pickupVehicleVideo ? 'default' : 'secondary'}>
+                        {pickupVehicleVideo ? 'Pronto' : 'Obrigatorio'}
+                      </Badge>
+                      <Video className="h-5 w-5" />
+                    </div>
+                    <Input
+                      type="file"
+                      accept="video/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => {
+                        addAttachment(e.target.files?.[0], 'video-retirada-veiculo', 'car-pickup-video');
+                        e.currentTarget.value = '';
+                      }}
+                    />
+                  </label>
+                  <label className="flex min-h-20 cursor-pointer items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-background/70 px-4 py-3 text-left">
+                    <div>
+                      <p className="text-sm font-medium">Video de devolucao do veiculo</p>
+                      <p className="text-xs text-muted-foreground">
+                        {returnVehicleVideo ? returnVehicleVideo.displayName : 'Ainda nao enviado'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={returnVehicleVideo ? 'default' : 'secondary'}>
+                        {returnVehicleVideo ? 'Pronto' : 'Obrigatorio'}
+                      </Badge>
+                      <Video className="h-5 w-5" />
+                    </div>
+                    <Input
+                      type="file"
+                      accept="video/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => {
+                        addAttachment(e.target.files?.[0], 'video-devolucao-veiculo', 'car-return-video');
+                        e.currentTarget.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
               <Camera className="h-5 w-5" />
               <span className="text-xs">Camera</span>
               <Input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addAttachment(e.target.files?.[0], 'midia-tecnica'); e.currentTarget.value = ''; }} />
+            </label>
+            <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
+              <Video className="h-5 w-5" />
+              <span className="text-xs">Video</span>
+              <Input type="file" accept="video/*" capture="environment" className="hidden" onChange={(e) => { addAttachment(e.target.files?.[0], 'midia-tecnica'); e.currentTarget.value = ''; }} />
             </label>
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
               <Camera className="h-5 w-5" />
@@ -671,10 +776,19 @@ export default function TechnicianMobile() {
                           <FileText className="h-4 w-4" />
                         </div>
                       )}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-medium">{item.file.name}</p>
-                        <p className="text-[11px] text-muted-foreground">{Math.max(1, Math.round(item.file.size / 1024))} KB</p>
-                      </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-medium">{item.file.name}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {item.category === 'car-pickup-video'
+                          ? 'Video de retirada do veiculo'
+                          : item.category === 'car-return-video'
+                            ? 'Video de devolucao do veiculo'
+                            : item.type === 'documento-tecnico'
+                              ? 'Documento tecnico'
+                              : 'Midia tecnica'}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">{Math.max(1, Math.round(item.file.size / 1024))} KB</p>
+                    </div>
                       <Button type="button" variant="outline" size="sm" onClick={() => removeAttachment(item.id)}>
                         Remover
                       </Button>
@@ -689,6 +803,9 @@ export default function TechnicianMobile() {
                 ))}
               </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Fotos, videos e documentos enviados aqui tambem seguem para a pasta do atendimento no Google Drive.
+            </p>
           </CardContent>
         </Card>
         )}
@@ -737,7 +854,7 @@ export default function TechnicianMobile() {
         )}
 
         {activeSection === 'DETAILS' && (
-        <Button className="h-12 w-full rounded-xl bg-[#c8142f] hover:bg-[#a81027]" disabled={!report.summary || !clientSignatureDataUrl || !technicianSignatureDataUrl || savingReport} onClick={saveReport}>
+        <Button className="h-12 w-full rounded-xl bg-[#c8142f] hover:bg-[#a81027]" disabled={!canSendReport} onClick={saveReport}>
           {savingReport ? 'Enviando...' : `Enviar relatório técnico${pendingAttachments.length ? ` + ${pendingAttachments.length} anexo(s)` : ''}`}
         </Button>
         )}
@@ -765,12 +882,6 @@ export default function TechnicianMobile() {
         </Card>
         )}
 
-        {activeSection === 'DETAILS' && (
-        <Button className="h-12 w-full rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 text-base hover:from-green-700 hover:to-emerald-700" onClick={() => updateStatus('COMPLETED_SUCCESS')}>
-          <CheckCircle className="mr-2 h-5 w-5" />
-          Finalizar atendimento
-        </Button>
-        )}
       </div>
     </div>
   );

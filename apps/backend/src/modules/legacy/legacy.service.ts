@@ -486,7 +486,7 @@ export class LegacyService {
     const rows = await this.prisma.appointment.findMany({
       where: {
         technicianId: { in: technicianIds },
-        status: { in: [AppointmentStatus.READY, AppointmentStatus.CRITICAL, AppointmentStatus.WAITING] }
+        status: { in: [AppointmentStatus.READY, AppointmentStatus.CRITICAL, AppointmentStatus.WAITING, AppointmentStatus.COMPLETED] }
       },
       include: { client: true, technician: true, attachments: true, statusLogs: { orderBy: { createdAt: 'desc' } } },
       orderBy: { date: 'asc' }
@@ -513,7 +513,7 @@ export class LegacyService {
     await this.prisma.statusLog.create({
       data: { appointmentId: id, status: 'COMPLETED_SUCCESS', observation: summary ?? 'Atendimento finalizado pelo técnico' }
     });
-    await this.prisma.appointment.update({ where: { id }, data: { status: AppointmentStatus.CRITICAL } });
+    await this.prisma.appointment.update({ where: { id }, data: { status: AppointmentStatus.COMPLETED } });
 
     if (summary || report?.clientSignatureDataUrl || report?.technicianSignatureDataUrl) {
       const appointment = await this.prisma.appointment.findUnique({
@@ -2811,6 +2811,8 @@ export class LegacyService {
     if (normalized === 'assinatura-cliente') return ATTACHMENT_KIND.CLIENT_SIGNATURE;
     if (normalized === 'assinatura-tecnico') return ATTACHMENT_KIND.TECHNICIAN_SIGNATURE;
     if (normalized === 'midia-tecnica') return ATTACHMENT_KIND.TECHNICAL_MEDIA;
+    if (normalized === 'video-retirada-veiculo') return ATTACHMENT_KIND.TECHNICAL_MEDIA;
+    if (normalized === 'video-devolucao-veiculo') return ATTACHMENT_KIND.TECHNICAL_MEDIA;
     if (normalized === 'documento-tecnico') return ATTACHMENT_KIND.TECHNICAL_DOCUMENT;
     if (mimeType.startsWith('image/') || mimeType.startsWith('video/')) return ATTACHMENT_KIND.TECHNICAL_MEDIA;
     return ATTACHMENT_KIND.GENERAL;

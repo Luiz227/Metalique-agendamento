@@ -50,6 +50,20 @@ function addHoursToTime(date: string, time: string, hours: number) {
   return value.toISOString();
 }
 
+type LogisticsSuggestion = {
+  ok: boolean;
+  distanceText: string | null;
+  durationText: string | null;
+  durationSeconds: number | null;
+  suggestedMode: 'CAR' | 'AIR' | null;
+  suggestedReason: string | null;
+  nearestAirport: {
+    name: string | null;
+    formattedAddress: string | null;
+    distanceText: string | null;
+  } | null;
+};
+
 export default function NewAppointment() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
@@ -58,6 +72,7 @@ export default function NewAppointment() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [travelEstimate, setTravelEstimate] = useState<{ distanceText: string; durationText: string } | null>(null);
+  const [logisticsSuggestion, setLogisticsSuggestion] = useState<LogisticsSuggestion | null>(null);
   const [travelLoading, setTravelLoading] = useState(false);
   const [serviceOrderImporting, setServiceOrderImporting] = useState(false);
   const [serviceOrderImportMessage, setServiceOrderImportMessage] = useState('');
@@ -166,22 +181,43 @@ export default function NewAppointment() {
     const destination = buildMapsDestination(formData.address, formData.city);
     if (currentStep !== 0 || destination.length < 6) {
       setTravelEstimate(null);
+      setLogisticsSuggestion(null);
       return;
     }
 
     const timer = setTimeout(async () => {
       try {
         setTravelLoading(true);
-        const route = await api<{ ok: boolean; distanceText: string | null; durationText: string | null }>(
-          `/maps/travel-time?origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(destination)}`
+        const route = await api<LogisticsSuggestion>(
+          `/maps/logistics-suggestion?origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(destination)}`
         );
+        setLogisticsSuggestion(route);
         if (route.ok && route.distanceText && route.durationText) {
           setTravelEstimate({ distanceText: route.distanceText, durationText: route.durationText });
+          setFormData((prev) => {
+            const airportLabel =
+              route.nearestAirport?.name && route.nearestAirport?.formattedAddress
+                ? `${route.nearestAirport.name} - ${route.nearestAirport.formattedAddress}`
+                : route.nearestAirport?.name || route.nearestAirport?.formattedAddress || '';
+            const nextTransportMode = route.suggestedMode ?? prev.transportMode;
+            const nextFlightAirport =
+              nextTransportMode === 'AIR' ? airportLabel || prev.flightAirport : '';
+            if (prev.transportMode === nextTransportMode && prev.flightAirport === nextFlightAirport) {
+              return prev;
+            }
+            return {
+              ...prev,
+              transportMode: nextTransportMode,
+              flightAirport: nextFlightAirport
+            };
+          });
         } else {
           setTravelEstimate(null);
+          setLogisticsSuggestion(null);
         }
       } catch {
         setTravelEstimate(null);
+        setLogisticsSuggestion(null);
       } finally {
         setTravelLoading(false);
       }
@@ -487,6 +523,27 @@ export default function NewAppointment() {
                     Tempo estimado: {travelEstimate.durationText} ? Dist?ncia: {travelEstimate.distanceText}
                   </p>
                 )}
+                {logisticsSuggestion?.suggestedMode && (
+                  <div className="mt-3 rounded-lg border border-blue-500/20 bg-blue-500/10 p-3 text-sm">
+                    <p className="font-medium text-blue-200">
+                      Sugestao automatica: {logisticsSuggestion.suggestedMode === 'AIR' ? 'viagem aerea' : 'viagem de carro'}
+                    </p>
+                    {logisticsSuggestion.suggestedReason && (
+                      <p className="mt-1 text-xs text-zinc-300">{logisticsSuggestion.suggestedReason}</p>
+                    )}
+                    {logisticsSuggestion.nearestAirport && (
+                      <div className="mt-2 text-xs text-zinc-300">
+                        <p>Aeroporto mais proximo: {logisticsSuggestion.nearestAirport.name || 'Nao identificado'}</p>
+                        {logisticsSuggestion.nearestAirport.formattedAddress && (
+                          <p>{logisticsSuggestion.nearestAirport.formattedAddress}</p>
+                        )}
+                        {logisticsSuggestion.nearestAirport.distanceText && (
+                          <p>Distancia do cliente ate o aeroporto: {logisticsSuggestion.nearestAirport.distanceText}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -657,6 +714,12 @@ export default function NewAppointment() {
               <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-800/20 p-3">
                 <Label>Dados do voo</Label>
                 <Input placeholder="Aeroporto" value={formData.flightAirport} onChange={(e) => setFormData({ ...formData, flightAirport: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                {logisticsSuggestion?.nearestAirport && (
+                  <p className="text-xs text-zinc-400">
+                    Sugestao do sistema: {logisticsSuggestion.nearestAirport.name}
+                    {logisticsSuggestion.nearestAirport.distanceText ? ` (${logisticsSuggestion.nearestAirport.distanceText} do cliente)` : ''}
+                  </p>
+                )}
                 <div className="grid md:grid-cols-2 gap-3">
                   <div>
                     <Label>Ida - data e hora</Label>

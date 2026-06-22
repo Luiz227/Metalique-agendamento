@@ -167,6 +167,7 @@ export default function AppointmentDetails() {
   const [travelEstimate, setTravelEstimate] = useState<{ distanceText: string; durationText: string } | null>(null);
   const [logisticsSuggestion, setLogisticsSuggestion] = useState<LogisticsSuggestion | null>(null);
   const [travelLoading, setTravelLoading] = useState(false);
+  const [logisticsError, setLogisticsError] = useState('');
   async function load(showLoading = true) {
     if (!id) {
       setAppointment(null);
@@ -277,12 +278,14 @@ export default function AppointmentDetails() {
     if (destination.length < 6) {
       setTravelEstimate(null);
       setLogisticsSuggestion(null);
+      setLogisticsError('');
       return;
     }
 
     const timer = setTimeout(async () => {
       try {
         setTravelLoading(true);
+        setLogisticsError('');
         const route = await api<LogisticsSuggestion>(
           `/maps/logistics-suggestion?origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(destination)}`
         );
@@ -311,10 +314,12 @@ export default function AppointmentDetails() {
         } else {
           setTravelEstimate(null);
           setLogisticsSuggestion(null);
+          setLogisticsError('Nao foi possivel calcular a sugestao automatica para esse endereco. Confira cidade, endereco e integracao do Google Maps.');
         }
-      } catch {
+      } catch (err) {
         setTravelEstimate(null);
         setLogisticsSuggestion(null);
+        setLogisticsError(err instanceof Error ? err.message : 'Falha ao calcular a sugestao automatica de viagem.');
       } finally {
         setTravelLoading(false);
       }
@@ -327,6 +332,7 @@ export default function AppointmentDetails() {
     editing ? form.fullAddress : appointment?.fullAddress,
     editing ? form.city : appointment?.city
   );
+  const shouldShowLogisticsStatus = logisticsDestination.length >= 6;
   const airportDestination = logisticsSuggestion?.suggestedMode === 'AIR'
     ? [logisticsSuggestion.nearestAirport?.name, logisticsSuggestion.nearestAirport?.formattedAddress].filter(Boolean).join(', ')
     : '';
@@ -889,24 +895,44 @@ export default function AppointmentDetails() {
                 <div className="mt-3 space-y-3">
                   <p className="text-[11px] text-muted-foreground">Base fixa de saida: {COMPANY_BASE_ADDRESS}</p>
                   {travelLoading && <p className="text-xs text-muted-foreground">Calculando tempo de viagem...</p>}
-                  {logisticsSuggestion?.suggestedMode && (
-                    <div className="rounded-md border border-blue-500/20 bg-blue-500/10 p-3">
-                      <p className="text-sm font-semibold text-blue-200">
-                        Sugestao automatica: {logisticsSuggestion.suggestedMode === 'AIR' ? 'viagem aerea' : 'viagem de carro'}
-                      </p>
-                      {logisticsSuggestion.suggestedReason && (
-                        <p className="mt-1 text-xs text-muted-foreground">{logisticsSuggestion.suggestedReason}</p>
+                  {shouldShowLogisticsStatus && (
+                    <div className={`rounded-md border p-3 ${
+                      logisticsSuggestion?.suggestedMode
+                        ? 'border-blue-500/20 bg-blue-500/10'
+                        : logisticsError
+                          ? 'border-amber-500/30 bg-amber-500/10'
+                          : 'border-border bg-muted/20'
+                    }`}>
+                      <p className="text-sm font-semibold text-foreground">Sugestao de viagem</p>
+                      {travelLoading && (
+                        <p className="mt-1 text-xs text-muted-foreground">O sistema esta calculando automaticamente se a viagem deve ser de carro ou de aviao.</p>
                       )}
-                      {logisticsSuggestion.nearestAirport && (
-                        <div className="mt-2 text-xs text-muted-foreground">
-                          <p>Aeroporto mais proximo: {logisticsSuggestion.nearestAirport.name || 'Nao identificado'}</p>
-                          {logisticsSuggestion.nearestAirport.formattedAddress && (
-                            <p>{logisticsSuggestion.nearestAirport.formattedAddress}</p>
+                      {!travelLoading && logisticsSuggestion?.suggestedMode && (
+                        <>
+                          <p className="mt-1 text-sm font-semibold text-blue-200">
+                            Sugestao automatica: {logisticsSuggestion.suggestedMode === 'AIR' ? 'viagem aerea' : 'viagem de carro'}
+                          </p>
+                          {logisticsSuggestion.suggestedReason && (
+                            <p className="mt-1 text-xs text-muted-foreground">{logisticsSuggestion.suggestedReason}</p>
                           )}
-                          {logisticsSuggestion.nearestAirport.distanceText && (
-                            <p>Distancia do cliente ate o aeroporto: {logisticsSuggestion.nearestAirport.distanceText}</p>
+                          {logisticsSuggestion.nearestAirport && (
+                            <div className="mt-2 text-xs text-muted-foreground">
+                              <p>Aeroporto mais proximo: {logisticsSuggestion.nearestAirport.name || 'Nao identificado'}</p>
+                              {logisticsSuggestion.nearestAirport.formattedAddress && (
+                                <p>{logisticsSuggestion.nearestAirport.formattedAddress}</p>
+                              )}
+                              {logisticsSuggestion.nearestAirport.distanceText && (
+                                <p>Distancia do cliente ate o aeroporto: {logisticsSuggestion.nearestAirport.distanceText}</p>
+                              )}
+                            </div>
                           )}
-                        </div>
+                        </>
+                      )}
+                      {!travelLoading && !logisticsSuggestion?.suggestedMode && logisticsError && (
+                        <p className="mt-1 text-xs text-amber-200">{logisticsError}</p>
+                      )}
+                      {!travelLoading && !logisticsSuggestion?.suggestedMode && !logisticsError && (
+                        <p className="mt-1 text-xs text-muted-foreground">Preencha o endereco completo e a cidade para o sistema gerar a sugestao automaticamente.</p>
                       )}
                     </div>
                   )}

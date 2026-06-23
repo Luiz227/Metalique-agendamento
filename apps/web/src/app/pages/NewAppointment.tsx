@@ -192,13 +192,16 @@ export default function NewAppointment() {
       try {
         setTravelLoading(true);
         setLogisticsError('');
+        const browserKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
         let route: LogisticsSuggestion | null = null;
         try {
           route = await api<LogisticsSuggestion>(
             `/maps/logistics-suggestion?origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(destination)}`
           );
+          if (!route.ok && browserKey) {
+            route = await calculateBrowserLogisticsSuggestion(browserKey, COMPANY_BASE_ADDRESS, destination) as LogisticsSuggestion;
+          }
         } catch (backendErr) {
-          const browserKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
           if (!browserKey) throw backendErr;
           route = await calculateBrowserLogisticsSuggestion(browserKey, COMPANY_BASE_ADDRESS, destination) as LogisticsSuggestion;
         }

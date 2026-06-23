@@ -10,6 +10,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Progress } from '../components/ui/progress';
 import { ApiError, api, parseServiceOrderPdf } from '../services/api';
+import { calculateBrowserLogisticsSuggestion } from '../services/googleMapsBrowser';
 import type { Client, Technician, Vehicle } from '../services/types';
 
 const steps = [
@@ -180,7 +181,7 @@ export default function NewAppointment() {
 
   useEffect(() => {
     const destination = buildMapsDestination(formData.address, formData.city);
-    if (currentStep !== 0 || destination.length < 6) {
+    if (currentStep !== 3 || destination.length < 6) {
       setTravelEstimate(null);
       setLogisticsSuggestion(null);
       setLogisticsError('');
@@ -191,9 +192,16 @@ export default function NewAppointment() {
       try {
         setTravelLoading(true);
         setLogisticsError('');
-        const route = await api<LogisticsSuggestion>(
-          `/maps/logistics-suggestion?origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(destination)}`
-        );
+        let route: LogisticsSuggestion | null = null;
+        try {
+          route = await api<LogisticsSuggestion>(
+            `/maps/logistics-suggestion?origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(destination)}`
+          );
+        } catch (backendErr) {
+          const browserKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
+          if (!browserKey) throw backendErr;
+          route = await calculateBrowserLogisticsSuggestion(browserKey, COMPANY_BASE_ADDRESS, destination) as LogisticsSuggestion;
+        }
         setLogisticsSuggestion(route);
         if (route.ok && route.distanceText && route.durationText) {
           setTravelEstimate({ distanceText: route.distanceText, durationText: route.durationText });

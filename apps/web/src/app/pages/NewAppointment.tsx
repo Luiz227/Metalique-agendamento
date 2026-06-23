@@ -243,6 +243,15 @@ export default function NewAppointment() {
   }, [currentStep, formData.address, formData.city]);
 
   const logisticsDestination = buildMapsDestination(formData.address, formData.city);
+  const nearestAirportLabel = logisticsSuggestion?.nearestAirport
+    ? [
+        logisticsSuggestion.nearestAirport.name,
+        logisticsSuggestion.nearestAirport.formattedAddress,
+        logisticsSuggestion.nearestAirport.distanceText ? `${logisticsSuggestion.nearestAirport.distanceText} do cliente` : ''
+      ]
+        .filter(Boolean)
+        .join(' - ')
+    : '';
   const shouldShowLogisticsStatus = currentStep === 3 && logisticsDestination.length >= 6;
 
   const canContinue = useMemo(() => {
@@ -752,13 +761,19 @@ export default function NewAppointment() {
               {formData.transportMode === 'AIR' && (
               <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-800/20 p-3">
                 <Label>Dados do voo</Label>
-                <Input placeholder="Aeroporto" value={formData.flightAirport} onChange={(e) => setFormData({ ...formData, flightAirport: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
-                {logisticsSuggestion?.nearestAirport && (
-                  <p className="text-xs text-zinc-400">
-                    Sugestao do sistema: {logisticsSuggestion.nearestAirport.name}
-                    {logisticsSuggestion.nearestAirport.distanceText ? ` (${logisticsSuggestion.nearestAirport.distanceText} do cliente)` : ''}
-                  </p>
-                )}
+                <div className="space-y-1">
+                  <Label>Aeroporto mais proximo do cliente</Label>
+                  <Input
+                    placeholder="Calculado automaticamente"
+                    value={nearestAirportLabel}
+                    readOnly
+                    className="bg-zinc-800/50 border-zinc-700"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Aeroporto usado na viagem</Label>
+                  <Input placeholder="Aeroporto/terminal da viagem" value={formData.flightAirport} onChange={(e) => setFormData({ ...formData, flightAirport: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+                </div>
                 <div className="grid md:grid-cols-2 gap-3">
                   <div>
                     <Label>Ida - data e hora</Label>

@@ -343,6 +343,15 @@ export default function AppointmentDetails() {
     editing ? form.fullAddress : appointment?.fullAddress,
     editing ? form.city : appointment?.city
   );
+  const nearestAirportLabel = logisticsSuggestion?.nearestAirport
+    ? [
+        logisticsSuggestion.nearestAirport.name,
+        logisticsSuggestion.nearestAirport.formattedAddress,
+        logisticsSuggestion.nearestAirport.distanceText ? `${logisticsSuggestion.nearestAirport.distanceText} do cliente` : ''
+      ]
+        .filter(Boolean)
+        .join(' - ')
+    : '';
   const shouldShowLogisticsStatus = logisticsDestination.length >= 6;
   const airportDestination = logisticsSuggestion?.suggestedMode === 'AIR'
     ? [logisticsSuggestion.nearestAirport?.name, logisticsSuggestion.nearestAirport?.formattedAddress].filter(Boolean).join(', ')
@@ -834,13 +843,18 @@ export default function AppointmentDetails() {
                 <p className="text-xs text-muted-foreground">Dados do voo</p>
                 {editing ? (
                   <>
-                    <Input placeholder="Aeroporto" value={form.flightAirport} onChange={(e) => setForm({ ...form, flightAirport: e.target.value })} />
-                    {logisticsSuggestion?.nearestAirport && (
-                      <p className="text-xs text-muted-foreground">
-                        Sugestao do sistema: {logisticsSuggestion.nearestAirport.name}
-                        {logisticsSuggestion.nearestAirport.distanceText ? ` (${logisticsSuggestion.nearestAirport.distanceText} do cliente)` : ''}
-                      </p>
-                    )}
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-muted-foreground">Aeroporto mais proximo do cliente</p>
+                      <Input
+                        placeholder="Calculado automaticamente"
+                        value={nearestAirportLabel}
+                        readOnly
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-muted-foreground">Aeroporto usado na viagem</p>
+                      <Input placeholder="Aeroporto/terminal da viagem" value={form.flightAirport} onChange={(e) => setForm({ ...form, flightAirport: e.target.value })} />
+                    </div>
                     <div className="grid gap-2 sm:grid-cols-2">
                       <div>
                         <p className="mb-1 text-[11px] text-muted-foreground">Ida - data e hora</p>
@@ -854,7 +868,8 @@ export default function AppointmentDetails() {
                   </>
                 ) : (
                   <div className="space-y-1 text-sm">
-                    <p>Aeroporto: {appointment.flightAirport || 'Nao informado'}</p>
+                    <p>Aeroporto mais proximo do cliente: {nearestAirportLabel || appointment.flightAirport || 'Nao informado'}</p>
+                    <p>Aeroporto da viagem: {appointment.flightAirport || 'Nao informado'}</p>
                     <p className="text-muted-foreground">Ida: {safeLocaleDateTime(appointment.flightDepartureAt)}</p>
                     <p className="text-muted-foreground">Volta: {safeLocaleDateTime(appointment.flightReturnAt)}</p>
                   </div>

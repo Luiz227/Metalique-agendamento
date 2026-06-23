@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Check, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, AlertCircle, Clock, MapPin, Route } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -589,6 +589,36 @@ export default function NewAppointment() {
                     )}
                     {!travelLoading && !logisticsSuggestion?.suggestedMode && !logisticsError && (
                       <p className="mt-1 text-xs text-zinc-300">Preencha o endereco completo e a cidade para o sistema gerar a sugestao automaticamente.</p>
+                    )}
+                  </div>
+                )}
+                {(travelEstimate || logisticsSuggestion?.nearestAirport) && (
+                  <div className={`mt-3 grid gap-2 ${logisticsSuggestion?.nearestAirport ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+                    <div className="rounded-lg border border-zinc-700 bg-zinc-900/40 p-3">
+                      <div className="flex items-center gap-2 text-xs text-zinc-400">
+                        <Clock className="h-4 w-4" />
+                        Tempo de carro
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-white">{travelEstimate?.durationText ?? 'Nao calculado'}</p>
+                    </div>
+                    <div className="rounded-lg border border-zinc-700 bg-zinc-900/40 p-3">
+                      <div className="flex items-center gap-2 text-xs text-zinc-400">
+                        <Route className="h-4 w-4" />
+                        Distancia da Metalique
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-white">{travelEstimate?.distanceText ?? 'Nao calculado'}</p>
+                    </div>
+                    {logisticsSuggestion?.nearestAirport && (
+                      <div className="rounded-lg border border-zinc-700 bg-zinc-900/40 p-3">
+                        <div className="flex items-center gap-2 text-xs text-zinc-400">
+                          <MapPin className="h-4 w-4" />
+                          Aeroporto sugerido
+                        </div>
+                        <p className="mt-1 text-sm font-semibold text-white">{logisticsSuggestion.nearestAirport.name || 'Nao identificado'}</p>
+                        {logisticsSuggestion.nearestAirport.distanceText && (
+                          <p className="mt-1 text-xs text-zinc-400">{logisticsSuggestion.nearestAirport.distanceText} do cliente</p>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}

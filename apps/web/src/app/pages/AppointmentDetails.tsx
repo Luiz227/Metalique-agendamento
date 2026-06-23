@@ -962,22 +962,34 @@ export default function AppointmentDetails() {
                       )}
                     </div>
                   )}
-                  {travelEstimate && (
-                    <div className="grid gap-2 sm:grid-cols-2">
+                  {(travelEstimate || logisticsSuggestion?.nearestAirport) && (
+                    <div className={`grid gap-2 ${logisticsSuggestion?.nearestAirport ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
                       <div className="rounded-md border bg-muted/30 p-3">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Clock className="h-4 w-4" />
                           Tempo de carro
                         </div>
-                        <p className="mt-1 text-sm font-semibold">{travelEstimate.durationText}</p>
+                        <p className="mt-1 text-sm font-semibold">{travelEstimate?.durationText ?? 'Nao calculado'}</p>
                       </div>
                       <div className="rounded-md border bg-muted/30 p-3">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Route className="h-4 w-4" />
                           Distancia da Metalique
                         </div>
-                        <p className="mt-1 text-sm font-semibold">{travelEstimate.distanceText}</p>
+                        <p className="mt-1 text-sm font-semibold">{travelEstimate?.distanceText ?? 'Nao calculado'}</p>
                       </div>
+                      {logisticsSuggestion?.nearestAirport && (
+                        <div className="rounded-md border bg-muted/30 p-3">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <MapPin className="h-4 w-4" />
+                            Aeroporto sugerido
+                          </div>
+                          <p className="mt-1 text-sm font-semibold">{logisticsSuggestion.nearestAirport.name || 'Nao identificado'}</p>
+                          {logisticsSuggestion.nearestAirport.distanceText && (
+                            <p className="mt-1 text-xs text-muted-foreground">{logisticsSuggestion.nearestAirport.distanceText} do cliente</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                   {routeExternalUrl && (

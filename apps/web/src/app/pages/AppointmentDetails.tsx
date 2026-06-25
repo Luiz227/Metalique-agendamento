@@ -855,11 +855,23 @@ export default function AppointmentDetails() {
                   <>
                     <div className="space-y-1">
                       <p className="text-[11px] text-muted-foreground">Aeroporto mais proximo do cliente</p>
-                      <Input
-                        placeholder="Calculado automaticamente"
-                        value={nearestAirportLabel}
-                        readOnly
-                      />
+                      <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+                        <Input
+                          placeholder="Calculado automaticamente"
+                          value={nearestAirportLabel}
+                          readOnly
+                        />
+                        {nearestAirportLabel && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full"
+                            onClick={() => setForm((prev) => ({ ...prev, flightAirport: nearestAirportLabel }))}
+                          >
+                            Usar aeroporto sugerido na viagem
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     <div className="space-y-1">
                       <p className="text-[11px] text-muted-foreground">Aeroporto usado na viagem</p>
@@ -969,6 +981,21 @@ export default function AppointmentDetails() {
                       )}
                       {!travelLoading && !logisticsSuggestion?.suggestedMode && !logisticsError && (
                         <p className="mt-1 text-xs text-muted-foreground">Preencha o endereco completo e a cidade para o sistema gerar a sugestao automaticamente.</p>
+                      )}
+                    </div>
+                  )}
+                  {logisticsSuggestion?.suggestedMode === 'AIR' && logisticsSuggestion?.nearestAirport && (
+                    <div className="rounded-md border border-cyan-500/20 bg-cyan-500/10 p-3">
+                      <div className="flex items-center gap-2 text-xs text-cyan-100">
+                        <MapPin className="h-4 w-4" />
+                        Aeroporto sugerido para esta viagem
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-white">{logisticsSuggestion.nearestAirport.name || 'Nao identificado'}</p>
+                      {logisticsSuggestion.nearestAirport.formattedAddress && (
+                        <p className="mt-1 text-xs text-cyan-50/90">{logisticsSuggestion.nearestAirport.formattedAddress}</p>
+                      )}
+                      {logisticsSuggestion.nearestAirport.distanceText && (
+                        <p className="mt-1 text-xs text-cyan-100/80">Distancia do cliente ate o aeroporto: {logisticsSuggestion.nearestAirport.distanceText}</p>
                       )}
                     </div>
                   )}

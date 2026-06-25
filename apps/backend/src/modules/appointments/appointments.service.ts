@@ -219,18 +219,40 @@ export class AppointmentsService {
   }
 
   private toApiAppointment(row: AppointmentRow, checklistOverride?: Partial<Record<ChecklistKey, boolean>>) {
+    const hasDefinedAddress = Boolean(row.fullAddress && row.fullAddress.trim() && row.fullAddress !== 'Endereco a definir');
+    const hasDefinedCity = Boolean(row.city && row.city.trim() && row.city !== 'A definir');
+    const hasDefinedServiceType = Boolean(row.serviceType && row.serviceType.trim() && row.serviceType !== 'Pendente definicao');
+    const hasDefinedProblem = Boolean(
+      row.problemDescription &&
+        row.problemDescription.trim() &&
+        row.problemDescription !== 'Pendente descricao do servico'
+    );
+    const hasHotelRequest = Boolean(row.hasHotel || row.hotelName || row.hotelAddress || row.hotelCheckIn || row.hotelCheckOut);
+    const hasTransportDecision = Boolean(row.transportMode && row.transportMode !== 'NONE');
+    const hasFlightData = Boolean(row.flightAirport || row.flightDepartureAt || row.flightReturnAt);
+    const hasOfficialServiceData = Boolean(
+      row.serviceCode &&
+        row.serviceItemDescription &&
+        row.machineCode &&
+        row.machineName &&
+        row.machineModel
+    );
+
     const derivedChecklist: Record<ChecklistKey, boolean> = {
-      clientConfirmed: row.status !== AppointmentStatus.DRAFT,
-      contactConfirmed: row.status === AppointmentStatus.READY,
-      addressConfirmed: !!row.fullAddress,
-      serviceTypeConfirmed: !!row.serviceType && row.serviceType !== 'Pendente definicao',
+      clientConfirmed: false,
+      contactConfirmed: false,
+      addressConfirmed: hasDefinedAddress && hasDefinedCity,
+      serviceTypeConfirmed: hasDefinedServiceType && hasDefinedProblem,
       technicianSelected: !!row.technicianId,
-      technicianAvailability: !!row.technicianId,
+      technicianAvailability: !!row.technicianId && !!row.startTime && !!row.endTime,
       dateTimeConfirmed: !!row.startTime,
-      hotelNeedChecked: true,
-      transportNeedChecked: true,
-      osChecked: !!row.osNumber,
-      clientChecklistChecked: !!row.notes
+      hotelNeedChecked: !hasHotelRequest || Boolean(row.hotelName && row.hotelAddress && row.hotelCheckIn && row.hotelCheckOut),
+      transportNeedChecked:
+        !hasTransportDecision ||
+        row.transportMode === 'CAR' ||
+        (row.transportMode === 'AIR' && hasFlightData),
+      osChecked: hasOfficialServiceData,
+      clientChecklistChecked: false
     };
     const schedulingChecklist = { ...derivedChecklist, ...(checklistOverride ?? {}) };
 

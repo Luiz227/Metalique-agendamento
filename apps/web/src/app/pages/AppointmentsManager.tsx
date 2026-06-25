@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, CheckCircle2, ClipboardPenLine, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { ApiError, api, connectRealtime } from '../services/api';
+import { createAppointmentDraft } from '../services/appointmentDraft';
 import type { Appointment } from '../services/types';
 import { formatDate, formatTime, money, statusLabel } from '../services/types';
 
@@ -46,10 +47,12 @@ function technicianReportText(appointment: Appointment) {
 }
 
 export default function AppointmentsManager() {
+  const navigate = useNavigate();
   const [error, setError] = useState('');
   const [items, setItems] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFinished, setShowFinished] = useState(false);
+  const [creatingDraft, setCreatingDraft] = useState(false);
 
   async function load(showSpinner = false) {
     if (showSpinner) setLoading(true);
@@ -105,6 +108,21 @@ export default function AppointmentsManager() {
     }
   }
 
+  async function handleCreateAppointment() {
+    setCreatingDraft(true);
+    setError('');
+    try {
+      const draft = await createAppointmentDraft();
+      toast.success('Rascunho criado. Abrindo o formulario oficial completo.');
+      navigate(`/appointments/${draft.id}?editing=1&source=create`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Nao foi possivel criar o rascunho do agendamento.');
+      toast.error('Erro ao abrir a tela completa de criacao.');
+    } finally {
+      setCreatingDraft(false);
+    }
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -137,12 +155,10 @@ export default function AppointmentsManager() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Link to="/appointments/new">
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Criar Agendamento
-                  </Button>
-                </Link>
+                <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleCreateAppointment} disabled={creatingDraft}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  {creatingDraft ? 'Abrindo formulario...' : 'Criar Agendamento'}
+                </Button>
                 <Link to="/schedule">
                   <Button variant="outline">Ir para Agenda</Button>
                 </Link>
@@ -154,8 +170,8 @@ export default function AppointmentsManager() {
             <p className="text-sm font-medium text-white">Como usar</p>
             <p className="mt-2 text-sm text-zinc-400">
               1. Clique em <span className="text-white">Criar Agendamento</span>.
-              2. Preencha tudo no formulario oficial.
-              3. Salve o rascunho ou gere o agendamento.
+              2. O sistema abre direto no formulario oficial completo.
+              3. Preencha tudo no mesmo lugar.
               4. Depois, se precisar ajustar, use <span className="text-white">Abrir e continuar preenchimento</span> nos cards abaixo.
             </p>
           </div>

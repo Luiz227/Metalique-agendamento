@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Car, CheckCircle, Clock, FileText, Hotel, MapPin, Navigation, Route, User } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -97,6 +97,8 @@ type LogisticsSuggestion = {
 export default function AppointmentDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const autoEditHandledRef = useRef(false);
   const [appointment, setAppointment] = useState<Appointment | null>(null);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -271,6 +273,14 @@ export default function AppointmentDetails() {
       clientChecklistChecked: appointment.schedulingChecklist?.clientChecklistChecked ?? false
     });
   }, [appointment, editing]);
+
+  useEffect(() => {
+    if (!appointment || autoEditHandledRef.current) return;
+    if (searchParams.get('editing') !== '1') return;
+    autoEditHandledRef.current = true;
+    setEditing(true);
+    navigate(`/appointments/${appointment.id}`, { replace: true });
+  }, [appointment, navigate, searchParams]);
 
   useEffect(() => {
     const fullAddress = editing ? form.fullAddress : appointment?.fullAddress;

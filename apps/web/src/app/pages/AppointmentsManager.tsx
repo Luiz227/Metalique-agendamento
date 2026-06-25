@@ -1,39 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ClipboardPenLine, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { ApiError, api, connectRealtime } from '../services/api';
-import type { Appointment, Client } from '../services/types';
+import type { Appointment } from '../services/types';
 import { formatDate, formatTime, money, statusLabel } from '../services/types';
-
-type QuickForm = {
-  companyName: string;
-  cnpj: string;
-  ie: string;
-  address: string;
-  district: string;
-  city: string;
-  state: string;
-  zipCode: string;
-  daysOut: string;
-};
-
-const initialForm: QuickForm = {
-  companyName: '',
-  cnpj: '',
-  ie: '',
-  address: '',
-  district: '',
-  city: '',
-  state: '',
-  zipCode: '',
-  daysOut: '1'
-};
 
 const checklistLabels: Record<string, string> = {
   clientConfirmed: 'Cliente confirmado',
@@ -72,8 +46,6 @@ function technicianReportText(appointment: Appointment) {
 }
 
 export default function AppointmentsManager() {
-  const [form, setForm] = useState<QuickForm>(initialForm);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [items, setItems] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -133,145 +105,62 @@ export default function AppointmentsManager() {
     }
   }
 
-  async function createClient() {
-    return api<Client>('/clients', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: form.companyName,
-        cnpj: form.cnpj || null,
-        ie: form.ie || null,
-        city: form.city || 'A definir',
-        state: form.state || null,
-        district: form.district || null,
-        zipCode: form.zipCode || null,
-        address: form.address,
-        notes: `CNPJ: ${form.cnpj}`
-      })
-    });
-  }
-
-  async function createDraftAppointment() {
-    const client = await createClient();
-    const today = new Date();
-    const end = new Date(today.getTime() + 2 * 60 * 60 * 1000);
-    return api<Appointment>('/appointments', {
-      method: 'POST',
-      body: JSON.stringify({
-        clientId: client.id,
-        city: form.city || 'A definir',
-        fullAddress: form.address,
-        serviceType: 'Pendente definicao',
-        problemDescription: 'Pendente descricao do servico',
-        date: new Date(`${today.toISOString().slice(0, 10)}T12:00:00`).toISOString(),
-        startTime: today.toISOString(),
-        endTime: end.toISOString(),
-        status: 'WAITING',
-        daysOut: Number(form.daysOut || '1'),
-        osNumber: '',
-        clientChecklist: `CNPJ: ${form.cnpj}`,
-        notes: 'Agendamento criado em preenchimento',
-        schedulingChecklist: {
-          clientConfirmed: false,
-          contactConfirmed: false,
-          addressConfirmed: false,
-          serviceTypeConfirmed: false,
-          technicianSelected: false,
-          technicianAvailability: false,
-          dateTimeConfirmed: false,
-          hotelNeedChecked: false,
-          transportNeedChecked: false,
-          osChecked: false,
-          clientChecklistChecked: false
-        }
-      })
-    });
-  }
-
-  async function handleCreate() {
-    if (!form.companyName || !form.cnpj || !form.address || Number(form.daysOut || '0') < 1) {
-      setError('Preencha empresa, CNPJ, endereco e dias (minimo 1).');
-      return;
-    }
-    setError('');
-    setSaving(true);
-    try {
-      const created = await createDraftAppointment();
-      toast.success('Agendamento criado com sucesso em preenchimento.');
-      setForm(initialForm);
-      await load();
-      window.location.href = `/appointments/${created.id}`;
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao criar agendamento');
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Central de Agendamentos</h1>
-          <p className="text-muted-foreground">Crie rapido e continue preenchendo quando quiser.</p>
+          <p className="text-muted-foreground">
+            Agora a criacao comeca direto no formulario completo, sem duplicar preenchimento entre duas telas.
+          </p>
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Novo Agendamento Rapido</CardTitle>
+          <CardTitle>Criar novo agendamento</CardTitle>
         </CardHeader>
-        <CardContent className="grid md:grid-cols-5 gap-3">
-          <div>
-            <Label>Empresa</Label>
-            <Input value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} />
+        <CardContent className="space-y-4">
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-blue-100">
+                  <ClipboardPenLine className="h-5 w-5" />
+                  <p className="font-medium">Formulario oficial completo em uma unica entrada</p>
+                </div>
+                <p className="max-w-2xl text-sm text-zinc-300">
+                  Clique em criar e o sistema abre diretamente a tela com todos os campos:
+                  empresa, cidade, servico, tecnico, logistica, OS e checklist.
+                </p>
+                <p className="text-xs text-zinc-400">
+                  Se quiser parar no meio, o rascunho continua disponivel e os agendamentos salvos podem ser reabertos depois para correcao.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link to="/appointments/new">
+                  <Button className="bg-blue-600 hover:bg-blue-700">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Criar Agendamento
+                  </Button>
+                </Link>
+                <Link to="/schedule">
+                  <Button variant="outline">Ir para Agenda</Button>
+                </Link>
+              </div>
+            </div>
           </div>
-          <div>
-            <Label>CNPJ</Label>
-            <Input value={form.cnpj} onChange={(e) => setForm({ ...form, cnpj: e.target.value })} />
+
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
+            <p className="text-sm font-medium text-white">Como usar</p>
+            <p className="mt-2 text-sm text-zinc-400">
+              1. Clique em <span className="text-white">Criar Agendamento</span>.
+              2. Preencha tudo no formulario oficial.
+              3. Salve o rascunho ou gere o agendamento.
+              4. Depois, se precisar ajustar, use <span className="text-white">Abrir e continuar preenchimento</span> nos cards abaixo.
+            </p>
           </div>
-          <div>
-            <Label>IE</Label>
-            <Input value={form.ie} onChange={(e) => setForm({ ...form, ie: e.target.value })} />
-          </div>
-          <div>
-            <Label>Cidade</Label>
-            <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
-          </div>
-          <div>
-            <Label>Estado</Label>
-            <Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })} />
-          </div>
-          <div>
-            <Label>Bairro</Label>
-            <Input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} />
-          </div>
-          <div>
-            <Label>CEP</Label>
-            <Input value={form.zipCode} onChange={(e) => setForm({ ...form, zipCode: e.target.value })} />
-          </div>
-          <div>
-            <Label>Endereco</Label>
-            <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-          </div>
-          <div>
-            <Label>Dias do agendamento</Label>
-            <Input
-              type="number"
-              min="1"
-              value={form.daysOut}
-              onChange={(e) => setForm({ ...form, daysOut: e.target.value })}
-            />
-          </div>
-          <div className="md:col-span-4 flex items-center gap-2">
-            <Button onClick={handleCreate} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="h-4 w-4 mr-2" />
-              {saving ? 'Criando...' : 'Criar Agendamento'}
-            </Button>
-            <Link to="/schedule">
-              <Button variant="outline">Ir para Agenda</Button>
-            </Link>
-          </div>
-          {error && <p className="md:col-span-4 text-sm text-red-500">{error}</p>}
+
+          {error && <p className="text-sm text-red-500">{error}</p>}
         </CardContent>
       </Card>
 

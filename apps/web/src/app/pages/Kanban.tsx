@@ -58,6 +58,7 @@ function columnOf(appointment: Appointment): KanbanColumn['key'] {
   if (appointment.status === 'READY') return 'ready';
   if (appointment.status === 'CRITICAL' || wasFinishedByTechnician(appointment)) return 'critical';
 
+  const checklist = appointment.schedulingChecklist;
   const hasCoreDataMissing =
     !appointment.city?.trim() ||
     appointment.city === 'A definir' ||
@@ -65,11 +66,17 @@ function columnOf(appointment: Appointment): KanbanColumn['key'] {
     !appointment.serviceType?.trim() ||
     appointment.serviceType === 'Pendente definicao' ||
     !appointment.problemDescription?.trim() ||
-    appointment.problemDescription === 'Pendente descricao do serviço' ||
+    appointment.problemDescription === 'Pendente descricao do servi??o' ||
     !appointment.technicianId ||
     !appointment.startTime;
 
+  const hasChecklistPending = Object.keys(checklistLabels).some((key) => {
+    if (!checklist) return true;
+    return !checklist[key as keyof NonNullable<Appointment['schedulingChecklist']>];
+  });
+
   if (hasCoreDataMissing) return 'draft';
+  if (hasChecklistPending) return 'pending';
   return 'pending';
 }
 

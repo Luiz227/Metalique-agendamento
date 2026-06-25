@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: service_planner
+      POSTGRES_USER: service_planner
+      POSTGRES_PASSWORD: service_planner
+    volumes:
+      - service_planner_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U service_planner -d service_planner"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://service_planner:service_planner@postgres:5432/service_planner?schema=public
+      PORT: 3333
+      JWT_SECRET: change-me-in-easypanel
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      API_URL: ${API_URL:-http://localhost:3333}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-primary}
+      GOOGLE_CLIENT_EMAIL: ${GOOGLE_CLIENT_EMAIL:-}
+      GOOGLE_PRIVATE_KEY: ${GOOGLE_PRIVATE_KEY:-}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-Service Planner <no-reply@serviceplanner.local>}
+    ports:
+      - "3333:3333"
+    command: sh -c "npx prisma db push --schema prisma/schema.prisma && node dist/src/main.js"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3333/api}
+        VITE_GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  service_planner_db:

@@ -3,18 +3,18 @@
   "version": "1.0.0",
   "private": true,
   "workspaces": [
-    "apps/api",
     "apps/web",
-    "apps/backend",
-    "apps/frontend",
-    "packages/shared"
+    "apps/backend"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace apps/api",
+    "dev": "npm run dev --workspace agenda-metalique-backend",
+    "dev:backend": "npm run dev --workspace agenda-metalique-backend",
     "dev:web": "npm run dev --workspace apps/web",
-    "build": "npm run build --workspaces",
-    "lint": "npm run lint --workspaces",
-    "db:migrate": "npm run db:migrate --workspace apps/api",
-    "db:seed": "npm run db:seed --workspace apps/api"
+    "build": "npm run build --workspace agenda-metalique-backend && npm run build --workspace @service-planner/web",
+    "build:backend": "npm run build --workspace agenda-metalique-backend",
+    "build:web": "npm run build --workspace @service-planner/web",
+    "lint": "npm run lint --workspace agenda-metalique-backend && npm run lint --workspace @service-planner/web",
+    "db:migrate": "npm run prisma:migrate --workspace agenda-metalique-backend",
+    "db:seed": "npm run prisma:seed --workspace agenda-metalique-backend"
   }
 }

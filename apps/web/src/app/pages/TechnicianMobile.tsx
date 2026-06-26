@@ -1,5 +1,5 @@
 import { type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, Camera, Clock, FileText, MapPin, Navigation, Phone, Play, RefreshCw, Video } from 'lucide-react';
+import { Calendar, Camera, Car, Clock, FileText, MapPin, Navigation, Phone, Play, RefreshCw, Video } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -598,6 +598,28 @@ export default function TechnicianMobile() {
               <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
                 <p className="text-xs text-blue-700 dark:text-blue-200">Ponto de atencao</p>
                 <p className="mt-1 text-sm text-blue-800 dark:text-blue-100 break-words">{current.notes}</p>
+              </div>
+            )}
+
+            {isCarTrip && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+                <div className="flex items-start gap-3">
+                  <Car className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-amber-100">Veiculo da viagem</p>
+                    {current.vehicle ? (
+                      <div className="mt-2 space-y-1 text-sm text-amber-50/90">
+                        <p className="font-medium">{current.vehicle.name} - {current.vehicle.plate}</p>
+                        <p>Ano: {current.vehicle.year ?? 'Nao informado'} | KM: {new Intl.NumberFormat('pt-BR').format(current.vehicle.mileage ?? 0)}</p>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm text-amber-50/90">Veiculo ainda nao informado pela logistica.</p>
+                    )}
+                    <p className="mt-2 text-xs text-amber-100/80">
+                      Grave o video da retirada antes de sair e o video da devolucao ao retornar com o veiculo.
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
 

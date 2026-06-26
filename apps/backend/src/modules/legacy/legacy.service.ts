@@ -488,10 +488,13 @@ export class LegacyService {
         technicianId: { in: technicianIds },
         status: { in: [AppointmentStatus.READY, AppointmentStatus.CRITICAL, AppointmentStatus.WAITING, AppointmentStatus.COMPLETED] }
       },
-      include: { client: true, technician: true, attachments: true, statusLogs: { orderBy: { createdAt: 'desc' } } },
+      include: { client: true, technician: true, vehicle: true, attachments: true, statusLogs: { orderBy: { createdAt: 'desc' } } },
       orderBy: { date: 'asc' }
     });
-    return rows.map((row) => this.toSimpleAppointment(row));
+    const checklistById = await this.getChecklistOverrides(rows.map((row) => row.id));
+    return rows
+      .filter((row) => row.status === AppointmentStatus.COMPLETED || this.isSchedulingChecklistComplete(row, checklistById.get(row.id)))
+      .map((row) => this.toSimpleAppointment(row, checklistById.get(row.id)));
   }
 
   async technicianSetStatus(id: string, status: string, observation?: string) {
@@ -2693,6 +2696,7 @@ export class LegacyService {
     status: AppointmentStatus;
     notes: string | null;
     osNumber: string | null;
+    vehicleId: string | null;
     daysOut: number;
     machineCode: string | null;
     machineName: string | null;
@@ -2711,6 +2715,7 @@ export class LegacyService {
     hotelCheckIn: Date | null;
     hotelCheckOut: Date | null;
     hotelNotes: string | null;
+    vehicle?: { id: string; name: string; year: number | null; plate: string; mileage: number; active: boolean } | null;
     client: {
       id: string;
       name: string;
@@ -2727,11 +2732,13 @@ export class LegacyService {
     technician: { id: string; name: string; baseCity: string; baseAddress: string; specialties: string[]; active: boolean; color: string } | null;
     attachments?: { id: string; kind: string; originalName: string; mimeType: string; size: number; publicUrl: string | null; createdAt: Date }[];
     statusLogs: { id: string; status: string; createdAt: Date; observation: string | null }[];
-  }) {
+  }, checklistOverride?: Partial<Record<ChecklistKey, boolean>>) {
+    const schedulingChecklist = this.buildSchedulingChecklist(row, checklistOverride);
     return {
       id: row.id,
       clientId: row.clientId,
       technicianId: row.technicianId,
+      vehicleId: row.vehicleId,
       city: row.city,
       fullAddress: row.fullAddress,
       serviceType: row.serviceType,
@@ -2763,19 +2770,7 @@ export class LegacyService {
       needsHotel: Boolean(row.hotelName || row.hotelAddress || row.hotelCheckIn || row.hotelCheckOut),
       needsTransport: false,
       clientChecklist: row.notes,
-      schedulingChecklist: {
-        clientConfirmed: true,
-        contactConfirmed: true,
-        addressConfirmed: true,
-        serviceTypeConfirmed: true,
-        technicianSelected: !!row.technicianId,
-        technicianAvailability: !!row.technicianId,
-        dateTimeConfirmed: true,
-        hotelNeedChecked: true,
-        transportNeedChecked: true,
-        osChecked: true,
-        clientChecklistChecked: true
-      },
+      schedulingChecklist,
       client: row.client,
       technician: row.technician
         ? {
@@ -2784,6 +2779,16 @@ export class LegacyService {
             availability: 'Seg-Sex',
             hasOwnCar: false,
             canTravel: true
+          }
+        : null,
+      vehicle: row.vehicle
+        ? {
+            id: row.vehicle.id,
+            name: row.vehicle.name,
+            year: row.vehicle.year,
+            plate: row.vehicle.plate,
+            mileage: row.vehicle.mileage,
+            active: row.vehicle.active
           }
         : null,
       statusLogs: row.statusLogs.map((log) => ({
@@ -2802,6 +2807,110 @@ export class LegacyService {
         createdAt: attachment.createdAt.toISOString()
       }))
     };
+  }
+
+  private async getChecklistOverrides(appointmentIds: string[]) {
+    const map = new Map<string, Partial<Record<ChecklistKey, boolean>>>();
+    if (!appointmentIds.length) return map;
+
+    const logs = await this.prisma.auditLog.findMany({
+      where: {
+        entity: 'appointment_checklist',
+        action: 'UPDATE',
+        entityId: { in: appointmentIds }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    for (const log of logs) {
+      if (!log.entityId || map.has(log.entityId)) continue;
+      map.set(log.entityId, this.parseChecklist(log.metadata));
+    }
+
+    return map;
+  }
+
+  private parseChecklist(input: unknown): Partial<Record<ChecklistKey, boolean>> {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+    const source = input as Record<string, unknown>;
+    const result: Partial<Record<ChecklistKey, boolean>> = {};
+    for (const key of CHECKLIST_KEYS) {
+      if (source[key] !== undefined) result[key] = Boolean(source[key]);
+    }
+    return result;
+  }
+
+  private buildSchedulingChecklist(
+    row: {
+      fullAddress: string;
+      city: string;
+      serviceType: string;
+      problemDescription: string | null;
+      technicianId: string | null;
+      startTime: Date;
+      endTime: Date;
+      hasHotel?: boolean | null;
+      hotelName: string | null;
+      hotelAddress: string | null;
+      hotelCheckIn: Date | null;
+      hotelCheckOut: Date | null;
+      transportMode: string | null;
+      flightAirport: string | null;
+      flightDepartureAt: Date | null;
+      flightReturnAt: Date | null;
+      serviceCode: string | null;
+      serviceItemDescription: string | null;
+      machineCode: string | null;
+      machineName: string | null;
+      machineModel: string | null;
+    },
+    checklistOverride?: Partial<Record<ChecklistKey, boolean>>
+  ): Record<ChecklistKey, boolean> {
+    const hasDefinedAddress = Boolean(row.fullAddress && row.fullAddress.trim() && row.fullAddress !== 'Endereco a definir');
+    const hasDefinedCity = Boolean(row.city && row.city.trim() && row.city !== 'A definir');
+    const hasDefinedServiceType = Boolean(row.serviceType && row.serviceType.trim() && row.serviceType !== 'Pendente definicao');
+    const hasDefinedProblem = Boolean(
+      row.problemDescription &&
+        row.problemDescription.trim() &&
+        row.problemDescription !== 'Pendente descricao do servico'
+    );
+    const hasHotelRequest = Boolean(row.hasHotel || row.hotelName || row.hotelAddress || row.hotelCheckIn || row.hotelCheckOut);
+    const hasTransportDecision = Boolean(row.transportMode && row.transportMode !== 'NONE');
+    const hasFlightData = Boolean(row.flightAirport || row.flightDepartureAt || row.flightReturnAt);
+    const hasOfficialServiceData = Boolean(
+      row.serviceCode &&
+        row.serviceItemDescription &&
+        row.machineCode &&
+        row.machineName &&
+        row.machineModel
+    );
+
+    const derivedChecklist: Record<ChecklistKey, boolean> = {
+      clientConfirmed: false,
+      contactConfirmed: false,
+      addressConfirmed: hasDefinedAddress && hasDefinedCity,
+      serviceTypeConfirmed: hasDefinedServiceType && hasDefinedProblem,
+      technicianSelected: !!row.technicianId,
+      technicianAvailability: !!row.technicianId && !!row.startTime && !!row.endTime,
+      dateTimeConfirmed: !!row.startTime,
+      hotelNeedChecked: !hasHotelRequest || Boolean(row.hotelName && row.hotelAddress && row.hotelCheckIn && row.hotelCheckOut),
+      transportNeedChecked:
+        !hasTransportDecision ||
+        row.transportMode === 'CAR' ||
+        (row.transportMode === 'AIR' && hasFlightData),
+      osChecked: hasOfficialServiceData,
+      clientChecklistChecked: false
+    };
+
+    return { ...derivedChecklist, ...(checklistOverride ?? {}) };
+  }
+
+  private isSchedulingChecklistComplete(
+    row: Parameters<LegacyService['buildSchedulingChecklist']>[0],
+    checklistOverride?: Partial<Record<ChecklistKey, boolean>>
+  ) {
+    const checklist = this.buildSchedulingChecklist(row, checklistOverride);
+    return CHECKLIST_KEYS.every((key) => checklist[key]);
   }
 
   private normalizeAttachmentKind(type: string | undefined, mimeType: string) {
@@ -3550,5 +3659,21 @@ export class LegacyService {
     return data;
   }
 }
+
+const CHECKLIST_KEYS = [
+  'clientConfirmed',
+  'contactConfirmed',
+  'addressConfirmed',
+  'serviceTypeConfirmed',
+  'technicianSelected',
+  'technicianAvailability',
+  'dateTimeConfirmed',
+  'hotelNeedChecked',
+  'transportNeedChecked',
+  'osChecked',
+  'clientChecklistChecked'
+] as const;
+
+type ChecklistKey = (typeof CHECKLIST_KEYS)[number];
 
 

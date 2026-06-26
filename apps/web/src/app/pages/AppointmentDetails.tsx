@@ -305,6 +305,23 @@ export default function AppointmentDetails() {
           );
           if (!route.ok && browserKey) {
             route = await calculateBrowserLogisticsSuggestion(browserKey, COMPANY_BASE_ADDRESS, destination) as LogisticsSuggestion;
+          } else if (
+            route.ok &&
+            route.suggestedMode === 'AIR' &&
+            !route.nearestAirport &&
+            browserKey
+          ) {
+            const browserRoute = await calculateBrowserLogisticsSuggestion(
+              browserKey,
+              COMPANY_BASE_ADDRESS,
+              destination
+            ) as LogisticsSuggestion;
+            if (browserRoute.nearestAirport) {
+              route = {
+                ...route,
+                nearestAirport: browserRoute.nearestAirport
+              };
+            }
           }
         } catch (backendErr) {
           if (!browserKey) throw backendErr;

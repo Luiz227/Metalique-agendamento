@@ -75,6 +75,7 @@ export type Appointment = {
   clientId: string;
   technician?: Technician | null;
   technicianId?: string | null;
+  vehicleId?: string | null;
   vehicle?: Vehicle | null;
   hotel?: Hotel | null;
   expense?: Expense | null;

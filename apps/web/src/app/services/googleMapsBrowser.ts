@@ -57,6 +57,11 @@ function geocode(geocoder: google.maps.Geocoder, address: string) {
   return geocoder.geocode({ address, region: 'BR' });
 }
 
+function extractAddressComponent(result: google.maps.GeocoderResult | undefined, wantedTypes: string[]) {
+  const component = result?.address_components?.find((item) => wantedTypes.some((type) => item.types.includes(type)));
+  return component?.long_name ?? null;
+}
+
 export async function calculateBrowserLogisticsSuggestion(
   apiKey: string,
   origin: string,
@@ -103,8 +108,16 @@ export async function calculateBrowserLogisticsSuggestion(
     try {
       const [clientGeo] = await geocode(geocoder, destination);
       const clientLocation = clientGeo.results?.[0]?.geometry?.location;
-      const cityOnly = destination.split(',').slice(-3).join(', ').trim() || destination;
-      const [airportGeo] = await geocode(geocoder, `Aeroporto, ${cityOnly}`);
+      const clientResult = clientGeo.results?.[0];
+      const resolvedCity =
+        extractAddressComponent(clientResult, ['administrative_area_level_2']) ||
+        extractAddressComponent(clientResult, ['locality']) ||
+        extractAddressComponent(clientResult, ['administrative_area_level_1']);
+      const resolvedState = extractAddressComponent(clientResult, ['administrative_area_level_1']);
+      const resolvedCountry = extractAddressComponent(clientResult, ['country']) || 'Brasil';
+      const airportSearchBase = [resolvedCity, resolvedState, resolvedCountry].filter(Boolean).join(', ');
+      const airportSearchQuery = airportSearchBase ? `Aeroporto, ${airportSearchBase}` : `Aeroporto, ${destination}`;
+      const [airportGeo] = await geocode(geocoder, airportSearchQuery);
       const airportResult = airportGeo.results?.[0];
       const airportLocation = airportResult?.geometry?.location;
 

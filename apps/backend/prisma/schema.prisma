@@ -87,6 +87,7 @@ model Appointment {
   id                String             @id @default(cuid())
   clientId          String
   technicianId      String?
+  vehicleId         String?
   city              String
   fullAddress       String
   serviceType       String
@@ -121,6 +122,7 @@ model Appointment {
   flightReturnAt    DateTime?
   client            Client             @relation(fields: [clientId], references: [id])
   technician        Technician?        @relation(fields: [technicianId], references: [id])
+  vehicle           Vehicle?           @relation(fields: [vehicleId], references: [id])
   expenses          Expense[]
   attachments       Attachment[]
   statusLogs        StatusLog[]
@@ -132,6 +134,7 @@ model Appointment {
 
   @@index([status, date])
   @@index([technicianId, date])
+  @@index([vehicleId])
   @@index([clientId, date])
   @@map("appointments")
 }
@@ -157,6 +160,7 @@ model Vehicle {
   plate       String   @unique
   mileage     Int      @default(0)
   active      Boolean  @default(true)
+  appointments Appointment[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

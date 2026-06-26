@@ -6,6 +6,7 @@ type AppointmentRow = Prisma.AppointmentGetPayload<{
   include: {
     client: true;
     technician: true;
+    vehicle: true;
     attachments: true;
     statusLogs: true;
   };
@@ -32,6 +33,7 @@ export class AppointmentsService {
       include: {
         client: true,
         technician: true,
+        vehicle: true,
         attachments: true,
         statusLogs: { orderBy: { createdAt: 'desc' } }
       },
@@ -48,6 +50,7 @@ export class AppointmentsService {
       include: {
         client: true,
         technician: true,
+        vehicle: true,
         attachments: true,
         statusLogs: { orderBy: { createdAt: 'desc' } }
       }
@@ -62,6 +65,7 @@ export class AppointmentsService {
       data: {
         clientId: String(body.clientId),
         technicianId: body.technicianId ? String(body.technicianId) : null,
+        vehicleId: body.vehicleId ? String(body.vehicleId) : null,
         city: String(body.city ?? ''),
         fullAddress: String(body.fullAddress ?? ''),
         serviceType: String(body.serviceType ?? ''),
@@ -93,7 +97,7 @@ export class AppointmentsService {
         flightDepartureAt: body.flightDepartureAt ? new Date(String(body.flightDepartureAt)) : null,
         flightReturnAt: body.flightReturnAt ? new Date(String(body.flightReturnAt)) : null
       },
-      include: { client: true, technician: true, attachments: true, statusLogs: true }
+      include: { client: true, technician: true, vehicle: true, attachments: true, statusLogs: true }
     });
     if (body.schedulingChecklist && typeof body.schedulingChecklist === 'object') {
       await this.prisma.auditLog.create({
@@ -113,6 +117,7 @@ export class AppointmentsService {
       where: { id },
       data: {
         technicianId: body.technicianId !== undefined ? (body.technicianId ? String(body.technicianId) : null) : undefined,
+        vehicleId: body.vehicleId !== undefined ? (body.vehicleId ? String(body.vehicleId) : null) : undefined,
         city: body.city !== undefined ? String(body.city) : undefined,
         fullAddress: body.fullAddress !== undefined ? String(body.fullAddress) : undefined,
         serviceType: body.serviceType !== undefined ? String(body.serviceType) : undefined,
@@ -144,7 +149,7 @@ export class AppointmentsService {
         flightDepartureAt: body.flightDepartureAt !== undefined ? (body.flightDepartureAt ? new Date(String(body.flightDepartureAt)) : null) : undefined,
         flightReturnAt: body.flightReturnAt !== undefined ? (body.flightReturnAt ? new Date(String(body.flightReturnAt)) : null) : undefined
       },
-      include: { client: true, technician: true, attachments: true, statusLogs: { orderBy: { createdAt: 'desc' } } }
+      include: { client: true, technician: true, vehicle: true, attachments: true, statusLogs: { orderBy: { createdAt: 'desc' } } }
     });
     return this.toApiAppointment(row);
   }
@@ -260,6 +265,7 @@ export class AppointmentsService {
       id: row.id,
       clientId: row.clientId,
       technicianId: row.technicianId,
+      vehicleId: row.vehicleId,
       city: row.city,
       fullAddress: row.fullAddress,
       serviceType: row.serviceType,
@@ -322,6 +328,16 @@ export class AppointmentsService {
             canTravel: true,
             active: row.technician.active,
             color: row.technician.color
+          }
+        : null,
+      vehicle: row.vehicle
+        ? {
+            id: row.vehicle.id,
+            name: row.vehicle.name,
+            year: row.vehicle.year,
+            plate: row.vehicle.plate,
+            mileage: row.vehicle.mileage,
+            active: row.vehicle.active
           }
         : null,
       statusLogs: row.statusLogs.map((log) => ({

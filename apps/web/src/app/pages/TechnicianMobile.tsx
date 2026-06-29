@@ -121,6 +121,7 @@ export default function TechnicianMobile() {
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [savingReport, setSavingReport] = useState(false);
+  const [uploadingVehicleStage, setUploadingVehicleStage] = useState<'pickup' | 'return' | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [clientSignatureDataUrl, setClientSignatureDataUrl] = useState('');
   const [technicianSignatureDataUrl, setTechnicianSignatureDataUrl] = useState('');
@@ -198,8 +199,12 @@ export default function TechnicianMobile() {
   const currentClientPhone = current?.client?.phone ?? '';
   const currentAddress = current?.fullAddress ?? 'Endereco nao informado';
   const isCarTrip = current?.transportMode === 'CAR';
-  const pickupVehicleVideo = pendingAttachments.find((item) => item.category === 'car-pickup-video');
-  const returnVehicleVideo = pendingAttachments.find((item) => item.category === 'car-return-video');
+  const pickupVehicleVideo = (current?.attachments ?? []).find(
+    (item) => item.kind === 'VEHICLE_PICKUP_VIDEO' || item.originalName.toLowerCase().startsWith('retirada-veiculo-')
+  );
+  const returnVehicleVideo = (current?.attachments ?? []).find(
+    (item) => item.kind === 'VEHICLE_RETURN_VIDEO' || item.originalName.toLowerCase().startsWith('devolucao-veiculo-')
+  );
   const missingVehiclePickupVideo = isCarTrip && !pickupVehicleVideo;
   const missingVehicleReturnVideo = isCarTrip && !returnVehicleVideo;
   const canSendReport =
@@ -317,6 +322,26 @@ export default function TechnicianMobile() {
       }
       const message = payload?.message ?? (raw.slice(0, 180) || 'Falha ao enviar arquivo');
       throw new Error(`${message} (${response.status})`);
+    }
+  }
+
+  async function uploadVehicleVideo(file: File | undefined, stage: 'pickup' | 'return') {
+    if (!file) return;
+    const type = stage === 'pickup' ? 'video-retirada-veiculo' : 'video-devolucao-veiculo';
+    const category = stage === 'pickup' ? 'car-pickup-video' : 'car-return-video';
+    setUploadingVehicleStage(stage);
+    setMessage('');
+    setErrorMessage('');
+    try {
+      await uploadFileNow(file, type, buildDefaultAttachmentName(file.name, category));
+      setMessage(stage === 'pickup'
+        ? 'Video de retirada enviado. O relatorio tecnico foi liberado.'
+        : 'Video de devolucao enviado com sucesso.');
+      await load(true);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Nao foi possivel enviar o video do veiculo.');
+    } finally {
+      setUploadingVehicleStage(null);
     }
   }
 
@@ -673,7 +698,7 @@ export default function TechnicianMobile() {
         </Card>
         )}
 
-        {activeSection === 'DETAILS' && (
+        {activeSection === 'DETAILS' && (!isCarTrip || Boolean(pickupVehicleVideo)) && (
         <Card className="rounded-2xl">
           <CardHeader><CardTitle className="text-base sm:text-lg">Relatorio Tecnico</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -708,19 +733,19 @@ export default function TechnicianMobile() {
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
                 <p className="text-sm font-semibold text-amber-300">Controle obrigatorio do veiculo</p>
                 <p className="mt-1 text-xs text-amber-100/90">
-                  Para viagens de carro, grave um video mostrando como o carro foi retirado e outro video mostrando como ele foi devolvido na empresa.
+                  Primeiro envie o video da retirada. Depois o sistema libera as consideracoes, os demais anexos e as assinaturas.
                 </p>
                 <div className="mt-3 grid grid-cols-1 gap-3">
                   <label className="flex min-h-20 cursor-pointer items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-background/70 px-4 py-3 text-left">
                     <div>
                       <p className="text-sm font-medium">Video de retirada do veiculo</p>
                       <p className="text-xs text-muted-foreground">
-                        {pickupVehicleVideo ? pickupVehicleVideo.displayName : 'Ainda nao enviado'}
+                        {pickupVehicleVideo ? pickupVehicleVideo.originalName : 'Ainda nao enviado'}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant={pickupVehicleVideo ? 'default' : 'secondary'}>
-                        {pickupVehicleVideo ? 'Pronto' : 'Obrigatorio'}
+                        {pickupVehicleVideo ? 'Enviado' : uploadingVehicleStage === 'pickup' ? 'Enviando' : 'Enviar primeiro'}
                       </Badge>
                       <Video className="h-5 w-5" />
                     </div>
@@ -729,22 +754,24 @@ export default function TechnicianMobile() {
                       accept="video/*"
                       capture="environment"
                       className="hidden"
+                      disabled={uploadingVehicleStage !== null}
                       onChange={(e) => {
-                        addAttachment(e.target.files?.[0], 'video-retirada-veiculo', 'car-pickup-video');
+                        uploadVehicleVideo(e.target.files?.[0], 'pickup').catch(() => undefined);
                         e.currentTarget.value = '';
                       }}
                     />
                   </label>
+                  {pickupVehicleVideo && (
                   <label className="flex min-h-20 cursor-pointer items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-background/70 px-4 py-3 text-left">
                     <div>
                       <p className="text-sm font-medium">Video de devolucao do veiculo</p>
                       <p className="text-xs text-muted-foreground">
-                        {returnVehicleVideo ? returnVehicleVideo.displayName : 'Ainda nao enviado'}
+                        {returnVehicleVideo ? returnVehicleVideo.originalName : 'Enviar ao devolver o veiculo'}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant={returnVehicleVideo ? 'default' : 'secondary'}>
-                        {returnVehicleVideo ? 'Pronto' : 'Obrigatorio'}
+                        {returnVehicleVideo ? 'Enviado' : uploadingVehicleStage === 'return' ? 'Enviando' : 'Obrigatorio ao finalizar'}
                       </Badge>
                       <Video className="h-5 w-5" />
                     </div>
@@ -753,15 +780,24 @@ export default function TechnicianMobile() {
                       accept="video/*"
                       capture="environment"
                       className="hidden"
+                      disabled={uploadingVehicleStage !== null}
                       onChange={(e) => {
-                        addAttachment(e.target.files?.[0], 'video-devolucao-veiculo', 'car-return-video');
+                        uploadVehicleVideo(e.target.files?.[0], 'return').catch(() => undefined);
                         e.currentTarget.value = '';
                       }}
                     />
                   </label>
+                  )}
                 </div>
               </div>
             )}
+            {isCarTrip && !pickupVehicleVideo && (
+              <div className="rounded-xl border border-dashed border-amber-500/40 p-4 text-center text-sm text-muted-foreground">
+                As consideracoes tecnicas, os outros arquivos e as assinaturas serao liberados depois do envio do video de retirada.
+              </div>
+            )}
+            {(!isCarTrip || Boolean(pickupVehicleVideo)) && (
+            <>
             <div className="grid grid-cols-2 gap-3">
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
               <Camera className="h-5 w-5" />
@@ -828,12 +864,14 @@ export default function TechnicianMobile() {
             <p className="text-xs text-muted-foreground">
               Fotos, videos e documentos enviados aqui tambem seguem para a pasta do atendimento no Google Drive.
             </p>
+            </>
+            )}
           </CardContent>
         </Card>
         )}
 
 
-        {activeSection === 'DETAILS' && (
+        {activeSection === 'DETAILS' && (!isCarTrip || Boolean(pickupVehicleVideo)) && (
         <Card className="rounded-2xl">
           <CardHeader><CardTitle className="text-base sm:text-lg">Assinaturas</CardTitle></CardHeader>
           <CardContent className="space-y-5">
@@ -875,7 +913,7 @@ export default function TechnicianMobile() {
         </Card>
         )}
 
-        {activeSection === 'DETAILS' && (
+        {activeSection === 'DETAILS' && (!isCarTrip || Boolean(pickupVehicleVideo)) && (
         <Button className="h-12 w-full rounded-xl bg-[#c8142f] hover:bg-[#a81027]" disabled={!canSendReport} onClick={saveReport}>
           {savingReport ? 'Enviando...' : `Enviar relatório técnico${pendingAttachments.length ? ` + ${pendingAttachments.length} anexo(s)` : ''}`}
         </Button>

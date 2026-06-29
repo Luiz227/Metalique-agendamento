@@ -63,6 +63,8 @@ const ATTACHMENT_KIND = {
   TECHNICAL_REPORT: 'TECHNICAL_REPORT',
   TECHNICAL_MEDIA: 'TECHNICAL_MEDIA',
   TECHNICAL_DOCUMENT: 'TECHNICAL_DOCUMENT',
+  VEHICLE_PICKUP_VIDEO: 'VEHICLE_PICKUP_VIDEO',
+  VEHICLE_RETURN_VIDEO: 'VEHICLE_RETURN_VIDEO',
   CLIENT_SIGNATURE: 'CLIENT_SIGNATURE',
   TECHNICIAN_SIGNATURE: 'TECHNICIAN_SIGNATURE'
 } as const;
@@ -512,6 +514,31 @@ export class LegacyService {
     }
   ) {
     const summary = report?.summary?.trim();
+
+    const vehicleControl = await this.prisma.appointment.findUnique({
+      where: { id },
+      select: {
+        transportMode: true,
+        attachments: { select: { kind: true, originalName: true } }
+      }
+    });
+    if (!vehicleControl) throw new NotFoundException('Agendamento nao encontrado');
+    if (vehicleControl.transportMode === 'CAR') {
+      const hasPickupVideo = vehicleControl.attachments.some(
+        (attachment) =>
+          attachment.kind === ATTACHMENT_KIND.VEHICLE_PICKUP_VIDEO ||
+          attachment.originalName.toLowerCase().startsWith('retirada-veiculo-')
+      );
+      const hasReturnVideo = vehicleControl.attachments.some(
+        (attachment) =>
+          attachment.kind === ATTACHMENT_KIND.VEHICLE_RETURN_VIDEO ||
+          attachment.originalName.toLowerCase().startsWith('devolucao-veiculo-')
+      );
+      if (!hasPickupVideo) throw new BadRequestException('Envie primeiro o video de retirada do veiculo.');
+      if (!hasReturnVideo) {
+        throw new BadRequestException('Envie o video de devolucao do veiculo antes de finalizar o relatorio.');
+      }
+    }
 
     await this.prisma.statusLog.create({
       data: { appointmentId: id, status: 'COMPLETED_SUCCESS', observation: summary ?? 'Atendimento finalizado pelo técnico' }
@@ -2604,7 +2631,11 @@ export class LegacyService {
   ) {
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
-      include: { client: true, technician: true }
+      include: {
+        client: true,
+        technician: true,
+        attachments: { select: { kind: true, originalName: true } }
+      }
     });
     if (!appointment) throw new NotFoundException('Agendamento não encontrado');
 
@@ -2612,6 +2643,19 @@ export class LegacyService {
     const mimeType = file?.mimetype ?? 'application/octet-stream';
     const size = file?.size ?? 0;
     const kind = this.normalizeAttachmentKind(type, mimeType);
+    if (
+      appointment.transportMode === 'CAR' &&
+      (kind === ATTACHMENT_KIND.TECHNICAL_MEDIA || kind === ATTACHMENT_KIND.TECHNICAL_DOCUMENT)
+    ) {
+      const hasPickupVideo = appointment.attachments.some(
+        (attachment) =>
+          attachment.kind === ATTACHMENT_KIND.VEHICLE_PICKUP_VIDEO ||
+          attachment.originalName.toLowerCase().startsWith('retirada-veiculo-')
+      );
+      if (!hasPickupVideo) {
+        throw new BadRequestException('Envie primeiro o video de retirada do veiculo.');
+      }
+    }
     const attachmentId = randomUUID();
     let uploadResult: { fileId: string; folderPath: string; publicUrl: string | null };
 
@@ -2920,8 +2964,8 @@ export class LegacyService {
     if (normalized === 'assinatura-cliente') return ATTACHMENT_KIND.CLIENT_SIGNATURE;
     if (normalized === 'assinatura-tecnico') return ATTACHMENT_KIND.TECHNICIAN_SIGNATURE;
     if (normalized === 'midia-tecnica') return ATTACHMENT_KIND.TECHNICAL_MEDIA;
-    if (normalized === 'video-retirada-veiculo') return ATTACHMENT_KIND.TECHNICAL_MEDIA;
-    if (normalized === 'video-devolucao-veiculo') return ATTACHMENT_KIND.TECHNICAL_MEDIA;
+    if (normalized === 'video-retirada-veiculo') return ATTACHMENT_KIND.VEHICLE_PICKUP_VIDEO;
+    if (normalized === 'video-devolucao-veiculo') return ATTACHMENT_KIND.VEHICLE_RETURN_VIDEO;
     if (normalized === 'documento-tecnico') return ATTACHMENT_KIND.TECHNICAL_DOCUMENT;
     if (mimeType.startsWith('image/') || mimeType.startsWith('video/')) return ATTACHMENT_KIND.TECHNICAL_MEDIA;
     return ATTACHMENT_KIND.GENERAL;

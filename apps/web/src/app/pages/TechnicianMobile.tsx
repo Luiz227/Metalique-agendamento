@@ -1,5 +1,5 @@
 import { type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, Camera, Car, Clock, FileText, MapPin, Navigation, Phone, Plane, Play, RefreshCw, Video } from 'lucide-react';
+import { Calendar, Camera, Car, Clock, FileText, MapPin, Navigation, Phone, Plane, Play, RefreshCw, Sparkles, Video } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -17,6 +17,16 @@ type PendingAttachment = {
   type: 'midia-tecnica' | 'documento-tecnico' | 'video-retirada-veiculo' | 'video-devolucao-veiculo';
   category: 'general-media' | 'general-document' | 'car-pickup-video' | 'car-return-video';
   previewUrl?: string;
+};
+
+type WeeklyAiReport = {
+  ok: boolean;
+  generated: boolean;
+  generatedAt?: string;
+  periodStart: string;
+  periodEnd: string;
+  sourceCount: number;
+  report: string;
 };
 
 function isImageFile(file: File) {
@@ -121,6 +131,9 @@ export default function TechnicianMobile() {
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [savingReport, setSavingReport] = useState(false);
+  const [weeklyAiReport, setWeeklyAiReport] = useState<WeeklyAiReport | null>(null);
+  const [generatingWeeklyReport, setGeneratingWeeklyReport] = useState(false);
+  const [weeklyReportError, setWeeklyReportError] = useState('');
   const [uploadingVehicleStage, setUploadingVehicleStage] = useState<'pickup' | 'return' | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [clientSignatureDataUrl, setClientSignatureDataUrl] = useState('');
@@ -322,6 +335,20 @@ export default function TechnicianMobile() {
       }
       const message = payload?.message ?? (raw.slice(0, 180) || 'Falha ao enviar arquivo');
       throw new Error(`${message} (${response.status})`);
+    }
+  }
+
+  async function generateWeeklyReport() {
+    setGeneratingWeeklyReport(true);
+    setWeeklyReportError('');
+    try {
+      const result = await api<WeeklyAiReport>('/technician/weekly-report', { method: 'POST' });
+      setWeeklyAiReport(result);
+      if (!result.ok && !result.generated) setWeeklyReportError(result.report);
+    } catch (err) {
+      setWeeklyReportError(err instanceof Error ? err.message : 'Nao foi possivel gerar o relatorio semanal.');
+    } finally {
+      setGeneratingWeeklyReport(false);
     }
   }
 
@@ -710,6 +737,35 @@ export default function TechnicianMobile() {
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+        )}
+
+        {activeSection === 'DETAILS' && (
+        <Card className="rounded-2xl border-blue-500/20 bg-blue-500/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Sparkles className="h-5 w-5 text-blue-400" />
+              Relatorio semanal com IA
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              A IA resume os relatos tecnicos finalizados por voce na semana atual.
+            </p>
+            <Button type="button" className="w-full" onClick={generateWeeklyReport} disabled={generatingWeeklyReport}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              {generatingWeeklyReport ? 'Gerando relatorio...' : weeklyAiReport ? 'Atualizar relatorio da semana' : 'Gerar relatorio da semana'}
+            </Button>
+            {weeklyReportError && <p className="text-sm text-red-400">{weeklyReportError}</p>}
+            {weeklyAiReport && (
+              <div className="rounded-xl border bg-background/80 p-4">
+                <p className="mb-3 text-xs text-muted-foreground">
+                  {weeklyAiReport.sourceCount} relato(s) considerado(s) nesta semana
+                </p>
+                <div className="whitespace-pre-wrap text-sm leading-6">{weeklyAiReport.report}</div>
+              </div>
+            )}
           </CardContent>
         </Card>
         )}

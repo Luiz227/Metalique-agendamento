@@ -113,6 +113,11 @@ export class LegacyController {
     return this.service.technicianAppointments(this.extractAuthIdentity(authorization ?? null));
   }
 
+  @Post('technician/weekly-report')
+  technicianWeeklyReport(@Headers('authorization') authorization?: string) {
+    return this.service.technicianWeeklyReport(this.extractAuthIdentity(authorization ?? null));
+  }
+
   @Post('technician/appointments/:id/status')
   technicianStatus(@Param('id') id: string, @Body() body: { status?: string; observation?: string }) {
     return this.service.technicianSetStatus(id, String(body?.status ?? 'TRAVELING'), body?.observation);

@@ -509,6 +509,116 @@ export class LegacyService {
       .map((row) => this.toSimpleAppointment(row, checklistById.get(row.id)));
   }
 
+  async technicianWeeklyReport(identity: { userId: string | null; email: string | null; name: string | null } | null) {
+    if (!identity) throw new BadRequestException('Tecnico nao identificado');
+
+    const linkedUser = identity.userId
+      ? await this.prisma.user.findUnique({ where: { id: identity.userId } })
+      : identity.email
+        ? await this.prisma.user.findUnique({ where: { email: identity.email } })
+        : null;
+    const candidateName = linkedUser?.name?.trim() || identity.name?.trim() || '';
+    const firstName = candidateName.split(/\s+/).filter(Boolean)[0] ?? '';
+    const technicianSearch: Prisma.TechnicianWhereInput[] = [];
+    if (linkedUser) technicianSearch.push({ userId: linkedUser.id });
+    if (candidateName) technicianSearch.push({ name: { equals: candidateName, mode: 'insensitive' } });
+    if (firstName.length >= 3) technicianSearch.push({ name: { startsWith: firstName, mode: 'insensitive' } });
+
+    const technicians = technicianSearch.length
+      ? await this.prisma.technician.findMany({ where: { OR: technicianSearch } })
+      : [];
+    const technicianIds = Array.from(new Set(technicians.map((item) => item.id)));
+    if (!technicianIds.length) throw new NotFoundException('Cadastro do tecnico nao encontrado');
+
+    const now = new Date();
+    const mondayShift = now.getDay() === 0 ? -6 : 1 - now.getDay();
+    const start = new Date(now);
+    start.setDate(now.getDate() + mondayShift);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 7);
+
+    const logs = await this.prisma.statusLog.findMany({
+      where: {
+        appointment: { technicianId: { in: technicianIds } },
+        status: { in: ['COMPLETED_SUCCESS', 'COMPLETED_PARTIAL'] },
+        createdAt: { gte: start, lt: end }
+      },
+      include: { appointment: { include: { client: true } } },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    const sources = logs.map((log) => ({
+      date: log.createdAt.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+      client: log.appointment.client.name,
+      city: log.appointment.city,
+      service: log.appointment.serviceType,
+      status: log.status,
+      technicalReport: log.observation?.trim() || 'Relato tecnico nao informado'
+    }));
+    if (!sources.length) {
+      return {
+        ok: true,
+        generated: false,
+        periodStart: start.toISOString(),
+        periodEnd: new Date(end.getTime() - 1).toISOString(),
+        sourceCount: 0,
+        report: 'Ainda nao existem relatos tecnicos finalizados nesta semana.'
+      };
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY?.trim();
+    if (!apiKey) {
+      return {
+        ok: false,
+        generated: false,
+        periodStart: start.toISOString(),
+        periodEnd: new Date(end.getTime() - 1).toISOString(),
+        sourceCount: sources.length,
+        report: 'A IA nao esta configurada. Defina OPENAI_API_KEY no backend.'
+      };
+    }
+
+    const model = process.env.OPENAI_WEEKLY_REPORT_MODEL?.trim() || process.env.OPENAI_SERVICE_ORDER_MODEL?.trim() || 'gpt-4o-mini';
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        temperature: 0.2,
+        messages: [
+          {
+            role: 'system',
+            content: 'Voce cria relatorios semanais profissionais para tecnicos de campo. Use somente os dados fornecidos, nao invente fatos e escreva em portugues do Brasil.'
+          },
+          {
+            role: 'user',
+            content: [
+              `Crie o relatorio semanal do tecnico ${candidateName || technicians[0]?.name || 'Tecnico'}.`,
+              'Organize em: Resumo da semana; Atendimentos realizados; Principais atividades; Pendencias e pontos de atencao; Conclusao.',
+              'Se nao houver pendencias descritas, informe que nenhuma pendencia foi registrada nos relatos.',
+              `Relatos da semana: ${JSON.stringify(sources)}`
+            ].join('\n\n')
+          }
+        ]
+      })
+    });
+    if (!response.ok) throw new BadRequestException('Nao foi possivel gerar o relatorio semanal com IA');
+    const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const report = payload.choices?.[0]?.message?.content?.trim();
+    if (!report) throw new BadRequestException('A IA nao retornou o relatorio semanal');
+
+    return {
+      ok: true,
+      generated: true,
+      generatedAt: new Date().toISOString(),
+      periodStart: start.toISOString(),
+      periodEnd: new Date(end.getTime() - 1).toISOString(),
+      sourceCount: sources.length,
+      report
+    };
+  }
+
   async technicianSetStatus(id: string, status: string, observation?: string) {
     await this.prisma.statusLog.create({ data: { appointmentId: id, status, observation: observation ?? null } });
     return { ok: true };

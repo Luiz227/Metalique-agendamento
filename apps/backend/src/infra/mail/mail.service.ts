@@ -76,6 +76,12 @@ export class MailService {
             <p><strong>Cidade:</strong> ${this.escapeHtml(appointment.city)}</p>
             <p><strong>Endereco:</strong> ${this.escapeHtml(appointment.fullAddress)}</p>
             ${flightDetails}
+            <div style="margin-top:24px;padding:16px;border-left:4px solid #c8142f;background:#fff1f2;border-radius:6px">
+              <strong style="color:#9f1239">Importante</strong>
+              <p style="margin:8px 0 0;line-height:1.5">
+                Mais informacoes sobre o agendamento, orientacoes, documentos e atualizacoes estarao disponiveis no aplicativo do tecnico.
+              </p>
+            </div>
           </div>
         `
       });

@@ -116,9 +116,11 @@ model Appointment {
   hotelCheckOut     DateTime?
   hotelDailyRate    Decimal?           @db.Decimal(10,2)
   hotelNotes        String?
-  transportMode     String?
-  flightAirport     String?
-  flightDepartureAt DateTime?
+    transportMode     String?
+    flightAirport     String?
+    flightOutboundAirport String?
+    flightReturnAirport String?
+    flightDepartureAt DateTime?
   flightReturnAt    DateTime?
   client            Client             @relation(fields: [clientId], references: [id])
   technician        Technician?        @relation(fields: [technicianId], references: [id])

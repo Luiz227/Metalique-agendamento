@@ -654,7 +654,8 @@ export default function TechnicianMobile() {
                   <Plane className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />
                   <div className="min-w-0 space-y-1 text-sm text-sky-50/90">
                     <p className="font-semibold text-sky-100">Informacoes da viagem aerea</p>
-                    <p><strong>Aeroporto:</strong> {current.flightAirport || 'Nao informado'}</p>
+                    <p><strong>Aeroporto do voo de ida:</strong> {current.flightOutboundAirport || current.flightAirport || 'Nao informado'}</p>
+                    <p><strong>Aeroporto do voo de volta:</strong> {current.flightReturnAirport || current.flightAirport || 'Nao informado'}</p>
                     <p><strong>Voo de ida:</strong> {current.flightDepartureAt ? new Date(current.flightDepartureAt).toLocaleString('pt-BR') : 'Nao informado'}</p>
                     <p><strong>Voo de volta:</strong> {current.flightReturnAt ? new Date(current.flightReturnAt).toLocaleString('pt-BR') : 'Nao informado'}</p>
                     <p className="pt-1 text-xs text-sky-100/80">Viagens aereas nao exigem videos de retirada ou devolucao de veiculo.</p>

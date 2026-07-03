@@ -98,6 +98,8 @@ export class AppointmentsService {
         hotelNotes: body.hotelNotes ? String(body.hotelNotes) : null,
         transportMode: body.transportMode ? String(body.transportMode) : null,
         flightAirport: body.flightAirport ? String(body.flightAirport) : null,
+        flightOutboundAirport: body.flightOutboundAirport ? String(body.flightOutboundAirport) : null,
+        flightReturnAirport: body.flightReturnAirport ? String(body.flightReturnAirport) : null,
         flightDepartureAt: body.flightDepartureAt ? new Date(String(body.flightDepartureAt)) : null,
         flightReturnAt: body.flightReturnAt ? new Date(String(body.flightReturnAt)) : null
       },
@@ -150,6 +152,8 @@ export class AppointmentsService {
         hotelNotes: body.hotelNotes !== undefined ? (body.hotelNotes ? String(body.hotelNotes) : null) : undefined,
         transportMode: body.transportMode !== undefined ? (body.transportMode ? String(body.transportMode) : null) : undefined,
         flightAirport: body.flightAirport !== undefined ? (body.flightAirport ? String(body.flightAirport) : null) : undefined,
+        flightOutboundAirport: body.flightOutboundAirport !== undefined ? (body.flightOutboundAirport ? String(body.flightOutboundAirport) : null) : undefined,
+        flightReturnAirport: body.flightReturnAirport !== undefined ? (body.flightReturnAirport ? String(body.flightReturnAirport) : null) : undefined,
         flightDepartureAt: body.flightDepartureAt !== undefined ? (body.flightDepartureAt ? new Date(String(body.flightDepartureAt)) : null) : undefined,
         flightReturnAt: body.flightReturnAt !== undefined ? (body.flightReturnAt ? new Date(String(body.flightReturnAt)) : null) : undefined
       },
@@ -265,7 +269,13 @@ export class AppointmentsService {
     );
     const hasHotelRequest = Boolean(row.hasHotel || row.hotelName || row.hotelAddress || row.hotelCheckIn || row.hotelCheckOut);
     const hasTransportDecision = Boolean(row.transportMode && row.transportMode !== 'NONE');
-    const hasFlightData = Boolean(row.flightAirport || row.flightDepartureAt || row.flightReturnAt);
+    const hasFlightData = Boolean(
+      row.flightOutboundAirport ||
+      row.flightReturnAirport ||
+      row.flightAirport ||
+      row.flightDepartureAt ||
+      row.flightReturnAt
+    );
     const hasOfficialServiceData = Boolean(
       row.serviceCode &&
         row.serviceItemDescription &&
@@ -325,6 +335,8 @@ export class AppointmentsService {
       hotelNotes: row.hotelNotes,
       transportMode: row.transportMode,
       flightAirport: row.flightAirport,
+      flightOutboundAirport: row.flightOutboundAirport,
+      flightReturnAirport: row.flightReturnAirport,
       flightDepartureAt: row.flightDepartureAt?.toISOString() ?? null,
       flightReturnAt: row.flightReturnAt?.toISOString() ?? null,
       needsHotel: Boolean(row.hasHotel || row.hotelName || row.hotelAddress || row.hotelCheckIn || row.hotelCheckOut),

@@ -108,6 +108,8 @@ export type Appointment = {
   hotelNotes?: string | null;
   transportMode?: string | null;
   flightAirport?: string | null;
+  flightOutboundAirport?: string | null;
+  flightReturnAirport?: string | null;
   flightDepartureAt?: string | null;
   flightReturnAt?: string | null;
   clientChecklist?: string | null;

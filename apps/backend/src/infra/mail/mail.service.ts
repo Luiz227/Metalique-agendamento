@@ -14,6 +14,8 @@ type ConfirmedAppointmentEmail = {
   daysOut: number;
   transportMode: string | null;
   flightAirport: string | null;
+  flightOutboundAirport: string | null;
+  flightReturnAirport: string | null;
   flightDepartureAt: Date | null;
   flightReturnAt: Date | null;
   client: { name: string };
@@ -55,8 +57,12 @@ export class MailService {
     const flightDetails = appointment.transportMode === 'AIR'
       ? `
         <tr>
-          <td style="padding:7px 0;color:#52525b;width:150px">Aeroporto:</td>
-          <td style="padding:7px 0;color:#18181b;font-weight:600">${this.escapeHtml(appointment.flightAirport || 'Nao informado')}</td>
+          <td style="padding:7px 0;color:#52525b;width:150px">Aeroporto de ida:</td>
+          <td style="padding:7px 0;color:#18181b;font-weight:600">${this.escapeHtml(appointment.flightOutboundAirport || appointment.flightAirport || 'Nao informado')}</td>
+        </tr>
+        <tr>
+          <td style="padding:7px 0;color:#52525b;width:150px">Aeroporto de volta:</td>
+          <td style="padding:7px 0;color:#18181b;font-weight:600">${this.escapeHtml(appointment.flightReturnAirport || appointment.flightAirport || 'Nao informado')}</td>
         </tr>
         <tr>
           <td style="padding:7px 0;color:#52525b">Data de ida:</td>

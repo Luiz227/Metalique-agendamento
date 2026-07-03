@@ -148,7 +148,13 @@ export class NotificationsService {
     );
     const hasHotelRequest = Boolean(row.hasHotel || row.hotelName || row.hotelAddress || row.hotelCheckIn || row.hotelCheckOut);
     const hasTransportDecision = Boolean(row.transportMode && row.transportMode !== 'NONE');
-    const hasFlightData = Boolean(row.flightAirport || row.flightDepartureAt || row.flightReturnAt);
+    const hasFlightData = Boolean(
+      row.flightOutboundAirport ||
+      row.flightReturnAirport ||
+      row.flightAirport ||
+      row.flightDepartureAt ||
+      row.flightReturnAt
+    );
     const hasOfficialServiceData = Boolean(
       row.serviceCode &&
         row.serviceItemDescription &&

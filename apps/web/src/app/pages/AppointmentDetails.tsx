@@ -150,6 +150,8 @@ export default function AppointmentDetails() {
     transportMode: 'CAR',
     vehicleId: '',
     flightAirport: '',
+    flightOutboundAirport: '',
+    flightReturnAirport: '',
     flightDepartureAt: '',
     flightReturnAt: '',
     hasHotel: false,
@@ -255,6 +257,8 @@ export default function AppointmentDetails() {
       transportMode: appointment.transportMode ?? (appointment.vehicle ? 'CAR' : 'NONE'),
       vehicleId: appointment.vehicle?.id ?? '',
       flightAirport: appointment.flightAirport ?? '',
+      flightOutboundAirport: appointment.flightOutboundAirport ?? appointment.flightAirport ?? '',
+      flightReturnAirport: appointment.flightReturnAirport ?? appointment.flightAirport ?? '',
       flightDepartureAt: safeDateTimeLocalValue(appointment.flightDepartureAt),
       flightReturnAt: safeDateTimeLocalValue(appointment.flightReturnAt),
       hasHotel: Boolean(appointment.hasHotel || appointment.hotelName || appointment.hotelAddress || appointment.hotelCheckIn || appointment.hotelCheckOut),
@@ -348,13 +352,26 @@ export default function AppointmentDetails() {
               const nextFlightAirport = nextTransportMode === 'AIR'
                 ? airportLabel || prev.flightAirport
                 : '';
-              if (prev.transportMode === nextTransportMode && prev.flightAirport === nextFlightAirport) {
+              const nextOutboundAirport = nextTransportMode === 'AIR'
+                ? airportLabel || prev.flightOutboundAirport
+                : '';
+              const nextReturnAirport = nextTransportMode === 'AIR'
+                ? airportLabel || prev.flightReturnAirport
+                : '';
+              if (
+                prev.transportMode === nextTransportMode &&
+                prev.flightAirport === nextFlightAirport &&
+                prev.flightOutboundAirport === nextOutboundAirport &&
+                prev.flightReturnAirport === nextReturnAirport
+              ) {
                 return prev;
               }
               return {
                 ...prev,
                 transportMode: nextTransportMode,
-                flightAirport: nextFlightAirport
+                flightAirport: nextFlightAirport,
+                flightOutboundAirport: nextOutboundAirport,
+                flightReturnAirport: nextReturnAirport
               };
             });
           }
@@ -571,6 +588,8 @@ export default function AppointmentDetails() {
             machineObservations: form.machineObservations || null,
             transportMode: form.transportMode || null,
             flightAirport: form.transportMode === 'AIR' ? form.flightAirport || null : null,
+            flightOutboundAirport: form.transportMode === 'AIR' ? form.flightOutboundAirport || null : null,
+            flightReturnAirport: form.transportMode === 'AIR' ? form.flightReturnAirport || null : null,
             flightDepartureAt: form.transportMode === 'AIR' && form.flightDepartureAt ? new Date(form.flightDepartureAt).toISOString() : null,
             flightReturnAt: form.transportMode === 'AIR' && form.flightReturnAt ? new Date(form.flightReturnAt).toISOString() : null,
             hasHotel: form.hasHotel,
@@ -946,7 +965,12 @@ export default function AppointmentDetails() {
                             type="button"
                             variant="outline"
                             className="w-full"
-                            onClick={() => setForm((prev) => ({ ...prev, flightAirport: nearestAirportLabel }))}
+                            onClick={() => setForm((prev) => ({
+                              ...prev,
+                              flightAirport: nearestAirportLabel,
+                              flightOutboundAirport: nearestAirportLabel,
+                              flightReturnAirport: nearestAirportLabel
+                            }))}
                           >
                             Usar aeroporto sugerido na viagem
                           </Button>
@@ -954,8 +978,20 @@ export default function AppointmentDetails() {
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[11px] text-muted-foreground">Aeroporto usado na viagem</p>
-                      <Input placeholder="Aeroporto/terminal da viagem" value={form.flightAirport} onChange={(e) => setForm({ ...form, flightAirport: e.target.value })} />
+                      <p className="text-[11px] text-muted-foreground">Aeroporto/terminal do voo de ida</p>
+                      <Input
+                        placeholder="Informe de onde sai o voo de ida"
+                        value={form.flightOutboundAirport}
+                        onChange={(e) => setForm({ ...form, flightOutboundAirport: e.target.value, flightAirport: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-muted-foreground">Aeroporto/terminal do voo de volta</p>
+                      <Input
+                        placeholder="Informe de onde sai o voo de volta"
+                        value={form.flightReturnAirport}
+                        onChange={(e) => setForm({ ...form, flightReturnAirport: e.target.value })}
+                      />
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
                       <div>
@@ -971,7 +1007,8 @@ export default function AppointmentDetails() {
                 ) : (
                   <div className="space-y-1 text-sm">
                     <p>Aeroporto mais proximo do cliente: {nearestAirportLabel || appointment.flightAirport || 'Nao informado'}</p>
-                    <p>Aeroporto da viagem: {appointment.flightAirport || 'Nao informado'}</p>
+                    <p>Voo de ida: {appointment.flightOutboundAirport || appointment.flightAirport || 'Nao informado'}</p>
+                    <p>Voo de volta: {appointment.flightReturnAirport || appointment.flightAirport || 'Nao informado'}</p>
                     <p className="text-muted-foreground">Ida: {safeLocaleDateTime(appointment.flightDepartureAt)}</p>
                     <p className="text-muted-foreground">Volta: {safeLocaleDateTime(appointment.flightReturnAt)}</p>
                   </div>

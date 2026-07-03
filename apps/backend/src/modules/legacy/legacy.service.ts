@@ -2762,6 +2762,8 @@ export class LegacyService {
     serviceItemDescription: string | null;
     transportMode: string | null;
     flightAirport: string | null;
+    flightOutboundAirport: string | null;
+    flightReturnAirport: string | null;
     flightDepartureAt: Date | null;
     flightReturnAt: Date | null;
     hotelName: string | null;
@@ -2814,6 +2816,8 @@ export class LegacyService {
       serviceItemDescription: row.serviceItemDescription,
       transportMode: row.transportMode,
       flightAirport: row.flightAirport,
+      flightOutboundAirport: row.flightOutboundAirport,
+      flightReturnAirport: row.flightReturnAirport,
       flightDepartureAt: row.flightDepartureAt?.toISOString() ?? null,
       flightReturnAt: row.flightReturnAt?.toISOString() ?? null,
       hotelName: row.hotelName,
@@ -2910,6 +2914,8 @@ export class LegacyService {
       hotelCheckOut: Date | null;
       transportMode: string | null;
       flightAirport: string | null;
+      flightOutboundAirport: string | null;
+      flightReturnAirport: string | null;
       flightDepartureAt: Date | null;
       flightReturnAt: Date | null;
       serviceCode: string | null;
@@ -2930,7 +2936,13 @@ export class LegacyService {
     );
     const hasHotelRequest = Boolean(row.hasHotel || row.hotelName || row.hotelAddress || row.hotelCheckIn || row.hotelCheckOut);
     const hasTransportDecision = Boolean(row.transportMode && row.transportMode !== 'NONE');
-    const hasFlightData = Boolean(row.flightAirport || row.flightDepartureAt || row.flightReturnAt);
+    const hasFlightData = Boolean(
+      row.flightOutboundAirport ||
+      row.flightReturnAirport ||
+      row.flightAirport ||
+      row.flightDepartureAt ||
+      row.flightReturnAt
+    );
     const hasOfficialServiceData = Boolean(
       row.serviceCode &&
         row.serviceItemDescription &&

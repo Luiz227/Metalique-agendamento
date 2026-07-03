@@ -1,9 +1,13 @@
-import { Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Post, Put, Query, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { AppointmentsService } from './appointments.service';
 
 @Controller('appointments')
 export class AppointmentsController {
-  constructor(private readonly service: AppointmentsService) {}
+  constructor(
+    private readonly service: AppointmentsService,
+    private readonly jwt: JwtService
+  ) {}
 
   @Get('health')
   health() {
@@ -13,6 +17,22 @@ export class AppointmentsController {
   @Get()
   list(@Query('from') from?: string, @Query('to') to?: string) {
     return this.service.list(from, to);
+  }
+
+  @Delete()
+  async deleteAll(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: { confirmation?: string }
+  ) {
+    if (!authorization?.startsWith('Bearer ')) throw new UnauthorizedException('Sessao nao identificada');
+    try {
+      const payload = await this.jwt.verifyAsync<{ sub?: string }>(authorization.slice(7));
+      if (!payload.sub) throw new UnauthorizedException('Sessao invalida');
+      return this.service.deleteAll(payload.sub, body?.confirmation);
+    } catch (error) {
+      if (error instanceof UnauthorizedException) throw error;
+      throw new UnauthorizedException('Sessao invalida ou expirada');
+    }
   }
 
   @Get(':id')

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertCircle, CheckCircle2, ClipboardPenLine, Plus } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ClipboardPenLine, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
+import { Input } from '../components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { ApiError, api, connectRealtime } from '../services/api';
 import { createAppointmentDraft } from '../services/appointmentDraft';
 import type { Appointment } from '../services/types';
@@ -53,6 +55,9 @@ export default function AppointmentsManager() {
   const [loading, setLoading] = useState(true);
   const [showFinished, setShowFinished] = useState(false);
   const [creatingDraft, setCreatingDraft] = useState(false);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [deletingAll, setDeletingAll] = useState(false);
 
   async function load(showSpinner = false) {
     if (showSpinner) setLoading(true);
@@ -123,16 +128,63 @@ export default function AppointmentsManager() {
     }
   }
 
+  async function handleDeleteAll() {
+    if (deleteConfirmation !== 'EXCLUIR TODOS') return;
+    setDeletingAll(true);
+    try {
+      const result = await api<{ deleted: number }>('/appointments', {
+        method: 'DELETE',
+        body: JSON.stringify({ confirmation: deleteConfirmation })
+      });
+      setItems([]);
+      setDeleteAllOpen(false);
+      setDeleteConfirmation('');
+      toast.success(`${result.deleted} agendamento(s) excluido(s).`);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Nao foi possivel excluir os agendamentos.');
+    } finally {
+      setDeletingAll(false);
+    }
+  }
+
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Central de Agendamentos</h1>
           <p className="text-muted-foreground">
             Agora a criacao comeca direto no formulario completo, sem duplicar preenchimento entre duas telas.
           </p>
         </div>
+        <Button variant="destructive" onClick={() => setDeleteAllOpen(true)} disabled={!items.length}>
+          <Trash2 className="mr-2 h-4 w-4" />
+          Excluir todos
+        </Button>
       </div>
+
+      <Dialog open={deleteAllOpen} onOpenChange={(open) => {
+        setDeleteAllOpen(open);
+        if (!open) setDeleteConfirmation('');
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir todos os agendamentos?</DialogTitle>
+            <DialogDescription>
+              Esta acao exclui permanentemente {items.length} agendamento(s) e seus registros relacionados. Os arquivos existentes no Google Drive serao preservados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <p className="text-sm">Digite <strong>EXCLUIR TODOS</strong> para confirmar:</p>
+            <Input value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} autoComplete="off" />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteAllOpen(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleDeleteAll} disabled={deleteConfirmation !== 'EXCLUIR TODOS' || deletingAll}>
+              {deletingAll ? 'Excluindo...' : 'Excluir permanentemente'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>

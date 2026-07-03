@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { Appointment, AppointmentStatus, Prisma } from '@prisma/client';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Appointment, AppointmentStatus, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 import { MailService } from '../../infra/mail/mail.service';
 
@@ -116,6 +116,33 @@ export class AppointmentsService {
       });
     }
     return this.toApiAppointment(row, this.parseChecklist(body.schedulingChecklist));
+  }
+
+  async deleteAll(userId: string, confirmation?: string) {
+    if (confirmation !== 'EXCLUIR TODOS') {
+      throw new BadRequestException('Digite EXCLUIR TODOS para confirmar a exclusao');
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, active: true }
+    });
+    if (!user?.active || user.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Somente administradores podem excluir todos os agendamentos');
+    }
+
+    const total = await this.prisma.appointment.count();
+    await this.prisma.$transaction([
+      this.prisma.appointment.deleteMany(),
+      this.prisma.auditLog.create({
+        data: {
+          userId,
+          entity: 'appointment',
+          action: 'BULK_DELETE',
+          metadata: { total, confirmation }
+        }
+      })
+    ]);
+    return { ok: true, deleted: total };
   }
 
   async update(id: string, body: Record<string, unknown>) {

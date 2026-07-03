@@ -54,10 +54,18 @@ export class MailService {
     const subject = `Agendamento confirmado - ${appointment.client.name} - ${this.formatDate(appointment.date)}`;
     const flightDetails = appointment.transportMode === 'AIR'
       ? `
-        <h3>Viagem aerea</h3>
-        <p><strong>Aeroporto:</strong> ${this.escapeHtml(appointment.flightAirport || 'Nao informado')}</p>
-        <p><strong>Voo de ida:</strong> ${this.formatDateTime(appointment.flightDepartureAt)}</p>
-        <p><strong>Voo de volta:</strong> ${this.formatDateTime(appointment.flightReturnAt)}</p>
+        <tr>
+          <td style="padding:7px 0;color:#52525b;width:150px">Aeroporto:</td>
+          <td style="padding:7px 0;color:#18181b;font-weight:600">${this.escapeHtml(appointment.flightAirport || 'Nao informado')}</td>
+        </tr>
+        <tr>
+          <td style="padding:7px 0;color:#52525b">Data de ida:</td>
+          <td style="padding:7px 0;color:#18181b;font-weight:600">${this.formatOptionalDate(appointment.flightDepartureAt)}</td>
+        </tr>
+        <tr>
+          <td style="padding:7px 0;color:#52525b">Data de volta:</td>
+          <td style="padding:7px 0;color:#18181b;font-weight:600">${this.formatOptionalDate(appointment.flightReturnAt)}</td>
+        </tr>
       `
       : '';
 
@@ -66,27 +74,58 @@ export class MailService {
         from: process.env.SMTP_FROM?.trim() || user,
         to: recipients.join(', '),
         subject,
-        html: `
-          <div style="font-family:Arial,sans-serif;max-width:680px;color:#18181b">
-            <h2>Agendamento confirmado</h2>
-            <p>O atendimento abaixo foi confirmado no Agenda Metalique.</p>
-            <p><strong>Cliente:</strong> ${this.escapeHtml(appointment.client.name)}</p>
-            <p><strong>Tecnico:</strong> ${this.escapeHtml(technicianName)}</p>
-            <p><strong>Servico:</strong> ${this.escapeHtml(appointment.serviceType)}</p>
-            <p><strong>Data:</strong> ${this.formatDate(appointment.date)}</p>
-            <p><strong>Horario:</strong> ${this.formatTime(appointment.startTime)} ate ${this.formatTime(appointment.endTime)}</p>
-            <p><strong>Dias em campo:</strong> ${appointment.daysOut}</p>
-            <p><strong>Cidade:</strong> ${this.escapeHtml(appointment.city)}</p>
-            <p><strong>Endereco:</strong> ${this.escapeHtml(appointment.fullAddress)}</p>
-            ${flightDetails}
-            <div style="margin-top:24px;padding:16px;border-left:4px solid #c8142f;background:#fff1f2;border-radius:6px">
-              <strong style="color:#9f1239">Importante</strong>
-              <p style="margin:8px 0 0;line-height:1.5">
-                Mais informacoes sobre o agendamento, orientacoes, documentos e atualizacoes estarao disponiveis no aplicativo do tecnico.
-              </p>
-            </div>
-          </div>
-        `
+        html: `<!doctype html>
+          <html lang="pt-BR">
+            <body style="margin:0;padding:24px;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#18181b">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td align="center">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;background:#ffffff;border:1px solid #e4e4e7;border-radius:12px;overflow:hidden">
+                      <tr>
+                        <td style="padding:24px 30px;background:#d3113a;color:#ffffff">
+                          <div style="font-size:24px;line-height:1.25;font-weight:700">Agendamento confirmado</div>
+                          <div style="margin-top:6px;font-size:14px;color:#ffe4e9">Agenda Metalique</div>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding:30px">
+                          <p style="margin:0 0 16px;font-size:16px;line-height:1.6">Ol&aacute;, ${this.escapeHtml(technicianName)}.</p>
+                          <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#3f3f46">
+                            Um atendimento foi confirmado e vinculado &agrave; sua agenda. Confira abaixo as informa&ccedil;&otilde;es principais.
+                          </p>
+
+                          <div style="padding:20px;border-left:4px solid #d3113a;background:#f7f7f8;border-radius:8px">
+                            <div style="margin-bottom:12px;font-size:17px;font-weight:700;color:#d3113a">Dados do agendamento</div>
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="font-size:14px">
+                              <tr><td style="padding:7px 0;color:#52525b;width:150px">Cliente:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.client.name)}</td></tr>
+                              <tr><td style="padding:7px 0;color:#52525b">T&eacute;cnico:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(technicianName)}</td></tr>
+                              <tr><td style="padding:7px 0;color:#52525b">Servi&ccedil;o:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.serviceType)}</td></tr>
+                              <tr><td style="padding:7px 0;color:#52525b">Data:</td><td style="padding:7px 0;font-weight:600">${this.formatDate(appointment.date)}</td></tr>
+                              <tr><td style="padding:7px 0;color:#52525b">Dias em campo:</td><td style="padding:7px 0;font-weight:600">${appointment.daysOut}</td></tr>
+                              <tr><td style="padding:7px 0;color:#52525b">Cidade:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.city)}</td></tr>
+                              <tr><td style="padding:7px 0;color:#52525b">Endere&ccedil;o:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.fullAddress)}</td></tr>
+                              ${flightDetails}
+                            </table>
+                          </div>
+
+                          <div style="margin-top:24px;padding:18px;border:1px solid #fecdd3;background:#fff1f2;border-radius:8px">
+                            <strong style="color:#9f1239">Importante</strong>
+                            <p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:#4c0519">
+                              Mais informa&ccedil;&otilde;es sobre o agendamento, orienta&ccedil;&otilde;es, documentos e atualiza&ccedil;&otilde;es estar&atilde;o dispon&iacute;veis no aplicativo do t&eacute;cnico.
+                            </p>
+                          </div>
+
+                          <p style="margin:28px 0 0;font-size:14px;line-height:1.6;color:#52525b">
+                            Atenciosamente,<br><strong style="color:#18181b">Agenda Metalique</strong>
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </body>
+          </html>`
       });
       this.logger.log(`E-mail de confirmacao do agendamento ${appointment.id} enviado para ${recipients.length} destinatario(s).`);
       return { sent: true, recipients: recipients.length };
@@ -122,17 +161,9 @@ export class MailService {
     return value.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   }
 
-  private formatTime(value: Date) {
-    return value.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
-  }
-
-  private formatDateTime(value: Date | null) {
+  private formatOptionalDate(value: Date | null) {
     if (!value) return 'Nao informado';
-    return value.toLocaleString('pt-BR', {
-      timeZone: 'America/Sao_Paulo',
-      dateStyle: 'short',
-      timeStyle: 'short'
-    });
+    return this.formatDate(value);
   }
 
   private escapeHtml(value: string) {

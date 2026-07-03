@@ -178,7 +178,12 @@ export class AppointmentsService {
   }
 
   async cancel(id: string, reason?: string) {
-    await this.prisma.appointment.findUniqueOrThrow({ where: { id }, select: { id: true } });
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id },
+      include: { client: true, technician: { include: { user: { select: { email: true } } } } }
+    });
+    if (!appointment) throw new NotFoundException('Agendamento não encontrado');
+    const email = await this.mail.sendAppointmentCancelled(appointment, reason);
     await this.prisma.appointment.delete({ where: { id } });
     await this.prisma.auditLog.create({
       data: {
@@ -191,18 +196,29 @@ export class AppointmentsService {
         }
       }
     });
-    return { ok: true, deleted: true, id };
+    return { ok: true, deleted: true, id, email };
   }
 
   async reschedule(id: string, date: string, startTime: string, endTime: string) {
-    await this.prisma.appointment.update({
+    const appointment = await this.prisma.appointment.update({
       where: { id },
-      data: { date: new Date(date), startTime: new Date(startTime), endTime: new Date(endTime), status: AppointmentStatus.WAITING }
+      data: { date: new Date(date), startTime: new Date(startTime), endTime: new Date(endTime), status: AppointmentStatus.WAITING },
+      include: { client: true, technician: { include: { user: { select: { email: true } } } } }
     });
     await this.prisma.statusLog.create({
       data: { appointmentId: id, status: 'RESCHEDULED' }
     });
-    return { ok: true };
+    const email = await this.mail.sendAppointmentRescheduled(appointment);
+    await this.prisma.statusLog.create({
+      data: {
+        appointmentId: id,
+        status: email.sent ? 'RESCHEDULE_EMAIL_SENT' : 'RESCHEDULE_EMAIL_FAILED',
+        observation: email.sent
+          ? `E-mail enviado para ${email.recipients ?? 0} destinatário(s)`
+          : `E-mail não enviado: ${email.reason ?? 'motivo desconhecido'}`
+      }
+    });
+    return { ok: true, email };
   }
 
   async confirm(id: string) {

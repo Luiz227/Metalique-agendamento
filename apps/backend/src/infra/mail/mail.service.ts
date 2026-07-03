@@ -142,6 +142,111 @@ export class MailService {
     }
   }
 
+  async sendAppointmentRescheduled(appointment: ConfirmedAppointmentEmail) {
+    return this.sendAppointmentUpdate(appointment, {
+      event: 'reagendamento',
+      title: 'Agendamento reagendado',
+      subtitle: 'A data do atendimento foi atualizada',
+      message: 'Um atendimento da sua agenda foi reagendado. Confira abaixo a nova data e os dados principais.',
+      accent: '#d97706',
+      accentSoft: '#fffbeb'
+    });
+  }
+
+  async sendAppointmentCancelled(appointment: ConfirmedAppointmentEmail, reason?: string) {
+    return this.sendAppointmentUpdate(appointment, {
+      event: 'cancelamento',
+      title: 'Agendamento cancelado',
+      subtitle: 'O atendimento foi removido da agenda',
+      message: 'Um atendimento foi cancelado e não aparecerá mais na agenda do técnico.',
+      accent: '#be123c',
+      accentSoft: '#fff1f2',
+      reason: reason?.trim() || 'Motivo não informado'
+    });
+  }
+
+  private async sendAppointmentUpdate(
+    appointment: ConfirmedAppointmentEmail,
+    options: {
+      event: string;
+      title: string;
+      subtitle: string;
+      message: string;
+      accent: string;
+      accentSoft: string;
+      reason?: string;
+    }
+  ) {
+    const recipients = await this.resolveRecipients(appointment.technician?.user?.email);
+    if (!recipients.length) {
+      this.logger.warn(`E-mail de ${options.event} não enviado para ${appointment.id}: nenhum destinatário configurado.`);
+      return { sent: false, reason: 'no_recipients' };
+    }
+
+    const host = process.env.SMTP_HOST?.trim();
+    const user = process.env.SMTP_USER?.trim();
+    const password = process.env.SMTP_PASSWORD || process.env.SMTP_PASS;
+    if (!host || !user || !password) {
+      this.logger.warn(`E-mail de ${options.event} não enviado: configuração SMTP ausente.`);
+      return { sent: false, reason: 'smtp_not_configured' };
+    }
+
+    const port = Number(process.env.SMTP_PORT || 587);
+    const secure = String(process.env.SMTP_SECURE || '').toLowerCase() === 'true' || port === 465;
+    const transporter = nodemailer.createTransport({ host, port, secure, auth: { user, pass: password } });
+    const technicianName = appointment.technician?.name || 'Técnico ainda não informado';
+    const reasonBlock = options.reason
+      ? `<div style="margin-top:18px;padding:14px;border-radius:8px;background:${options.accentSoft};border:1px solid ${options.accent}33"><strong>Motivo:</strong> ${this.escapeHtml(options.reason)}</div>`
+      : '';
+
+    try {
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM?.trim() || user,
+        to: recipients.join(', '),
+        subject: `${options.title} - ${appointment.client.name} - ${this.formatDate(appointment.date)}`,
+        html: `<!doctype html>
+          <html lang="pt-BR">
+            <body style="margin:0;padding:24px;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#18181b">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr><td align="center">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;background:#fff;border:1px solid #e4e4e7;border-radius:12px;overflow:hidden">
+                    <tr><td style="padding:24px 30px;background:${options.accent};color:#fff">
+                      <div style="font-size:24px;font-weight:700">${options.title}</div>
+                      <div style="margin-top:6px;font-size:14px;color:#fff;opacity:.88">${options.subtitle}</div>
+                    </td></tr>
+                    <tr><td style="padding:30px">
+                      <p style="margin:0 0 8px;font-size:16px">Olá, ${this.escapeHtml(technicianName)}.</p>
+                      <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#3f3f46">${options.message}</p>
+                      <div style="padding:20px;border-left:4px solid ${options.accent};background:#f7f7f8;border-radius:8px">
+                        <div style="margin-bottom:12px;font-size:17px;font-weight:700;color:${options.accent}">Dados do agendamento</div>
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="font-size:14px">
+                          <tr><td style="padding:7px 0;color:#52525b;width:150px">Cliente:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.client.name)}</td></tr>
+                          <tr><td style="padding:7px 0;color:#52525b">Técnico:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(technicianName)}</td></tr>
+                          <tr><td style="padding:7px 0;color:#52525b">Serviço:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.serviceType)}</td></tr>
+                          <tr><td style="padding:7px 0;color:#52525b">Data:</td><td style="padding:7px 0;font-weight:600">${this.formatDate(appointment.date)}</td></tr>
+                          <tr><td style="padding:7px 0;color:#52525b">Cidade:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.city)}</td></tr>
+                          <tr><td style="padding:7px 0;color:#52525b">Endereço:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.fullAddress)}</td></tr>
+                        </table>
+                      </div>
+                      ${reasonBlock}
+                      <p style="margin:24px 0 0;font-size:14px;line-height:1.6;color:#52525b">Mais informações e atualizações estarão disponíveis no aplicativo do técnico.</p>
+                      <p style="margin:24px 0 0;font-size:14px;color:#52525b">Atenciosamente,<br><strong>Agenda Metalique</strong></p>
+                    </td></tr>
+                  </table>
+                </td></tr>
+              </table>
+            </body>
+          </html>`
+      });
+      this.logger.log(`E-mail de ${options.event} do agendamento ${appointment.id} enviado para ${recipients.length} destinatário(s).`);
+      return { sent: true, recipients: recipients.length };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Falha ao enviar ${options.event} do agendamento ${appointment.id}: ${message}`);
+      return { sent: false, reason: 'send_failed' };
+    }
+  }
+
   private async resolveRecipients(technicianEmail?: string | null) {
     const latest = await this.prisma.auditLog.findFirst({
       where: { entity: 'settings', action: 'UPDATE' },

@@ -244,10 +244,21 @@ export class MapsService {
     if (key) {
       const googleAirport = await this.tryGoogleNearbyAirport(place.lat, place.lng, key);
       if (googleAirport) return googleAirport;
+
+      const googleTextAirport = await this.tryGoogleTextAirport(destination, place.lat, place.lng, key);
+      if (googleTextAirport) return googleTextAirport;
     }
 
-    const fallback = await this.geocode(`Aeroporto, ${destination}`);
-    if (!fallback.ok || fallback.lat == null || fallback.lng == null) return null;
+    const fallbackQueries = this.buildAirportSearchQueries(destination);
+    let fallback: GeocodeResult | null = null;
+    for (const query of fallbackQueries) {
+      const result = await this.geocode(query);
+      if (result.ok && result.lat != null && result.lng != null) {
+        fallback = result;
+        break;
+      }
+    }
+    if (!fallback || fallback.lat == null || fallback.lng == null) return null;
 
     const meters = this.haversineKm(place.lat, place.lng, fallback.lat, fallback.lng) * 1000;
     return {
@@ -292,6 +303,71 @@ export class MapsService {
       distanceMeters: Math.round(meters),
       distanceText: `${(meters / 1000).toFixed(1)} km`
     };
+  }
+
+  private async tryGoogleTextAirport(
+    destination: string,
+    lat: number,
+    lng: number,
+    key: string
+  ): Promise<AirportSuggestion | null> {
+    for (const query of this.buildAirportSearchQueries(destination)) {
+      const url =
+        `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}` +
+        `&location=${encodeURIComponent(`${lat},${lng}`)}&radius=150000&type=airport&region=br&key=${encodeURIComponent(key)}`;
+      const response = await fetch(url);
+      if (!response.ok) continue;
+
+      const payload = (await response.json()) as {
+        status?: string;
+        results?: Array<{
+          name?: string;
+          formatted_address?: string;
+          geometry?: { location?: { lat?: number; lng?: number } };
+        }>;
+      };
+      if (payload.status !== 'OK') continue;
+
+      const first = payload.results?.[0];
+      const airportLat = first?.geometry?.location?.lat;
+      const airportLng = first?.geometry?.location?.lng;
+      if (typeof airportLat !== 'number' || typeof airportLng !== 'number') continue;
+
+      const meters = this.haversineKm(lat, lng, airportLat, airportLng) * 1000;
+      return {
+        name: first?.name ?? 'Aeroporto sugerido',
+        formattedAddress: first?.formatted_address ?? null,
+        lat: airportLat,
+        lng: airportLng,
+        distanceMeters: Math.round(meters),
+        distanceText: `${(meters / 1000).toFixed(1)} km`
+      };
+    }
+
+    return null;
+  }
+
+  private buildAirportSearchQueries(destination: string) {
+    const parts = destination
+      .replace(/,?\s*brasil$/i, '')
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const zipCode = destination.match(/\b\d{5}-?\d{3}\b/)?.[0] ?? '';
+    const state = [...parts].reverse().find((part) => /^[A-Z]{2}$/i.test(part)) ?? '';
+    const stateIndex = state ? parts.lastIndexOf(state) : -1;
+    const city = stateIndex > 0 ? parts[stateIndex - 1] : '';
+    const location = [city, state].filter(Boolean).join(', ');
+
+    return Array.from(
+      new Set(
+        [
+          location ? `Aeroporto em ${location}, Brasil` : '',
+          zipCode ? `Aeroporto proximo ao CEP ${zipCode}, Brasil` : '',
+          `Aeroporto proximo de ${destination}`
+        ].filter(Boolean)
+      )
+    );
   }
 
   private haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {

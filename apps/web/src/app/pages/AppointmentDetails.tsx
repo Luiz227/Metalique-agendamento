@@ -345,8 +345,9 @@ export default function AppointmentDetails() {
                   ? `${route.nearestAirport.name} - ${route.nearestAirport.formattedAddress}`
                   : route.nearestAirport?.name || route.nearestAirport?.formattedAddress || '';
               const nextTransportMode = route.suggestedMode ?? prev.transportMode;
-              const nextFlightAirport =
-                nextTransportMode === 'AIR' ? airportLabel || prev.flightAirport : '';
+              const nextFlightAirport = nextTransportMode === 'AIR'
+                ? airportLabel || prev.flightAirport
+                : '';
               if (prev.transportMode === nextTransportMode && prev.flightAirport === nextFlightAirport) {
                 return prev;
               }

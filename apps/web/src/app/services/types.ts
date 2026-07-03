@@ -43,6 +43,8 @@ export type Vehicle = {
   year?: number | null;
   plate: string;
   mileage: number;
+  lastMaintenanceMileage: number;
+  lastMaintenanceAt?: string | null;
   active: boolean;
 };
 
@@ -77,6 +79,8 @@ export type Appointment = {
   technicianId?: string | null;
   vehicleId?: string | null;
   vehicle?: Vehicle | null;
+  vehiclePickupMileage?: number | null;
+  vehicleReturnMileage?: number | null;
   hotel?: Hotel | null;
   expense?: Expense | null;
   city: string;

@@ -89,6 +89,8 @@ model Appointment {
   clientId          String
   technicianId      String?
   vehicleId         String?
+  vehiclePickupMileage Int?
+  vehicleReturnMileage Int?
   city              String
   fullAddress       String
   serviceType       String
@@ -162,6 +164,8 @@ model Vehicle {
   year        Int?
   plate       String   @unique
   mileage     Int      @default(0)
+  lastMaintenanceMileage Int @default(0)
+  lastMaintenanceAt DateTime?
   active      Boolean  @default(true)
   appointments Appointment[]
   createdAt   DateTime @default(now())

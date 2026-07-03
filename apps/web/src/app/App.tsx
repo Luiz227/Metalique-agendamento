@@ -8,8 +8,6 @@ import Schedule from './pages/Schedule';
 import NewAppointment from './pages/NewAppointment';
 import AppointmentsManager from './pages/AppointmentsManager';
 import AppointmentDetails from './pages/AppointmentDetails';
-import Financial from './pages/Financial';
-import Validation from './pages/Validation';
 import TechnicianMobile from './pages/TechnicianMobile';
 import TechnicianCalendar from './pages/TechnicianCalendar';
 import TechnicianWeeklyReport from './pages/TechnicianWeeklyReport';
@@ -30,7 +28,7 @@ function RequireAuth() {
 function homeByRole(role?: ApiUser['role']) {
   if (role === 'TECHNICIAN') return '/technician';
   if (role === 'LOGISTICS') return '/appointments/manage';
-  if (role === 'VALIDATOR') return '/validation';
+  if (role === 'VALIDATOR') return '/appointments/manage';
   if (role === 'SALES') return '/appointments/manage';
   return '/dashboard';
 }
@@ -56,12 +54,10 @@ export default function App() {
           <Route path="dashboard" element={<RequireRole roles={['ADMIN']}><Dashboard /></RequireRole>} />
           <Route path="map" element={<RequireRole roles={['ADMIN', 'LOGISTICS', 'SALES']}><MapView /></RequireRole>} />
           <Route path="schedule" element={<RequireRole roles={['ADMIN', 'LOGISTICS', 'SALES']}><Schedule /></RequireRole>} />
-          <Route path="appointments/manage" element={<RequireRole roles={['ADMIN', 'LOGISTICS', 'SALES']}><AppointmentsManager /></RequireRole>} />
+          <Route path="appointments/manage" element={<RequireRole roles={['ADMIN', 'LOGISTICS', 'SALES', 'VALIDATOR']}><AppointmentsManager /></RequireRole>} />
           <Route path="kanban" element={<RequireRole roles={['ADMIN']}><Kanban /></RequireRole>} />
           <Route path="appointments/new" element={<RequireRole roles={['ADMIN', 'LOGISTICS', 'SALES']}><NewAppointment /></RequireRole>} />
           <Route path="appointments/:id" element={<RequireRole roles={['ADMIN', 'LOGISTICS', 'SALES', 'VALIDATOR']}><AppointmentDetails /></RequireRole>} />
-          <Route path="financial" element={<RequireRole roles={['ADMIN']}><Financial /></RequireRole>} />
-          <Route path="validation" element={<RequireRole roles={['ADMIN', 'VALIDATOR']}><Validation /></RequireRole>} />
           <Route path="technician" element={<RequireRole roles={['TECHNICIAN']}><TechnicianMobile /></RequireRole>} />
           <Route path="technician/calendar" element={<RequireRole roles={['TECHNICIAN']}><TechnicianCalendar /></RequireRole>} />
           <Route path="technician/weekly-report" element={<RequireRole roles={['TECHNICIAN']}><TechnicianWeeklyReport /></RequireRole>} />

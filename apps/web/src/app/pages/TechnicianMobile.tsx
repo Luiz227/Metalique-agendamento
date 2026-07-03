@@ -123,6 +123,8 @@ export default function TechnicianMobile() {
   const [savingReport, setSavingReport] = useState(false);
   const [savedTechnicianSignature, setSavedTechnicianSignature] = useState('');
   const [uploadingVehicleStage, setUploadingVehicleStage] = useState<'pickup' | 'return' | null>(null);
+  const [pickupMileage, setPickupMileage] = useState('');
+  const [returnMileage, setReturnMileage] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [clientSignatureDataUrl, setClientSignatureDataUrl] = useState('');
   const [technicianSignatureDataUrl, setTechnicianSignatureDataUrl] = useState('');
@@ -242,6 +244,11 @@ export default function TechnicianMobile() {
   );
   const finishedTrips = useMemo(() => appointments.filter((item) => wasFinishedByTechnician(item)), [appointments]);
   const visibleTrips = activeTripsView === 'WEEK' ? weeklyTrips : finishedTrips;
+
+  useEffect(() => {
+    setPickupMileage(current?.vehiclePickupMileage != null ? String(current.vehiclePickupMileage) : '');
+    setReturnMileage(current?.vehicleReturnMileage != null ? String(current.vehicleReturnMileage) : '');
+  }, [current?.id, current?.vehiclePickupMileage, current?.vehicleReturnMileage]);
   const monthAppointments = useMemo(() => {
     const month = monthCursor.getMonth();
     const year = monthCursor.getFullYear();
@@ -347,14 +354,34 @@ export default function TechnicianMobile() {
     }
   }
 
+  async function saveVehicleMileage(stage: 'pickup' | 'return') {
+    if (!current) throw new Error('Agendamento nao selecionado.');
+    const mileageText = stage === 'pickup' ? pickupMileage : returnMileage;
+    const mileage = Number(mileageText);
+    if (!Number.isInteger(mileage) || mileage < 0) {
+      throw new Error(`Informe a quilometragem de ${stage === 'pickup' ? 'retirada' : 'devolucao'}.`);
+    }
+    await api(`/technician/appointments/${current.id}/vehicle-mileage`, {
+      method: 'POST',
+      body: JSON.stringify({ stage, mileage })
+    });
+  }
+
   async function uploadVehicleVideo(file: File | undefined, stage: 'pickup' | 'return') {
     if (!file) return;
+    const mileageText = stage === 'pickup' ? pickupMileage : returnMileage;
+    const mileage = Number(mileageText);
+    if (!Number.isInteger(mileage) || mileage < 0) {
+      setErrorMessage(`Informe a quilometragem de ${stage === 'pickup' ? 'retirada' : 'devolucao'} antes de enviar o video.`);
+      return;
+    }
     const type = stage === 'pickup' ? 'video-retirada-veiculo' : 'video-devolucao-veiculo';
     const category = stage === 'pickup' ? 'car-pickup-video' : 'car-return-video';
     setUploadingVehicleStage(stage);
     setMessage('');
     setErrorMessage('');
     try {
+      await saveVehicleMileage(stage);
       await uploadFileNow(file, type, buildDefaultAttachmentName(file.name, category));
       setMessage(stage === 'pickup'
         ? 'Video de retirada enviado. O relatorio tecnico foi liberado.'
@@ -774,6 +801,33 @@ export default function TechnicianMobile() {
                   Primeiro envie o video da retirada. Depois o sistema libera as consideracoes, os demais anexos e as assinaturas.
                 </p>
                 <div className="mt-3 grid grid-cols-1 gap-3">
+                  <label className="space-y-2">
+                    <span className="text-sm font-medium">Quilometragem na retirada</span>
+                    <Input
+                      type="number"
+                      min={current.vehicle?.mileage ?? 0}
+                      inputMode="numeric"
+                      placeholder={`KM atual: ${current.vehicle?.mileage ?? 0}`}
+                      value={pickupMileage}
+                      onChange={(event) => setPickupMileage(event.target.value)}
+                    />
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={async () => {
+                      setErrorMessage('');
+                      try {
+                        await saveVehicleMileage('pickup');
+                        setMessage('Quilometragem de retirada salva.');
+                        await load(true);
+                      } catch (err) {
+                        setErrorMessage(err instanceof Error ? err.message : 'Nao foi possivel salvar a quilometragem.');
+                      }
+                    }}
+                  >
+                    {current.vehiclePickupMileage != null ? 'Atualizar KM de retirada' : 'Salvar KM de retirada'}
+                  </Button>
                   <label className="flex min-h-20 cursor-pointer items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-background/70 px-4 py-3 text-left">
                     <div>
                       <p className="text-sm font-medium">Video de retirada do veiculo</p>
@@ -800,6 +854,34 @@ export default function TechnicianMobile() {
                     />
                   </label>
                   {pickupVehicleVideo && (
+                  <div className="space-y-3">
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium">Quilometragem na devolucao</span>
+                    <Input
+                      type="number"
+                      min={Number(pickupMileage || 0)}
+                      inputMode="numeric"
+                      placeholder="KM do painel ao devolver"
+                      value={returnMileage}
+                      onChange={(event) => setReturnMileage(event.target.value)}
+                    />
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={async () => {
+                      setErrorMessage('');
+                      try {
+                        await saveVehicleMileage('return');
+                        setMessage('Quilometragem de devolucao salva e veiculo atualizado.');
+                        await load(true);
+                      } catch (err) {
+                        setErrorMessage(err instanceof Error ? err.message : 'Nao foi possivel salvar a quilometragem.');
+                      }
+                    }}
+                  >
+                    {current.vehicleReturnMileage != null ? 'Atualizar KM de devolucao' : 'Salvar KM de devolucao'}
+                  </Button>
                   <label className="flex min-h-20 cursor-pointer items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-background/70 px-4 py-3 text-left">
                     <div>
                       <p className="text-sm font-medium">Video de devolucao do veiculo</p>
@@ -825,6 +907,7 @@ export default function TechnicianMobile() {
                       }}
                     />
                   </label>
+                  </div>
                   )}
                 </div>
               </div>

@@ -3,6 +3,7 @@ import { Save, Sparkles } from 'lucide-react';
 import { api } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Textarea } from '../components/ui/textarea';
 
 type WeeklyAiReport = {
   ok: boolean;
@@ -28,6 +29,8 @@ export default function TechnicianWeeklyReport() {
   const [savingSignature, setSavingSignature] = useState(false);
   const [signatureMessage, setSignatureMessage] = useState('');
   const [weeklyReport, setWeeklyReport] = useState<WeeklyAiReport | null>(null);
+  const [editableReport, setEditableReport] = useState('');
+  const [copyMessage, setCopyMessage] = useState('');
   const [generatingReport, setGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState('');
 
@@ -127,6 +130,7 @@ export default function TechnicianWeeklyReport() {
     try {
       const result = await api<WeeklyAiReport>('/technician/weekly-report', { method: 'POST' });
       setWeeklyReport(result);
+      setEditableReport(result.report);
       if (!result.ok) setReportError(result.report);
     } catch (error) {
       setReportError(error instanceof Error ? error.message : 'Nao foi possivel gerar o relatorio semanal.');
@@ -160,7 +164,28 @@ export default function TechnicianWeeklyReport() {
             {weeklyReport && (
               <div className="rounded-xl border bg-background/80 p-4">
                 <p className="mb-3 text-xs text-muted-foreground">{weeklyReport.sourceCount} atendimento(s) analisado(s)</p>
-                <div className="whitespace-pre-wrap text-sm leading-6">{weeklyReport.report}</div>
+                <label className="space-y-2">
+                  <span className="text-sm font-medium">Revise e edite o relatorio</span>
+                  <Textarea
+                    className="min-h-72 text-sm leading-6"
+                    value={editableReport}
+                    onChange={(event) => {
+                      setEditableReport(event.target.value);
+                      setCopyMessage('');
+                    }}
+                  />
+                </label>
+                <Button
+                  className="mt-3 w-full"
+                  variant="outline"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(editableReport);
+                    setCopyMessage('Relatorio revisado copiado.');
+                  }}
+                >
+                  Copiar relatorio revisado
+                </Button>
+                {copyMessage && <p className="mt-2 text-xs text-emerald-500">{copyMessage}</p>}
               </div>
             )}
           </CardContent>

@@ -48,6 +48,11 @@ export class LegacyController {
     return this.service.toggleVehicle(id);
   }
 
+  @Post('resources/vehicles/:id/maintenance')
+  registerVehicleMaintenance(@Param('id') id: string) {
+    return this.service.registerVehicleMaintenance(id);
+  }
+
   @Get('resources/hotels')
   hotels() {
     return this.service.resourcesHotels();
@@ -137,6 +142,20 @@ export class LegacyController {
   @Post('technician/appointments/:id/status')
   technicianStatus(@Param('id') id: string, @Body() body: { status?: string; observation?: string }) {
     return this.service.technicianSetStatus(id, String(body?.status ?? 'TRAVELING'), body?.observation);
+  }
+
+  @Post('technician/appointments/:id/vehicle-mileage')
+  technicianVehicleMileage(
+    @Param('id') id: string,
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: { stage?: 'pickup' | 'return'; mileage?: number | string }
+  ) {
+    return this.service.technicianVehicleMileage(
+      id,
+      this.extractAuthIdentity(authorization ?? null),
+      body?.stage,
+      body?.mileage
+    );
   }
 
   @Post('technician/appointments/:id/reports')

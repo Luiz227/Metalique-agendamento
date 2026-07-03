@@ -192,6 +192,18 @@ export class LegacyService {
     };
   }
 
+  async registerVehicleMaintenance(id: string) {
+    const vehicle = await this.prisma.vehicle.findUnique({ where: { id } });
+    if (!vehicle) throw new NotFoundException('Veiculo nao encontrado');
+    return this.prisma.vehicle.update({
+      where: { id },
+      data: {
+        lastMaintenanceMileage: vehicle.mileage,
+        lastMaintenanceAt: new Date()
+      }
+    });
+  }
+
   async putSettings(payload: Record<string, unknown>) {
     await this.prisma.auditLog.create({
       data: { entity: 'settings', action: 'UPDATE', metadata: payload as Prisma.InputJsonValue }
@@ -708,6 +720,13 @@ export class LegacyService {
       if (!hasPickupVideo) throw new BadRequestException('Envie primeiro o video de retirada do veiculo.');
       if (!hasReturnVideo) {
         throw new BadRequestException('Envie o video de devolucao do veiculo antes de finalizar o relatorio.');
+      }
+      const mileageControl = await this.prisma.appointment.findUnique({
+        where: { id },
+        select: { vehiclePickupMileage: true, vehicleReturnMileage: true }
+      });
+      if (mileageControl?.vehiclePickupMileage == null || mileageControl.vehicleReturnMileage == null) {
+        throw new BadRequestException('Registre as quilometragens de retirada e devolucao do veiculo.');
       }
     }
 
@@ -2023,6 +2042,56 @@ export class LegacyService {
     return this.removeDocxSignaturePlaceholders(result);
   }
 
+  async technicianVehicleMileage(
+    id: string,
+    identity: { userId: string | null; email: string | null; name: string | null } | null,
+    stage?: 'pickup' | 'return',
+    rawMileage?: number | string
+  ) {
+    const technician = await this.resolveTechnicianForIdentity(identity);
+    const mileage = Number(rawMileage);
+    if ((stage !== 'pickup' && stage !== 'return') || !Number.isInteger(mileage) || mileage < 0) {
+      throw new BadRequestException('Informe uma quilometragem valida.');
+    }
+
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id },
+      include: { vehicle: true }
+    });
+    if (!appointment || appointment.technicianId !== technician.id) {
+      throw new NotFoundException('Agendamento nao encontrado para este tecnico.');
+    }
+    if (appointment.transportMode !== 'CAR' || !appointment.vehicle) {
+      throw new BadRequestException('Este agendamento nao possui viagem de carro com veiculo vinculado.');
+    }
+    if (stage === 'pickup' && mileage < appointment.vehicle.mileage) {
+      throw new BadRequestException(`A KM de retirada nao pode ser menor que a KM atual (${appointment.vehicle.mileage} km).`);
+    }
+    if (stage === 'return' && appointment.vehiclePickupMileage == null) {
+      throw new BadRequestException('Registre primeiro a quilometragem de retirada.');
+    }
+    if (stage === 'return' && mileage < (appointment.vehiclePickupMileage ?? 0)) {
+      throw new BadRequestException('A KM de devolucao nao pode ser menor que a KM de retirada.');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.appointment.update({
+        where: { id },
+        data: stage === 'pickup'
+          ? { vehiclePickupMileage: mileage }
+          : { vehicleReturnMileage: mileage },
+        include: { vehicle: true }
+      });
+      if (stage === 'return') {
+        await tx.vehicle.update({
+          where: { id: appointment.vehicle!.id },
+          data: { mileage: { set: Math.max(appointment.vehicle!.mileage, mileage) } }
+        });
+      }
+      return updated;
+    });
+  }
+
   private removeLeftoverStateHash(xml: string, escapedState: string) {
     if (!escapedState) return xml;
 
@@ -2912,6 +2981,8 @@ export class LegacyService {
     notes: string | null;
     osNumber: string | null;
     vehicleId: string | null;
+    vehiclePickupMileage: number | null;
+    vehicleReturnMileage: number | null;
     daysOut: number;
     machineCode: string | null;
     machineName: string | null;
@@ -2932,7 +3003,7 @@ export class LegacyService {
     hotelCheckIn: Date | null;
     hotelCheckOut: Date | null;
     hotelNotes: string | null;
-    vehicle?: { id: string; name: string; year: number | null; plate: string; mileage: number; active: boolean } | null;
+    vehicle?: { id: string; name: string; year: number | null; plate: string; mileage: number; lastMaintenanceMileage: number; lastMaintenanceAt: Date | null; active: boolean } | null;
     client: {
       id: string;
       name: string;
@@ -2956,6 +3027,8 @@ export class LegacyService {
       clientId: row.clientId,
       technicianId: row.technicianId,
       vehicleId: row.vehicleId,
+      vehiclePickupMileage: row.vehiclePickupMileage,
+      vehicleReturnMileage: row.vehicleReturnMileage,
       city: row.city,
       fullAddress: row.fullAddress,
       serviceType: row.serviceType,
@@ -3007,6 +3080,8 @@ export class LegacyService {
             year: row.vehicle.year,
             plate: row.vehicle.plate,
             mileage: row.vehicle.mileage,
+            lastMaintenanceMileage: row.vehicle.lastMaintenanceMileage,
+            lastMaintenanceAt: row.vehicle.lastMaintenanceAt?.toISOString() ?? null,
             active: row.vehicle.active
           }
         : null,
@@ -3843,7 +3918,8 @@ export class LegacyService {
       name,
       plate,
       year,
-      mileage: Math.round(mileage)
+      mileage: Math.round(mileage),
+      lastMaintenanceMileage: Math.round(mileage)
     };
   }
 

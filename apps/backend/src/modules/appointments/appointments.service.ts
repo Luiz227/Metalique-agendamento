@@ -350,6 +350,8 @@ export class AppointmentsService {
       clientId: row.clientId,
       technicianId: row.technicianId,
       vehicleId: row.vehicleId,
+      vehiclePickupMileage: row.vehiclePickupMileage,
+      vehicleReturnMileage: row.vehicleReturnMileage,
       city: row.city,
       fullAddress: row.fullAddress,
       serviceType: row.serviceType,
@@ -423,6 +425,8 @@ export class AppointmentsService {
             year: row.vehicle.year,
             plate: row.vehicle.plate,
             mileage: row.vehicle.mileage,
+            lastMaintenanceMileage: row.vehicle.lastMaintenanceMileage,
+            lastMaintenanceAt: row.vehicle.lastMaintenanceAt?.toISOString() ?? null,
             active: row.vehicle.active
           }
         : null,

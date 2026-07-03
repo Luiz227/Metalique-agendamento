@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Car, Pencil, Power, Plus, Save } from 'lucide-react';
+import { AlertTriangle, Car, Pencil, Power, Plus, Save, Wrench } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -112,6 +112,16 @@ export default function Vehicles() {
     }
   }
 
+  async function registerMaintenance(id: string) {
+    setError(null);
+    try {
+      await api<Vehicle>(`/resources/vehicles/${id}/maintenance`, { method: 'POST' });
+      await loadVehicles();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Nao foi possivel registrar a manutencao.');
+    }
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -133,6 +143,14 @@ export default function Vehicles() {
           <CardContent className="p-6">
             <div className="text-2xl font-bold text-white">{vehicles.length}</div>
             <div className="text-xs text-zinc-400">Total cadastrados</div>
+          </CardContent>
+        </Card>
+        <Card className="border-amber-500/30 bg-amber-500/10">
+          <CardContent className="p-6">
+            <div className="text-2xl font-bold text-amber-300">
+              {vehicles.filter((vehicle) => vehicle.mileage - (vehicle.lastMaintenanceMileage ?? 0) >= 10000).length}
+            </div>
+            <div className="text-xs text-amber-200/80">Manutencoes vencidas</div>
           </CardContent>
         </Card>
         <Card className="bg-zinc-900/50 border-zinc-800">
@@ -227,6 +245,11 @@ export default function Vehicles() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {vehicles.map((vehicle) => (
+            (() => {
+              const traveledSinceMaintenance = Math.max(0, vehicle.mileage - (vehicle.lastMaintenanceMileage ?? 0));
+              const maintenanceDue = traveledSinceMaintenance >= 10000;
+              const remainingKm = Math.max(0, 10000 - traveledSinceMaintenance);
+              return (
             <Card key={vehicle.id} className="bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 transition-all">
               <CardHeader>
                 <div className="flex items-start justify-between gap-4">
@@ -245,6 +268,19 @@ export default function Vehicles() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                {maintenanceDue ? (
+                  <div className="flex items-start gap-3 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-red-200">
+                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                    <div>
+                      <p className="font-semibold">Manutencao necessaria</p>
+                      <p className="text-xs">O veiculo rodou {new Intl.NumberFormat('pt-BR').format(traveledSinceMaintenance)} km desde a ultima manutencao.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-300">
+                    Faltam {new Intl.NumberFormat('pt-BR').format(remainingKm)} km para a proxima manutencao.
+                  </div>
+                )}
                 <div className="grid gap-3 text-sm text-zinc-300 md:grid-cols-2">
                   <div>
                     <span className="block text-xs uppercase tracking-wide text-zinc-500">Ano</span>
@@ -265,9 +301,15 @@ export default function Vehicles() {
                     <Power className="mr-2 h-4 w-4" />
                     {vehicle.active ? 'Desativar' : 'Ativar'}
                   </Button>
+                  <Button className="border-emerald-700 text-emerald-300" type="button" variant="outline" onClick={() => registerMaintenance(vehicle.id)}>
+                    <Wrench className="mr-2 h-4 w-4" />
+                    Registrar manutencao
+                  </Button>
                 </div>
               </CardContent>
             </Card>
+              );
+            })()
           ))}
         </div>
       )}

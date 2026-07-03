@@ -66,7 +66,7 @@ function buildMapsDestination(
   state?: string | null,
   zipCode?: string | null
 ) {
-  return [address?.trim(), normalizeCityForMaps(city), state?.trim(), zipCode?.trim(), 'Brasil']
+  return [zipCode?.trim(), address?.trim(), normalizeCityForMaps(city), state?.trim(), 'Brasil']
     .filter(Boolean)
     .join(', ');
 }

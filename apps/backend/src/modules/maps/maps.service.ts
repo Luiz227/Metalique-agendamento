@@ -239,17 +239,23 @@ export class MapsService {
   private async findNearestAirport(destination: string): Promise<AirportSuggestion | null> {
     const place = await this.geocode(destination);
     if (!place.ok || place.lat == null || place.lng == null) return null;
+    const resolvedDestination = place.formattedAddress || destination;
 
     const key = process.env.GOOGLE_MAPS_API_KEY;
     if (key) {
       const googleAirport = await this.tryGoogleNearbyAirport(place.lat, place.lng, key);
       if (googleAirport) return googleAirport;
 
-      const googleTextAirport = await this.tryGoogleTextAirport(destination, place.lat, place.lng, key);
+      const googleTextAirport = await this.tryGoogleTextAirport(resolvedDestination, place.lat, place.lng, key);
       if (googleTextAirport) return googleTextAirport;
     }
 
-    const fallbackQueries = this.buildAirportSearchQueries(destination);
+    const fallbackQueries = Array.from(
+      new Set([
+        ...this.buildAirportSearchQueries(resolvedDestination),
+        ...this.buildAirportSearchQueries(destination)
+      ])
+    );
     let fallback: GeocodeResult | null = null;
     for (const query of fallbackQueries) {
       const result = await this.geocode(query);
@@ -354,9 +360,14 @@ export class MapsService {
       .map((part) => part.trim())
       .filter(Boolean);
     const zipCode = destination.match(/\b\d{5}-?\d{3}\b/)?.[0] ?? '';
-    const state = [...parts].reverse().find((part) => /^[A-Z]{2}$/i.test(part)) ?? '';
-    const stateIndex = state ? parts.lastIndexOf(state) : -1;
-    const city = stateIndex > 0 ? parts[stateIndex - 1] : '';
+    const cityStateMatches = Array.from(
+      destination.matchAll(/(?:^|,)\s*([^,]+?)\s*(?:-|\/)\s*([A-Z]{2})(?=\s*(?:,|$))/gi)
+    );
+    const cityStateMatch = cityStateMatches.at(-1);
+    const separateState = [...parts].reverse().find((part) => /^[A-Z]{2}$/i.test(part)) ?? '';
+    const state = cityStateMatch?.[2]?.toUpperCase() || separateState.toUpperCase();
+    const stateIndex = separateState ? parts.lastIndexOf(separateState) : -1;
+    const city = cityStateMatch?.[1]?.trim() || (stateIndex > 0 ? parts[stateIndex - 1] : '');
     const location = [city, state].filter(Boolean).join(', ');
 
     return Array.from(

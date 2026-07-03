@@ -934,8 +934,11 @@ export default function AppointmentDetails() {
                       <p className="text-[11px] text-muted-foreground">Aeroporto mais proximo do cliente</p>
                       <div className="space-y-2 rounded-md border bg-muted/20 p-3">
                         <Input
-                          placeholder="Calculado automaticamente"
-                          value={nearestAirportLabel}
+                          value={
+                            travelLoading
+                              ? 'Calculando aeroporto mais proximo...'
+                              : nearestAirportLabel || 'Aeroporto nao localizado automaticamente'
+                          }
                           readOnly
                         />
                         {nearestAirportLabel && (

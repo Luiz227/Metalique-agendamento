@@ -325,7 +325,17 @@ export class MapsService {
       .replace(/\s{2,}/g, ' ')
       .trim();
 
+    const strippedVenue = this.stripVenuePrefix(base);
+
     const withoutZipCode = base
+      .replace(/\b\d{5}-?\d{3}\b/g, ' ')
+      .replace(/\s+,/g, ',')
+      .replace(/,\s*,+/g, ', ')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+      .replace(/,\s*$/, '');
+
+    const strippedVenueWithoutZipCode = strippedVenue
       .replace(/\b\d{5}-?\d{3}\b/g, ' ')
       .replace(/\s+,/g, ',')
       .replace(/,\s*,+/g, ', ')
@@ -338,8 +348,12 @@ export class MapsService {
         [
           `${base}, Brasil`,
           base,
+          `${strippedVenue}, Brasil`,
+          strippedVenue,
           `${withoutZipCode}, Brasil`,
-          withoutZipCode
+          withoutZipCode,
+          `${strippedVenueWithoutZipCode}, Brasil`,
+          strippedVenueWithoutZipCode
         ]
           .map((value) =>
             value
@@ -351,5 +365,25 @@ export class MapsService {
           .filter(Boolean)
       )
     );
+  }
+
+  private stripVenuePrefix(input: string) {
+    const normalized = input.trim();
+    const looksLikeStreet = (value: string) =>
+      /(^|\b)(rua|r\.|avenida|av\.|rodovia|rod\.|estrada|alameda|travessa|tv\.|praca|praça|loteamento|condominio|condomínio|viela)\b/i.test(
+        value
+      ) || /\d/.test(value);
+
+    const dashParts = normalized.split(/\s+-\s+/).map((part) => part.trim()).filter(Boolean);
+    if (dashParts.length > 1 && !looksLikeStreet(dashParts[0]) && looksLikeStreet(dashParts.slice(1).join(' - '))) {
+      return dashParts.slice(1).join(' - ');
+    }
+
+    const commaParts = normalized.split(',').map((part) => part.trim()).filter(Boolean);
+    if (commaParts.length > 1 && !looksLikeStreet(commaParts[0]) && looksLikeStreet(commaParts.slice(1).join(', '))) {
+      return commaParts.slice(1).join(', ');
+    }
+
+    return normalized;
   }
 }

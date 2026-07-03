@@ -60,8 +60,13 @@ function normalizeCityForMaps(city?: string | null) {
     .trim();
 }
 
-function buildMapsDestination(address?: string | null, city?: string | null) {
-  return [address?.trim(), normalizeCityForMaps(city), 'Brasil']
+function buildMapsDestination(
+  address?: string | null,
+  city?: string | null,
+  state?: string | null,
+  zipCode?: string | null
+) {
+  return [address?.trim(), normalizeCityForMaps(city), state?.trim(), zipCode?.trim(), 'Brasil']
     .filter(Boolean)
     .join(', ');
 }
@@ -286,7 +291,9 @@ export default function AppointmentDetails() {
   useEffect(() => {
     const fullAddress = editing ? form.fullAddress : appointment?.fullAddress;
     const city = editing ? form.city : appointment?.city;
-    const destination = buildMapsDestination(fullAddress, city);
+    const state = editing ? form.clientState : appointment?.client?.state;
+    const zipCode = editing ? form.clientZipCode : appointment?.client?.zipCode;
+    const destination = buildMapsDestination(fullAddress, city, state, zipCode);
     if (destination.length < 6) {
       setTravelEstimate(null);
       setLogisticsSuggestion(null);
@@ -365,11 +372,23 @@ export default function AppointmentDetails() {
     }, 450);
 
     return () => clearTimeout(timer);
-  }, [editing, form.fullAddress, form.city, appointment?.fullAddress, appointment?.city]);
+  }, [
+    editing,
+    form.fullAddress,
+    form.city,
+    form.clientState,
+    form.clientZipCode,
+    appointment?.fullAddress,
+    appointment?.city,
+    appointment?.client?.state,
+    appointment?.client?.zipCode
+  ]);
 
   const logisticsDestination = buildMapsDestination(
     editing ? form.fullAddress : appointment?.fullAddress,
-    editing ? form.city : appointment?.city
+    editing ? form.city : appointment?.city,
+    editing ? form.clientState : appointment?.client?.state,
+    editing ? form.clientZipCode : appointment?.client?.zipCode
   );
   const nearestAirportLabel = logisticsSuggestion?.nearestAirport
     ? [

@@ -185,8 +185,15 @@ function normalizeCityForMaps(city?: string | null) {
     .trim();
 }
 
-function buildMapsQuery(address?: string | null, city?: string | null) {
-  return [address?.trim(), normalizeCityForMaps(city), 'Brasil'].filter(Boolean).join(', ');
+function buildMapsQuery(
+  address?: string | null,
+  city?: string | null,
+  state?: string | null,
+  zipCode?: string | null
+) {
+  return [address?.trim(), normalizeCityForMaps(city), state?.trim(), zipCode?.trim(), 'Brasil']
+    .filter(Boolean)
+    .join(', ');
 }
 
 export default function MapView() {
@@ -277,7 +284,12 @@ export default function MapView() {
       const resolvedBatch: Record<string, { lat: number; lng: number }> = {};
 
       for (const appointment of candidates.slice(0, 500)) {
-        const query = buildMapsQuery(appointment.fullAddress || appointment.client?.address || '', appointment.city);
+        const query = buildMapsQuery(
+          appointment.fullAddress || appointment.client?.address || '',
+          appointment.city || appointment.client?.city,
+          appointment.client?.state,
+          appointment.client?.zipCode
+        );
         try {
           const geo = await api<{ ok: boolean; lat: number | null; lng: number | null }>(`/maps/geocode?q=${encodeURIComponent(query)}`);
           if (cancelled) return;
@@ -539,7 +551,12 @@ export default function MapView() {
     (async () => {
       for (const appointment of candidates) {
         if (cancelled) return;
-        const query = buildMapsQuery(appointment.fullAddress || appointment.client?.address || '', appointment.city);
+        const query = buildMapsQuery(
+          appointment.fullAddress || appointment.client?.address || '',
+          appointment.city || appointment.client?.city,
+          appointment.client?.state,
+          appointment.client?.zipCode
+        );
         if (!query) continue;
         try {
           const result = await geocoder.geocode({ address: query });

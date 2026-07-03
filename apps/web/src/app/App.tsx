@@ -12,6 +12,7 @@ import Financial from './pages/Financial';
 import Validation from './pages/Validation';
 import TechnicianMobile from './pages/TechnicianMobile';
 import TechnicianCalendar from './pages/TechnicianCalendar';
+import TechnicianWeeklyReport from './pages/TechnicianWeeklyReport';
 import Notifications from './pages/Notifications';
 import Technicians from './pages/Technicians';
 import Vehicles from './pages/Vehicles';
@@ -63,6 +64,7 @@ export default function App() {
           <Route path="validation" element={<RequireRole roles={['ADMIN', 'VALIDATOR']}><Validation /></RequireRole>} />
           <Route path="technician" element={<RequireRole roles={['TECHNICIAN']}><TechnicianMobile /></RequireRole>} />
           <Route path="technician/calendar" element={<RequireRole roles={['TECHNICIAN']}><TechnicianCalendar /></RequireRole>} />
+          <Route path="technician/weekly-report" element={<RequireRole roles={['TECHNICIAN']}><TechnicianWeeklyReport /></RequireRole>} />
           <Route path="notifications" element={<RequireRole roles={['ADMIN']}><Notifications /></RequireRole>} />
           <Route path="technicians" element={<RequireRole roles={['ADMIN', 'LOGISTICS', 'SALES']}><Technicians /></RequireRole>} />
           <Route path="clients" element={<Navigate to={homeByRole(user?.role)} replace />} />

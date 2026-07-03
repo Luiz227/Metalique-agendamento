@@ -619,6 +619,57 @@ export class LegacyService {
     };
   }
 
+  async technicianProfile(identity: { userId: string | null; email: string | null; name: string | null } | null) {
+    const technician = await this.resolveTechnicianForIdentity(identity);
+    return {
+      id: technician.id,
+      name: technician.name,
+      signatureDataUrl: technician.signatureDataUrl
+    };
+  }
+
+  async saveTechnicianSignature(
+    identity: { userId: string | null; email: string | null; name: string | null } | null,
+    signatureDataUrl?: string
+  ) {
+    const technician = await this.resolveTechnicianForIdentity(identity);
+    const signature = String(signatureDataUrl ?? '').trim();
+    if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(signature)) {
+      throw new BadRequestException('Assinatura invalida. Desenhe novamente e tente salvar.');
+    }
+    if (signature.length > 2_500_000) {
+      throw new BadRequestException('A assinatura ultrapassou o tamanho permitido.');
+    }
+    await this.prisma.technician.update({
+      where: { id: technician.id },
+      data: { signatureDataUrl: signature }
+    });
+    return { ok: true, signatureDataUrl: signature };
+  }
+
+  private async resolveTechnicianForIdentity(
+    identity: { userId: string | null; email: string | null; name: string | null } | null
+  ) {
+    if (!identity) throw new BadRequestException('Tecnico nao identificado');
+    const linkedUser = identity.userId
+      ? await this.prisma.user.findUnique({ where: { id: identity.userId } })
+      : identity.email
+        ? await this.prisma.user.findUnique({ where: { email: identity.email } })
+        : null;
+    const candidateName = linkedUser?.name?.trim() || identity.name?.trim() || '';
+    const technician = await this.prisma.technician.findFirst({
+      where: {
+        OR: [
+          ...(linkedUser ? [{ userId: linkedUser.id }] : []),
+          ...(candidateName ? [{ name: { equals: candidateName, mode: Prisma.QueryMode.insensitive } }] : [])
+        ]
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+    if (!technician) throw new NotFoundException('Cadastro do tecnico nao encontrado');
+    return technician;
+  }
+
   async technicianSetStatus(id: string, status: string, observation?: string) {
     await this.prisma.statusLog.create({ data: { appointmentId: id, status, observation: observation ?? null } });
     return { ok: true };

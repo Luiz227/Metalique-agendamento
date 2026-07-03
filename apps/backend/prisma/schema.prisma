@@ -47,8 +47,9 @@ model Technician {
   baseCity       String
   baseAddress    String
   specialties    String[]
-  color          String        @default("#3b82f6")
-  active         Boolean       @default(true)
+    color          String        @default("#3b82f6")
+    signatureDataUrl String?     @db.Text
+    active         Boolean       @default(true)
   user           User?         @relation(fields: [userId], references: [id])
   appointments   Appointment[]
   statusLogs     StatusLog[]

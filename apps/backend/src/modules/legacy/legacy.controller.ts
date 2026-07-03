@@ -118,6 +118,22 @@ export class LegacyController {
     return this.service.technicianWeeklyReport(this.extractAuthIdentity(authorization ?? null));
   }
 
+  @Get('technician/profile')
+  technicianProfile(@Headers('authorization') authorization?: string) {
+    return this.service.technicianProfile(this.extractAuthIdentity(authorization ?? null));
+  }
+
+  @Put('technician/profile/signature')
+  saveTechnicianSignature(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: { signatureDataUrl?: string }
+  ) {
+    return this.service.saveTechnicianSignature(
+      this.extractAuthIdentity(authorization ?? null),
+      body?.signatureDataUrl
+    );
+  }
+
   @Post('technician/appointments/:id/status')
   technicianStatus(@Param('id') id: string, @Body() body: { status?: string; observation?: string }) {
     return this.service.technicianSetStatus(id, String(body?.status ?? 'TRAVELING'), body?.observation);

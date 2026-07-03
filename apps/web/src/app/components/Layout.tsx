@@ -17,7 +17,8 @@ import {
   Sun,
   Moon,
   Columns3,
-  ClipboardList
+  ClipboardList,
+  Sparkles
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { useEffect, useState } from 'react';
@@ -113,6 +114,7 @@ export default function Layout() {
     { name: 'Validacao', href: '/validation', icon: CheckCircle, roles: ['ADMIN', 'VALIDATOR'] },
     { name: 'Meus Atendimentos', href: '/technician', icon: Calendar, roles: ['TECHNICIAN'] },
     { name: 'Calendario', href: '/technician/calendar', icon: Calendar, roles: ['TECHNICIAN'] },
+    { name: 'Relatorio semanal', href: '/technician/weekly-report', icon: Sparkles, roles: ['TECHNICIAN'] },
     { name: 'Tecnicos', href: '/technicians', icon: Users, roles: ['ADMIN', 'LOGISTICS', 'SALES'] },
     { name: 'Usuarios', href: '/users', icon: Shield, roles: ['ADMIN'] },
     { name: 'Veiculos', href: '/vehicles', icon: Car, roles: ['ADMIN', 'LOGISTICS'] },

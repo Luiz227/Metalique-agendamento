@@ -204,18 +204,33 @@ export class AppointmentsService {
   async confirm(id: string) {
     const current = await this.prisma.appointment.findUnique({ where: { id }, select: { status: true } });
     if (!current) throw new NotFoundException('Agendamento nao encontrado');
-    if (current.status === AppointmentStatus.READY) return { ok: true, alreadyConfirmed: true };
+    if (current.status !== AppointmentStatus.READY) {
+      await this.prisma.appointment.update({ where: { id }, data: { status: AppointmentStatus.READY } });
+      await this.prisma.statusLog.create({ data: { appointmentId: id, status: 'CONFIRMED' } });
+    }
+    return this.sendConfirmationEmail(id);
+  }
 
-    const appointment = await this.prisma.appointment.update({
+  async sendConfirmationEmail(id: string) {
+    const appointment = await this.prisma.appointment.findUnique({
       where: { id },
-      data: { status: AppointmentStatus.READY },
       include: {
         client: true,
         technician: { include: { user: { select: { email: true } } } }
       }
     });
-    await this.prisma.statusLog.create({ data: { appointmentId: id, status: 'CONFIRMED' } });
+    if (!appointment) throw new NotFoundException('Agendamento nao encontrado');
+
     const email = await this.mail.sendAppointmentConfirmed(appointment);
+    await this.prisma.statusLog.create({
+      data: {
+        appointmentId: id,
+        status: email.sent ? 'CONFIRMATION_EMAIL_SENT' : 'CONFIRMATION_EMAIL_FAILED',
+        observation: email.sent
+          ? `E-mail enviado para ${email.recipients ?? 0} destinatario(s)`
+          : `E-mail nao enviado: ${email.reason ?? 'motivo desconhecido'}`
+      }
+    });
     return { ok: true, email };
   }
 

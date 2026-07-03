@@ -28,7 +28,10 @@ export class MailService {
 
   async sendAppointmentConfirmed(appointment: ConfirmedAppointmentEmail) {
     const recipients = await this.resolveRecipients(appointment.technician?.user?.email);
-    if (!recipients.length) return { sent: false, reason: 'no_recipients' };
+    if (!recipients.length) {
+      this.logger.warn(`E-mail de confirmacao nao enviado para ${appointment.id}: nenhum destinatario configurado.`);
+      return { sent: false, reason: 'no_recipients' };
+    }
 
     const host = process.env.SMTP_HOST?.trim();
     const user = process.env.SMTP_USER?.trim();
@@ -85,6 +88,7 @@ export class MailService {
           </div>
         `
       });
+      this.logger.log(`E-mail de confirmacao do agendamento ${appointment.id} enviado para ${recipients.length} destinatario(s).`);
       return { sent: true, recipients: recipients.length };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

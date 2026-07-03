@@ -105,6 +105,7 @@ export default function AppointmentDetails() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [emailNotice, setEmailNotice] = useState('');
   const [serviceOrderImporting, setServiceOrderImporting] = useState(false);
   const [serviceOrderImportMessage, setServiceOrderImportMessage] = useState('');
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -594,14 +595,47 @@ export default function AppointmentDetails() {
     if (!appointment) return;
     setSaving(true);
     setError('');
+    setEmailNotice('');
     try {
-      await api(`/appointments/${appointment.id}/confirm`, { method: 'POST' });
+      const result = await api<{ email?: { sent: boolean; reason?: string; recipients?: number } }>(`/appointments/${appointment.id}/confirm`, { method: 'POST' });
+      if (result.email?.sent) {
+        setEmailNotice(`Agendamento confirmado e e-mail enviado para ${result.email.recipients ?? 0} destinatario(s).`);
+      } else {
+        setError(emailFailureMessage(result.email?.reason));
+      }
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Nao foi possivel confirmar o agendamento.');
     } finally {
       setSaving(false);
     }
+  }
+
+  async function resendConfirmationEmail() {
+    if (!appointment) return;
+    setSaving(true);
+    setError('');
+    setEmailNotice('');
+    try {
+      const result = await api<{ email?: { sent: boolean; reason?: string; recipients?: number } }>(`/appointments/${appointment.id}/confirmation-email`, { method: 'POST' });
+      if (result.email?.sent) {
+        setEmailNotice(`E-mail enviado com sucesso para ${result.email.recipients ?? 0} destinatario(s).`);
+      } else {
+        setError(emailFailureMessage(result.email?.reason));
+      }
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Nao foi possivel reenviar o e-mail.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function emailFailureMessage(reason?: string) {
+    if (reason === 'no_recipients') return 'E-mail nao enviado: nenhum destinatario foi configurado e o tecnico nao possui e-mail vinculado.';
+    if (reason === 'smtp_not_configured') return 'E-mail nao enviado: faltam as variaveis SMTP no backend do Easypanel.';
+    if (reason === 'send_failed') return 'E-mail nao enviado: o servidor SMTP recusou a conexao ou a autenticacao. Confira o log do backend.';
+    return 'E-mail nao enviado. Confira as configuracoes e o log do backend.';
   }
 
   if (loading) {
@@ -659,6 +693,11 @@ export default function AppointmentDetails() {
             >
               Confirmar agendamento
             </Button>
+            {appointment.status === 'READY' && (
+              <Button variant="outline" onClick={resendConfirmationEmail} disabled={saving}>
+                Reenviar e-mail
+              </Button>
+            )}
             <Button variant="outline" onClick={openRescheduleDialog} disabled={saving}>
               Reagendar
             </Button>
@@ -676,6 +715,7 @@ export default function AppointmentDetails() {
           </div>
         </div>
         {error && <p className="text-sm text-red-500 mt-3">{error}</p>}
+        {emailNotice && <p className="text-sm text-green-500 mt-3">{emailNotice}</p>}
       </div>
 
       <Dialog open={rescheduleDialogOpen} onOpenChange={setRescheduleDialogOpen}>

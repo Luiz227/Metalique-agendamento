@@ -60,6 +60,11 @@ export class AppointmentsController {
     return this.service.confirm(id);
   }
 
+  @Post(':id/confirmation-email')
+  resendConfirmationEmail(@Param('id') id: string) {
+    return this.service.sendConfirmationEmail(id);
+  }
+
   @Post(':id/reopen')
   reopen(@Param('id') id: string) {
     return this.service.reopen(id);

@@ -3,6 +3,7 @@ import { Settings as SettingsIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { Textarea } from '../components/ui/textarea';
 import { api } from '../services/api';
 
 export default function Settings() {
@@ -13,7 +14,8 @@ export default function Settings() {
     averageHotelCost: 320,
     averageCarCost: 210,
     googleCalendarId: 'primary',
-    googleMapsApiKey: ''
+    googleMapsApiKey: '',
+    notificationEmails: ''
   });
   const [sla, setSla] = useState({ hours: 6, autoCancel: false });
 
@@ -45,9 +47,21 @@ export default function Settings() {
         <CardHeader><CardTitle className="text-white">Regras Inteligentes</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={submit} className="grid md:grid-cols-2 gap-4">
-            {Object.entries(settings).map(([key, value]) => (
+            {Object.entries(settings).filter(([key]) => key !== 'notificationEmails').map(([key, value]) => (
               <Input key={key} placeholder={key} value={String(value)} onChange={(e) => setSettings({ ...settings, [key]: Number.isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value) })} className="bg-zinc-800/50 border-zinc-700" />
             ))}
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-zinc-200">E-mails adicionais das confirmacoes</label>
+              <Textarea
+                value={settings.notificationEmails}
+                onChange={(e) => setSettings({ ...settings, notificationEmails: e.target.value })}
+                placeholder="gestor@empresa.com.br, logistica@empresa.com.br"
+                className="min-h-24 bg-zinc-800/50 border-zinc-700"
+              />
+              <p className="text-xs text-zinc-400">
+                O tecnico vinculado recebe automaticamente. Separe os demais e-mails por virgula ou por linha.
+              </p>
+            </div>
             <Button className="md:col-span-2 bg-blue-500 hover:bg-blue-600">Salvar Configurações</Button>
           </form>
         </CardContent>

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Appointment, AppointmentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../infra/prisma/prisma.service';
+import { MailService } from '../../infra/mail/mail.service';
 
 type AppointmentRow = Prisma.AppointmentGetPayload<{
   include: {
@@ -14,7 +15,10 @@ type AppointmentRow = Prisma.AppointmentGetPayload<{
 
 @Injectable()
 export class AppointmentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mail: MailService
+  ) {}
 
   health() {
     return { ok: true, module: 'appointments' };
@@ -198,9 +202,21 @@ export class AppointmentsService {
   }
 
   async confirm(id: string) {
-    await this.prisma.appointment.update({ where: { id }, data: { status: AppointmentStatus.READY } });
+    const current = await this.prisma.appointment.findUnique({ where: { id }, select: { status: true } });
+    if (!current) throw new NotFoundException('Agendamento nao encontrado');
+    if (current.status === AppointmentStatus.READY) return { ok: true, alreadyConfirmed: true };
+
+    const appointment = await this.prisma.appointment.update({
+      where: { id },
+      data: { status: AppointmentStatus.READY },
+      include: {
+        client: true,
+        technician: { include: { user: { select: { email: true } } } }
+      }
+    });
     await this.prisma.statusLog.create({ data: { appointmentId: id, status: 'CONFIRMED' } });
-    return { ok: true };
+    const email = await this.mail.sendAppointmentConfirmed(appointment);
+    return { ok: true, email };
   }
 
   async reopen(id: string) {

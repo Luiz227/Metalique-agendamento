@@ -175,10 +175,20 @@ export class LegacyService {
   }
 
   async getSettings() {
+    const latest = await this.prisma.auditLog.findFirst({
+      where: { entity: 'settings', action: 'UPDATE' },
+      orderBy: { createdAt: 'desc' },
+      select: { metadata: true }
+    });
+    const saved = latest?.metadata && typeof latest.metadata === 'object' && !Array.isArray(latest.metadata)
+      ? latest.metadata as Record<string, Prisma.JsonValue>
+      : {};
     return {
       companyName: 'Metalique',
       timezone: 'America/Sao_Paulo',
-      language: 'pt-BR'
+      language: 'pt-BR',
+      notificationEmails: '',
+      ...saved
     };
   }
 

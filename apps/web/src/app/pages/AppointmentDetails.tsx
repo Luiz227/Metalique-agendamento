@@ -718,7 +718,11 @@ export default function AppointmentDetails() {
             <h1 className="text-2xl font-bold mb-2">{appointment.client?.name ?? 'Cliente'}</h1>
             <div className="flex items-center gap-3">
               <Badge className={statusTone(appointment.status).color}>{statusLabel(appointment.status)}</Badge>
-              <span className="text-sm text-muted-foreground">Agendamento #{appointment.id}</span>
+              <span className="text-sm text-muted-foreground">
+                {appointment.osNumber
+                  ? `OS nº ${appointment.osNumber}`
+                  : `Atendimento em ${formatDate(appointment.date)}`}
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-2">

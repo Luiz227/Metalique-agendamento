@@ -18,6 +18,8 @@ export type ParsedServiceOrderFields = {
   clientState?: string;
   clientDistrict?: string;
   clientZipCode?: string;
+  vendorName?: string;
+  vendorEmail?: string;
   serviceType?: string;
   serviceCode?: string;
   serviceItemDescription?: string;

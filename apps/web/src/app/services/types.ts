@@ -103,6 +103,8 @@ export type Appointment = {
   machineObservations?: string | null;
   serviceCode?: string | null;
   serviceItemDescription?: string | null;
+  vendorName?: string | null;
+  vendorEmail?: string | null;
   hasHotel?: boolean;
   hotelName?: string | null;
   hotelAddress?: string | null;

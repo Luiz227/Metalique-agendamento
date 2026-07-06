@@ -135,6 +135,8 @@ export default function AppointmentDetails() {
     problemDescription: '',
     serviceCode: '',
     serviceItemDescription: '',
+    vendorName: '',
+    vendorEmail: '',
     machineCode: '',
     machineName: '',
     machineModel: '',
@@ -242,6 +244,8 @@ export default function AppointmentDetails() {
       problemDescription: appointment.problemDescription ?? '',
       serviceCode: appointment.serviceCode ?? '',
       serviceItemDescription: appointment.serviceItemDescription ?? '',
+      vendorName: appointment.vendorName ?? '',
+      vendorEmail: appointment.vendorEmail ?? '',
       machineCode: appointment.machineCode ?? '',
       machineName: appointment.machineName ?? '',
       machineModel: appointment.machineModel ?? '',
@@ -470,6 +474,8 @@ export default function AppointmentDetails() {
         osNumber: fields.osNumber || prev.osNumber,
         serviceCode: fields.serviceCode || prev.serviceCode,
         serviceItemDescription: fields.serviceItemDescription || prev.serviceItemDescription,
+        vendorName: fields.vendorName || prev.vendorName,
+        vendorEmail: fields.vendorEmail || prev.vendorEmail,
         machineCode: fields.machineCode || prev.machineCode,
         machineName: fields.machineName || prev.machineName,
         machineModel: fields.machineModel || prev.machineModel,
@@ -604,6 +610,8 @@ export default function AppointmentDetails() {
             serviceType: form.serviceType || 'Pendente definicao',
             serviceCode: form.serviceCode || null,
             serviceItemDescription: form.serviceItemDescription || null,
+            vendorName: form.vendorName || null,
+            vendorEmail: form.vendorEmail || null,
             problemDescription: form.problemDescription || 'Pendente descricao do servico',
             notes: form.notes,
             osNumber: form.osNumber || null,
@@ -1274,6 +1282,22 @@ export default function AppointmentDetails() {
                         </div>
                       </div>
                     )}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border/70 bg-muted/10 p-4 space-y-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold">Responsavel comercial</p>
+                    <p className="text-xs text-muted-foreground">A IA preenche estes dados quando identificar o vendedor na ordem de servico.</p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[11px] text-muted-foreground">Nome do vendedor</p>
+                      <Input value={form.vendorName} placeholder="Nome do vendedor" onChange={(e) => setForm({ ...form, vendorName: e.target.value })} disabled={!editing} className="w-full" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[11px] text-muted-foreground">E-mail do vendedor</p>
+                      <Input type="email" value={form.vendorEmail} placeholder="vendedor@empresa.com.br" onChange={(e) => setForm({ ...form, vendorEmail: e.target.value })} disabled={!editing} className="w-full" />
+                    </div>
                   </div>
                 </div>
                 <div className="rounded-xl border border-border/70 bg-muted/10 p-4 space-y-4">

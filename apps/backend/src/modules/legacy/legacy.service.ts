@@ -21,6 +21,8 @@ type ParsedServiceOrderFields = {
   clientState?: string;
   clientDistrict?: string;
   clientZipCode?: string;
+  vendorName?: string;
+  vendorEmail?: string;
   serviceType?: string;
   serviceCode?: string;
   serviceItemDescription?: string;
@@ -45,6 +47,8 @@ const SERVICE_ORDER_FIELD_KEYS = [
   'clientState',
   'clientDistrict',
   'clientZipCode',
+  'vendorName',
+  'vendorEmail',
   'serviceType',
   'serviceCode',
   'serviceItemDescription',
@@ -3596,6 +3600,8 @@ export class LegacyService {
       '- clientState: UF do cliente, somente duas letras se existir.',
       '- clientDistrict: bairro do cliente.',
       '- clientZipCode: CEP do cliente.',
+      '- vendorName: nome do vendedor, consultor ou responsavel comercial indicado explicitamente no documento. Nao use o nome do cliente nem do tecnico.',
+      '- vendorEmail: email do vendedor, consultor ou responsavel comercial. Nao use o email do cliente.',
       '- serviceType: tipo do servico, por exemplo START E TREINAMENTO, MANUTENCAO CORRETIVA, MANUTENCAO PREVENTIVA.',
       'Extraido pelo parser atual, use apenas como pista e corrija se estiver errado:',
       JSON.stringify(parserFields),
@@ -3693,6 +3699,12 @@ export class LegacyService {
 
     const emailMatch = headerSegment.match(/E-?mail:\s*([^\s]+@[^\s]+)/i);
     if (emailMatch) fields.clientEmail = this.cleanExtractedValue(emailMatch[1]);
+
+    const vendorNameMatch = text.match(/(?:Vendedor(?:a)?|Consultor(?:a)?|Respons[aÃ¡]vel\s+comercial)\s*:\s*([^\n\r]+?)(?=\s+E-?mail(?:\s+do\s+vendedor)?\s*:|\n|$)/i);
+    if (vendorNameMatch) fields.vendorName = this.cleanExtractedValue(vendorNameMatch[1]);
+
+    const vendorEmailMatch = text.match(/(?:E-?mail\s+(?:do\s+)?(?:vendedor|consultor|comercial)|E-?mail\s+comercial)\s*:\s*([^\s]+@[^\s]+)/i);
+    if (vendorEmailMatch) fields.vendorEmail = this.cleanExtractedValue(vendorEmailMatch[1]);
 
     const addressMatch = headerSegment.match(/Endere[cç]o:\s*([\s\S]*?)(?=\s+E-?mail:|\nCidade:|\nBairro:|\nCEP:|$)/i);
     if (addressMatch) fields.clientAddress = this.cleanExtractedValue(addressMatch[1]);

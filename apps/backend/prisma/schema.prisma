@@ -113,6 +113,8 @@ model Appointment {
   machineObservations String?
   serviceCode       String?
   serviceItemDescription String?
+  vendorName         String?
+  vendorEmail        String?
   hasHotel          Boolean            @default(false)
   hotelName         String?
   hotelAddress      String?

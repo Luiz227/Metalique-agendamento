@@ -73,7 +73,7 @@ export default function Settings() {
               <Input key={key} placeholder={key} value={String(value)} onChange={(e) => setSettings({ ...settings, [key]: Number.isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value) })} className="bg-zinc-800/50 border-zinc-700" />
             ))}
             <div className="space-y-2 md:col-span-2">
-              <label className="text-sm font-medium text-zinc-200">E-mails adicionais das confirmacoes</label>
+              <label className="text-sm font-medium text-zinc-200">E-mails adicionais para acompanhamento interno</label>
               <Textarea
                 value={settings.notificationEmails}
                 onChange={(e) => setSettings({ ...settings, notificationEmails: e.target.value })}
@@ -81,7 +81,7 @@ export default function Settings() {
                 className="min-h-24 bg-zinc-800/50 border-zinc-700"
               />
               <p className="text-xs text-zinc-400">
-                O tecnico vinculado recebe automaticamente. Separe os demais e-mails por virgula ou por linha.
+                O tecnico e o cliente recebem mensagens proprias automaticamente. Aqui entram somente gestores e equipes internas; separe por virgula ou por linha.
               </p>
             </div>
             <Button className="md:col-span-2 bg-blue-500 hover:bg-blue-600">Salvar Configurações</Button>

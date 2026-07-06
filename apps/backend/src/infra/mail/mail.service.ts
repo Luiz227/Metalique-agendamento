@@ -18,7 +18,7 @@ type ConfirmedAppointmentEmail = {
   flightReturnAirport: string | null;
   flightDepartureAt: Date | null;
   flightReturnAt: Date | null;
-  client: { name: string };
+  client: { name: string; email: string | null };
   technician: { name: string; user: { email: string } | null } | null;
 };
 
@@ -29,8 +29,13 @@ export class MailService {
   constructor(private readonly prisma: PrismaService) {}
 
   async sendAppointmentConfirmed(appointment: ConfirmedAppointmentEmail) {
-    const recipients = await this.resolveRecipients(appointment.technician?.user?.email);
-    if (!recipients.length) {
+    const technicianEmail = this.normalizeEmail(appointment.technician?.user?.email);
+    const clientEmail = this.normalizeEmail(appointment.client.email);
+    const reservedEmails = new Set([technicianEmail, clientEmail].filter(Boolean));
+    const configuredRecipients = (await this.resolveConfiguredRecipients())
+      .filter((email) => !reservedEmails.has(email));
+    const recipientCount = Number(Boolean(technicianEmail)) + Number(Boolean(clientEmail)) + configuredRecipients.length;
+    if (!recipientCount) {
       this.logger.warn(`E-mail de confirmacao nao enviado para ${appointment.id}: nenhum destinatario configurado.`);
       return { sent: false, reason: 'no_recipients' };
     }
@@ -76,9 +81,10 @@ export class MailService {
       : '';
 
     try {
-      await transporter.sendMail({
+      const deliveryPromises: Promise<unknown>[] = [];
+      if (technicianEmail) deliveryPromises.push(transporter.sendMail({
         from: process.env.SMTP_FROM?.trim() || user,
-        to: recipients.join(', '),
+        to: technicianEmail,
         subject,
         html: `<!doctype html>
           <html lang="pt-BR">
@@ -132,9 +138,37 @@ export class MailService {
               </table>
             </body>
           </html>`
-      });
-      this.logger.log(`E-mail de confirmacao do agendamento ${appointment.id} enviado para ${recipients.length} destinatario(s).`);
-      return { sent: true, recipients: recipients.length };
+      }));
+
+      if (clientEmail) deliveryPromises.push(transporter.sendMail({
+        from: process.env.SMTP_FROM?.trim() || user,
+        to: clientEmail,
+        subject: `Visita tecnica confirmada - ${this.formatDate(appointment.date)}`,
+        html: this.renderClientConfirmation(appointment, technicianName)
+      }));
+
+      deliveryPromises.push(...configuredRecipients.map((recipient) => transporter.sendMail({
+        from: process.env.SMTP_FROM?.trim() || user,
+        to: recipient,
+        subject: `Resumo do agendamento confirmado - ${appointment.client.name} - ${this.formatDate(appointment.date)}`,
+        html: this.renderManagementConfirmation(appointment, technicianName)
+      })));
+
+      const results = await Promise.allSettled(deliveryPromises);
+      const delivered = results.filter((result) => result.status === 'fulfilled').length;
+      const failed = results.length - delivered;
+      if (failed) this.logger.warn(`${failed} e-mail(s) do agendamento ${appointment.id} falharam; ${delivered} foram entregues.`);
+      else this.logger.log(`E-mails de confirmacao do agendamento ${appointment.id} enviados separadamente para ${delivered} destinatario(s).`);
+      return {
+        sent: delivered > 0,
+        recipients: delivered,
+        failed,
+        deliveries: {
+          technician: Boolean(technicianEmail),
+          client: Boolean(clientEmail),
+          additional: configuredRecipients.length
+        }
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Falha ao enviar confirmacao do agendamento ${appointment.id}: ${message}`);
@@ -248,6 +282,12 @@ export class MailService {
   }
 
   private async resolveRecipients(technicianEmail?: string | null) {
+    const configured = await this.resolveConfiguredRecipients();
+    const recipients = [this.normalizeEmail(technicianEmail), ...configured].filter(Boolean) as string[];
+    return Array.from(new Set(recipients));
+  }
+
+  private async resolveConfiguredRecipients() {
     const latest = await this.prisma.auditLog.findFirst({
       where: { entity: 'settings', action: 'UPDATE' },
       orderBy: { createdAt: 'desc' },
@@ -258,8 +298,69 @@ export class MailService {
       .split(/[;,\n]/)
       .map((email) => email.trim().toLowerCase())
       .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
-    const recipients = [technicianEmail?.trim().toLowerCase(), ...configured].filter(Boolean) as string[];
-    return Array.from(new Set(recipients));
+    return Array.from(new Set(configured));
+  }
+
+  private normalizeEmail(email?: string | null) {
+    const value = email?.trim().toLowerCase() ?? '';
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? value : '';
+  }
+
+  private renderClientConfirmation(appointment: ConfirmedAppointmentEmail, technicianName: string) {
+    return this.renderConfirmationShell({
+      title: 'Visita tecnica confirmada',
+      subtitle: 'Sua visita foi agendada pela Metalique',
+      greeting: `Ola, ${this.escapeHtml(appointment.client.name)}.`,
+      message: 'Confirmamos o agendamento da visita tecnica. Confira abaixo os dados principais do atendimento.',
+      rows: `
+        <tr><td style="padding:7px 0;color:#52525b;width:150px">Data:</td><td style="padding:7px 0;font-weight:600">${this.formatDate(appointment.date)}</td></tr>
+        <tr><td style="padding:7px 0;color:#52525b">Servico:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.serviceType)}</td></tr>
+        <tr><td style="padding:7px 0;color:#52525b">Tecnico:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(technicianName)}</td></tr>
+        <tr><td style="padding:7px 0;color:#52525b">Cidade:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.city)}</td></tr>
+        <tr><td style="padding:7px 0;color:#52525b">Endereco:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.fullAddress)}</td></tr>
+      `,
+      footer: 'Caso seja necessario alterar alguma informacao, entre em contato com a equipe Metalique.'
+    });
+  }
+
+  private renderManagementConfirmation(appointment: ConfirmedAppointmentEmail, technicianName: string) {
+    return this.renderConfirmationShell({
+      title: 'Agendamento confirmado',
+      subtitle: 'Resumo administrativo do atendimento',
+      greeting: 'Ola, equipe.',
+      message: 'Um novo atendimento foi confirmado. Estes dados sao destinados ao acompanhamento interno.',
+      rows: `
+        <tr><td style="padding:7px 0;color:#52525b;width:150px">Cliente:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.client.name)}</td></tr>
+        <tr><td style="padding:7px 0;color:#52525b">Tecnico:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(technicianName)}</td></tr>
+        <tr><td style="padding:7px 0;color:#52525b">Servico:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.serviceType)}</td></tr>
+        <tr><td style="padding:7px 0;color:#52525b">Data:</td><td style="padding:7px 0;font-weight:600">${this.formatDate(appointment.date)}</td></tr>
+        <tr><td style="padding:7px 0;color:#52525b">Dias em campo:</td><td style="padding:7px 0;font-weight:600">${appointment.daysOut}</td></tr>
+        <tr><td style="padding:7px 0;color:#52525b">Cidade:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.city)}</td></tr>
+        <tr><td style="padding:7px 0;color:#52525b">Endereco:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.fullAddress)}</td></tr>
+      `,
+      footer: 'Acompanhe o andamento e eventuais pendencias diretamente no Agenda Metalique.'
+    });
+  }
+
+  private renderConfirmationShell(content: {
+    title: string;
+    subtitle: string;
+    greeting: string;
+    message: string;
+    rows: string;
+    footer: string;
+  }) {
+    return `<!doctype html><html lang="pt-BR"><body style="margin:0;padding:24px;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#18181b">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;background:#fff;border:1px solid #e4e4e7;border-radius:12px;overflow:hidden">
+          <tr><td style="padding:24px 30px;background:#d3113a;color:#fff"><div style="font-size:24px;font-weight:700">${content.title}</div><div style="margin-top:6px;font-size:14px;color:#ffe4e9">${content.subtitle}</div></td></tr>
+          <tr><td style="padding:30px"><p style="margin:0 0 8px;font-size:16px">${content.greeting}</p><p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#3f3f46">${content.message}</p>
+            <div style="padding:20px;border-left:4px solid #d3113a;background:#f7f7f8;border-radius:8px"><div style="margin-bottom:12px;font-size:17px;font-weight:700;color:#d3113a">Dados do agendamento</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="font-size:14px">${content.rows}</table></div>
+            <p style="margin:24px 0 0;font-size:14px;line-height:1.6;color:#52525b">${content.footer}</p><p style="margin:24px 0 0;font-size:14px;color:#52525b">Atenciosamente,<br><strong>Agenda Metalique</strong></p>
+          </td></tr>
+        </table>
+      </td></tr></table>
+    </body></html>`;
   }
 
   private asRecord(value: Prisma.JsonValue | null | undefined): Record<string, Prisma.JsonValue> {

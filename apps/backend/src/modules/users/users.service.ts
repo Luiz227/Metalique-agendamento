@@ -22,6 +22,7 @@ export class UsersService {
       email: row.email,
       role: row.role,
       active: row.active,
+      mustChangePassword: row.mustChangePassword,
       technician: row.technician ?? null,
       createdAt: row.createdAt
     }));
@@ -37,7 +38,8 @@ export class UsersService {
         email: String(body.email ?? ''),
         role,
         active: body.active !== undefined ? Boolean(body.active) : true,
-        passwordHash
+        passwordHash,
+        mustChangePassword: true
       }
     });
 
@@ -61,7 +63,7 @@ export class UsersService {
       });
     }
 
-    return { id: row.id, name: row.name, email: row.email, role: row.role, active: row.active };
+    return { id: row.id, name: row.name, email: row.email, role: row.role, active: row.active, mustChangePassword: row.mustChangePassword };
   }
 
   async update(id: string, body: Record<string, unknown>) {
@@ -74,7 +76,8 @@ export class UsersService {
         email: body.email !== undefined ? String(body.email) : undefined,
         role: nextRole,
         active: body.active !== undefined ? Boolean(body.active) : undefined,
-        passwordHash: password
+        passwordHash: password,
+        mustChangePassword: password ? true : undefined
       }
     });
 
@@ -104,7 +107,7 @@ export class UsersService {
       });
     }
 
-    return { id: row.id, name: row.name, email: row.email, role: row.role, active: row.active };
+    return { id: row.id, name: row.name, email: row.email, role: row.role, active: row.active, mustChangePassword: row.mustChangePassword };
   }
 
   async remove(id: string) {

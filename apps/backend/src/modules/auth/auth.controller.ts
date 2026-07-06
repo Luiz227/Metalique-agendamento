@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
 
 type LoginBody = {
@@ -18,5 +18,13 @@ export class AuthController {
   @Post('login')
   login(@Body() body: LoginBody) {
     return this.service.login(body.email, body.password);
+  }
+
+  @Post('change-password')
+  changePassword(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: { newPassword?: string }
+  ) {
+    return this.service.changePassword(authorization, String(body?.newPassword ?? ''));
   }
 }

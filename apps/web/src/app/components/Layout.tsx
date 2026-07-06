@@ -44,6 +44,7 @@ export default function Layout() {
   const [isMobileWeb, setIsMobileWeb] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const user = getUser();
+  const profileInitial = user?.name?.trim().charAt(0).toLocaleUpperCase('pt-BR') || 'U';
 
   useEffect(() => {
     const html = document.documentElement;
@@ -157,7 +158,9 @@ export default function Layout() {
 
           <div className="p-4 border-t border-border">
             <div className="flex items-center gap-3 px-3 py-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-500" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-red-700 text-sm font-bold text-white shadow-sm">
+                {profileInitial}
+              </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{user?.name ?? 'Usuario'}</p>
                 <p className="text-xs text-muted-foreground truncate">{user?.email ?? 'sem email'}</p>

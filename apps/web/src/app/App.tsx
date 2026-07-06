@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import type { ReactElement } from 'react';
 import { Toaster } from './components/ui/sonner';
 import Login from './pages/Login';
+import ChangePassword from './pages/ChangePassword';
 import Dashboard from './pages/Dashboard';
 import MapView from './pages/MapView';
 import Schedule from './pages/Schedule';
@@ -22,7 +23,10 @@ import Layout from './components/Layout';
 import { getToken, getUser, type ApiUser } from './services/api';
 
 function RequireAuth() {
-  return getToken() ? <Layout /> : <Navigate to="/login" replace />;
+  const user = getUser();
+  if (!getToken() || !user) return <Navigate to="/login" replace />;
+  if (user.mustChangePassword) return <Navigate to="/change-password" replace />;
+  return <Layout />;
 }
 
 function homeByRole(role?: ApiUser['role']) {
@@ -50,6 +54,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/change-password" element={<ChangePassword />} />
         <Route element={<RequireAuth />}>
           <Route path="dashboard" element={<RequireRole roles={['ADMIN']}><Dashboard /></RequireRole>} />
           <Route path="map" element={<RequireRole roles={['ADMIN', 'LOGISTICS', 'SALES']}><MapView /></RequireRole>} />

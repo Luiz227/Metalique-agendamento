@@ -3,6 +3,7 @@ export type ApiUser = {
   name: string;
   email: string;
   role: 'ADMIN' | 'LOGISTICS' | 'TECHNICIAN' | 'VALIDATOR' | 'SALES';
+  mustChangePassword?: boolean;
 };
 
 export type ParsedServiceOrderFields = {

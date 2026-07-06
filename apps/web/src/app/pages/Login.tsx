@@ -26,7 +26,9 @@ export default function Login() {
         body: JSON.stringify({ email, password })
       });
       setSession(response.token, response.user);
-      navigate(response.user.role === 'TECHNICIAN' ? '/technician' : '/dashboard');
+      navigate(response.user.mustChangePassword
+        ? '/change-password'
+        : response.user.role === 'TECHNICIAN' ? '/technician' : '/dashboard');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Falha no login');
     } finally {

@@ -119,7 +119,6 @@ export class UsersService {
     const value = String(role ?? 'LOGISTICS').toUpperCase();
     if (value === 'ADMIN') return UserRole.ADMIN;
     if (value === 'TECHNICIAN') return UserRole.TECHNICIAN;
-    if (value === 'VALIDATOR') return UserRole.VALIDATOR;
     return UserRole.LOGISTICS;
   }
 

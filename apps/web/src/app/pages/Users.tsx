@@ -10,25 +10,28 @@ import { ApiError, api, getUser, type ApiUser } from '../services/api';
 type UserWithRelations = ApiUser & {
   active: boolean;
   technician?: { id: string; name: string; color?: string; active: boolean } | null;
-  ownedClients?: Array<{ id: string; name: string; city: string }>;
 };
+
+type SelectableRole = 'ADMIN' | 'LOGISTICS' | 'TECHNICIAN';
 
 type UserForm = {
   name: string;
   email: string;
   password: string;
-  role: ApiUser['role'];
+  role: SelectableRole;
   active: boolean;
   technicianColor: string;
 };
 
-const roleLabels: Record<ApiUser['role'], string> = {
+const roleLabels: Record<SelectableRole, string> = {
   ADMIN: 'Administrador',
   LOGISTICS: 'Agenda/Logística',
-  TECHNICIAN: 'Técnico',
-  VALIDATOR: 'Validador final',
-  SALES: 'Vendas'
+  TECHNICIAN: 'Técnico'
 };
+
+function normalizeSelectableRole(role: ApiUser['role']): SelectableRole {
+  return role === 'ADMIN' || role === 'TECHNICIAN' ? role : 'LOGISTICS';
+}
 
 const defaultColors = [
   '#2563eb',
@@ -57,7 +60,7 @@ const emptyForm: UserForm = {
   name: '',
   email: '',
   password: '',
-  role: 'SALES',
+  role: 'LOGISTICS',
   active: true,
   technicianColor: defaultColors[0]
 };
@@ -89,7 +92,7 @@ export default function Users() {
       name: user.name,
       email: user.email,
       password: '',
-      role: user.role,
+      role: normalizeSelectableRole(user.role),
       active: user.active,
       technicianColor: user.technician?.color ?? defaultColors[0]
     });
@@ -147,7 +150,7 @@ export default function Users() {
         <UsersIcon className="h-7 w-7 text-blue-400" />
         <div>
           <h1 className="text-2xl font-bold text-white">Usuários e Permissões</h1>
-          <p className="text-zinc-400">Administração de acessos para agenda, técnicos, vendas e validação.</p>
+          <p className="text-zinc-400">Administração de acessos para administradores, agenda/logística e técnicos.</p>
         </div>
       </div>
 
@@ -171,7 +174,7 @@ export default function Users() {
             <Input required placeholder="Nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
             <Input required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
             <Input required={!editingId} placeholder={editingId ? 'Nova senha, se quiser alterar' : 'Senha inicial'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
-            <Select value={form.role} onValueChange={(role) => setForm({ ...form, role: role as ApiUser['role'] })}>
+            <Select value={form.role} onValueChange={(role) => setForm({ ...form, role: role as SelectableRole })}>
               <SelectTrigger className="bg-zinc-800/50 border-zinc-700">
                 <SelectValue />
               </SelectTrigger>
@@ -233,13 +236,9 @@ export default function Users() {
 
               <div className="flex items-center gap-2 text-sm text-zinc-300">
                 <Shield className="h-4 w-4 text-blue-400" />
-                {roleLabels[user.role]}
+                {roleLabels[normalizeSelectableRole(user.role)]}
                 {user.technician?.color && <span className="h-3 w-3 rounded-full" style={{ backgroundColor: user.technician.color }} />}
               </div>
-
-              {user.role === 'SALES' && (
-                <p className="text-xs text-zinc-500">Clientes vinculados: {user.ownedClients?.length ?? 0}</p>
-              )}
 
               <div className="flex gap-2 pt-2 border-t border-zinc-800">
                 <Button type="button" variant="outline" size="sm" className="border-zinc-700" onClick={() => startEdit(user)}>

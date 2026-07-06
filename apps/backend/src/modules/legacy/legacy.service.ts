@@ -1010,6 +1010,8 @@ export class LegacyService {
       machineObservations: string | null;
       serviceCode: string | null;
       serviceItemDescription: string | null;
+      vendorName: string | null;
+      vendorEmail: string | null;
       client: {
         name: string;
         phone: string | null;
@@ -1062,6 +1064,12 @@ export class LegacyService {
         : company.logoText),
       CODIGO_SERVICO: serviceCode,
       DESCRICAO_SERVICO: serviceDescription,
+      VENDEDOR: appointment.vendorName || 'Nao informado',
+      NOME_VENDEDOR: appointment.vendorName || 'Nao informado',
+      EMAIL_VENDEDOR: appointment.vendorEmail || 'Nao informado',
+      VENDEDOR_EMAIL: appointment.vendorEmail || 'Nao informado',
+      NomeDoVendedor: appointment.vendorName || 'Nao informado',
+      VendedorEmail: appointment.vendorEmail || 'Nao informado',
       CONSIDERACOES_TECNICO: report.summary?.trim() || 'Nao informado',
       CosideracoesDoTecnico: report.summary?.trim() || 'Nao informado',
       ConsideracoesDoTecnico: report.summary?.trim() || 'Nao informado',
@@ -1100,6 +1108,8 @@ export class LegacyService {
       machineObservations: string | null;
       serviceCode: string | null;
       serviceItemDescription: string | null;
+      vendorName: string | null;
+      vendorEmail: string | null;
       client: {
         name: string;
         phone: string | null;
@@ -1162,12 +1172,17 @@ export class LegacyService {
       DataEmissao: this.formatDateOnly(emissionDate),
       DescricaoProduto: serviceDescription,
       DescricaoServico: serviceDescription,
-      NomeDoVendedor: 'Agenda Metalique',
+      NomeDoVendedor: appointment.vendorName || 'Nao informado',
+      Vendedor: appointment.vendorName || 'Nao informado',
+      VENDEDOR: appointment.vendorName || 'Nao informado',
+      NOME_VENDEDOR: appointment.vendorName || 'Nao informado',
       Pedido: osNumber,
       OSCodigo: osNumber,
       OsDataAbertura: this.formatDateOnly(emissionDate),
       ValidadeDoOrcamento: this.formatDateOnly(emissionDate),
-      VendedorEmail: 'agenda@metalique.com.br',
+      VendedorEmail: appointment.vendorEmail || 'Nao informado',
+      EMAIL_VENDEDOR: appointment.vendorEmail || 'Nao informado',
+      VENDEDOR_EMAIL: appointment.vendorEmail || 'Nao informado',
       CONSIDERACOES_TECNICO: report.summary?.trim() || 'Nao informado',
       CosideracoesDoTecnico: report.summary?.trim() || 'Nao informado',
       ConsideracoesDoTecnico: report.summary?.trim() || 'Nao informado'
@@ -1356,6 +1371,8 @@ export class LegacyService {
       machineObservations: string | null;
       serviceCode: string | null;
       serviceItemDescription: string | null;
+      vendorName: string | null;
+      vendorEmail: string | null;
       client: {
         name: string;
         phone: string | null;
@@ -1403,6 +1420,8 @@ export class LegacyService {
     const equipmentManufacturer = appointment.machineManufacturer || (isStart ? 'METALIQUE LASER E PLASMA CNC' : company.logoText);
     const notesText = report.summary?.trim() || 'Nao informado';
     const technicianName = appointment.technician?.name || 'Nao informado';
+    const vendorName = appointment.vendorName || 'Nao informado';
+    const vendorEmail = appointment.vendorEmail || 'Nao informado';
 
     let cursorY = height - 38;
 
@@ -1484,14 +1503,16 @@ export class LegacyService {
       `CPF/CNPJ: ${appointment.client.cnpj || 'Nao informado'} IE: ${appointment.client.ie || 'Nao informado'}`,
       `Endereco: ${appointment.fullAddress || 'Nao informado'}`,
       `Cidade: ${address.cidade} - ${address.estado}`,
-      `OS Tecnico: ${technicianName}`
+      `OS Tecnico: ${technicianName}`,
+      `Vendedor: ${vendorName}`
     ];
     const rightInfo = [
       `Telefone: ${appointment.client.phone || 'Nao informado'}`,
       `Bairro: ${address.bairro}`,
       `E-mail: ${appointment.client.email || 'Nao informado'}`,
       `CEP: ${address.cep}`,
-      `Data Visita: ${this.formatDateOnly(visitDate)}`
+      `Data Visita: ${this.formatDateOnly(visitDate)}`,
+      `E-mail vendedor: ${vendorEmail}`
     ];
     leftInfo.forEach((line, index) => {
       page.drawText(line, { x: leftX, y: cursorY - index * lineGap, font: boldFont, size: infoSize, color: black });
@@ -1500,7 +1521,7 @@ export class LegacyService {
       page.drawText(line, { x: rightX, y: cursorY - index * lineGap, font: boldFont, size: infoSize, color: black });
     });
 
-    cursorY -= lineGap * 5 + 8;
+    cursorY -= lineGap * 6 + 8;
 
     cursorY = this.drawLabeledFullWidthBox(page, {
       x: margin,

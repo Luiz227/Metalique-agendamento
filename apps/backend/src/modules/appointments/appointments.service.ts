@@ -145,6 +145,51 @@ export class AppointmentsService {
     return { ok: true, deleted: total };
   }
 
+  async resetSystemData(userId: string, confirmation?: string) {
+    if (confirmation !== 'REDEFINIR SISTEMA') {
+      throw new BadRequestException('Digite REDEFINIR SISTEMA para confirmar a limpeza');
+    }
+    const administrator = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!administrator || !administrator.active || administrator.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Somente um administrador ativo pode redefinir o sistema');
+    }
+
+    const counts = await this.prisma.$transaction(async (tx) => {
+      const snapshot = {
+        appointments: await tx.appointment.count(),
+        clients: await tx.client.count(),
+        technicians: await tx.technician.count(),
+        vehicles: await tx.vehicle.count(),
+        hotels: await tx.hotel.count(),
+        users: await tx.user.count({ where: { id: { not: userId } } })
+      };
+
+      await tx.appointment.deleteMany();
+      await tx.notification.deleteMany();
+      await tx.auditLog.deleteMany();
+      await tx.technician.deleteMany();
+      await tx.client.deleteMany();
+      await tx.hotel.deleteMany();
+      await tx.vehicle.deleteMany();
+      await tx.user.deleteMany({ where: { id: { not: userId } } });
+      await tx.auditLog.create({
+        data: {
+          userId,
+          entity: 'system',
+          action: 'FACTORY_RESET',
+          metadata: snapshot
+        }
+      });
+      return snapshot;
+    });
+
+    return {
+      ok: true,
+      preservedAdministrator: administrator.email,
+      deleted: counts
+    };
+  }
+
   async update(id: string, body: Record<string, unknown>) {
     const row = await this.prisma.appointment.update({
       where: { id },

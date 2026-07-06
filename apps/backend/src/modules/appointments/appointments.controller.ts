@@ -35,6 +35,22 @@ export class AppointmentsController {
     }
   }
 
+  @Delete('system-data')
+  async resetSystemData(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: { confirmation?: string }
+  ) {
+    if (!authorization?.startsWith('Bearer ')) throw new UnauthorizedException('Sessao nao identificada');
+    try {
+      const payload = await this.jwt.verifyAsync<{ sub?: string }>(authorization.slice(7));
+      if (!payload.sub) throw new UnauthorizedException('Sessao invalida');
+      return this.service.resetSystemData(payload.sub, body?.confirmation);
+    } catch (error) {
+      if (error instanceof UnauthorizedException) throw error;
+      throw new UnauthorizedException('Sessao invalida ou expirada');
+    }
+  }
+
   @Get(':id')
   byId(@Param('id') id: string) {
     return this.service.findById(id);

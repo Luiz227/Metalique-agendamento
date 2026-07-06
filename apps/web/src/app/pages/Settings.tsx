@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Settings as SettingsIcon } from 'lucide-react';
+import { AlertTriangle, Settings as SettingsIcon, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -18,6 +18,9 @@ export default function Settings() {
     notificationEmails: ''
   });
   const [sla, setSla] = useState({ hours: 6, autoCancel: false });
+  const [resetConfirmation, setResetConfirmation] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState('');
 
   useEffect(() => {
     api<typeof settings>('/settings').then((data) => setSettings({ ...settings, ...data })).catch(() => undefined);
@@ -32,6 +35,25 @@ export default function Settings() {
   async function submitSla(event: React.FormEvent) {
     event.preventDefault();
     await api('/settings/sla', { method: 'PUT', body: JSON.stringify(sla) });
+  }
+
+  async function resetSystemData() {
+    if (resetConfirmation !== 'REDEFINIR SISTEMA') return;
+    setResetting(true);
+    setResetMessage('');
+    try {
+      const result = await api<{ deleted: Record<string, number> }>('/appointments/system-data', {
+        method: 'DELETE',
+        body: JSON.stringify({ confirmation: resetConfirmation })
+      });
+      const total = Object.values(result.deleted).reduce((sum, count) => sum + count, 0);
+      setResetMessage(`Sistema redefinido. ${total} registro(s) principal(is) removido(s).`);
+      setResetConfirmation('');
+    } catch (error) {
+      setResetMessage(error instanceof Error ? error.message : 'Nao foi possivel redefinir o sistema.');
+    } finally {
+      setResetting(false);
+    }
   }
 
   return (
@@ -89,6 +111,41 @@ export default function Settings() {
             </select>
             <Button className="md:col-span-2 bg-blue-500 hover:bg-blue-600">Salvar SLA</Button>
           </form>
+        </CardContent>
+      </Card>
+      <Card className="border-red-500/40 bg-red-500/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-red-400">
+            <AlertTriangle className="h-5 w-5" /> Redefinir dados de teste
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm leading-6 text-zinc-300">
+            Apaga agendamentos, clientes, tecnicos, veiculos, hoteis, notificacoes, relatorios e todos os usuarios de teste.
+            Somente sua conta de administrador sera mantida. Os arquivos existentes no Google Drive nao serao excluidos.
+          </p>
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+            Esta acao e definitiva e nao pode ser desfeita.
+          </div>
+          <label className="block space-y-2">
+            <span className="text-sm text-zinc-300">Digite <strong>REDEFINIR SISTEMA</strong> para confirmar</span>
+            <Input
+              value={resetConfirmation}
+              onChange={(event) => setResetConfirmation(event.target.value)}
+              placeholder="REDEFINIR SISTEMA"
+              className="border-red-500/40 bg-zinc-950"
+            />
+          </label>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={resetConfirmation !== 'REDEFINIR SISTEMA' || resetting}
+            onClick={resetSystemData}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            {resetting ? 'Redefinindo...' : 'Apagar todos os dados de teste'}
+          </Button>
+          {resetMessage && <p className="text-sm text-zinc-300">{resetMessage}</p>}
         </CardContent>
       </Card>
     </div>

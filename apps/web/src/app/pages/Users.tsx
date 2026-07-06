@@ -33,28 +33,27 @@ function normalizeSelectableRole(role: ApiUser['role']): SelectableRole {
   return role === 'ADMIN' || role === 'TECHNICIAN' ? role : 'LOGISTICS';
 }
 
-const defaultColors = [
-  '#2563eb',
-  '#16a34a',
-  '#dc2626',
-  '#ca8a04',
-  '#9333ea',
-  '#0891b2',
-  '#ea580c',
-  '#db2777',
-  '#0f766e',
-  '#4f46e5',
-  '#7c3aed',
-  '#be123c',
-  '#15803d',
-  '#0369a1',
-  '#b45309',
-  '#334155',
-  '#1d4ed8',
-  '#a21caf',
-  '#c2410c',
-  '#047857'
+const technicianColorPresets = [
+  { name: 'Renan', label: 'Azul escuro', color: '#1E3A8A' },
+  { name: 'Matheus Oliveira', label: 'Verde escuro', color: '#166534' },
+  { name: 'Carlos', label: 'Vermelho', color: '#DC2626' },
+  { name: 'Matheus Cunha', label: 'Laranja', color: '#F97316' },
+  { name: 'André', label: 'Rosa', color: '#EC4899' },
+  { name: 'Felipe', label: 'Amarelo', color: '#EAB308' },
+  { name: 'Agnaldo', label: 'Cinza', color: '#6B7280' },
+  { name: 'Matheus Rodrigo', label: 'Roxo claro', color: '#C084FC' },
+  { name: 'Carlos Henrique', label: 'Magenta', color: '#D946EF' },
+  { name: 'Allan', label: 'Roxo escuro', color: '#581C87' }
 ];
+
+function normalizeName(name: string) {
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function presetColorForName(name: string) {
+  const normalized = normalizeName(name);
+  return technicianColorPresets.find((preset) => normalizeName(preset.name) === normalized)?.color;
+}
 
 const emptyForm: UserForm = {
   name: '',
@@ -62,7 +61,7 @@ const emptyForm: UserForm = {
   password: '',
   role: 'LOGISTICS',
   active: true,
-  technicianColor: defaultColors[0]
+  technicianColor: technicianColorPresets[0].color
 };
 
 export default function Users() {
@@ -94,7 +93,7 @@ export default function Users() {
       password: '',
       role: normalizeSelectableRole(user.role),
       active: user.active,
-      technicianColor: user.technician?.color ?? defaultColors[0]
+      technicianColor: user.technician?.color ?? presetColorForName(user.name) ?? technicianColorPresets[0].color
     });
     setError('');
   }
@@ -171,7 +170,16 @@ export default function Users() {
         </CardHeader>
         <CardContent>
           <form onSubmit={submit} className="grid md:grid-cols-4 gap-3">
-            <Input required placeholder="Nome" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+            <Input
+              required
+              placeholder="Nome"
+              value={form.name}
+              onChange={(e) => {
+                const name = e.target.value;
+                setForm({ ...form, name, technicianColor: presetColorForName(name) ?? form.technicianColor });
+              }}
+              className="bg-zinc-800/50 border-zinc-700"
+            />
             <Input required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
             <Input required={!editingId} placeholder={editingId ? 'Nova senha, se quiser alterar' : 'Senha inicial'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
             <Select value={form.role} onValueChange={(role) => setForm({ ...form, role: role as SelectableRole })}>
@@ -200,15 +208,18 @@ export default function Users() {
                     onChange={(e) => setForm({ ...form, technicianColor: e.target.value })}
                     className="h-10 w-16 p-1 bg-zinc-800/50 border-zinc-700"
                   />
-                  {defaultColors.map((color) => (
+                  {technicianColorPresets.map((preset) => (
                     <button
-                      key={color}
+                      key={preset.name}
                       type="button"
-                      aria-label={`Selecionar cor ${color}`}
-                      className={`h-8 w-8 rounded-full border-2 ${form.technicianColor === color ? 'border-white' : 'border-zinc-700'}`}
-                      style={{ backgroundColor: color }}
-                      onClick={() => setForm({ ...form, technicianColor: color })}
-                    />
+                      aria-label={`${preset.name}: ${preset.label}`}
+                      title={`${preset.name} - ${preset.label}`}
+                      className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-xs ${form.technicianColor.toUpperCase() === preset.color.toUpperCase() ? 'border-white bg-zinc-700' : 'border-zinc-700 bg-zinc-900'}`}
+                      onClick={() => setForm({ ...form, technicianColor: preset.color })}
+                    >
+                      <span className="h-5 w-5 rounded-full border border-black/30" style={{ backgroundColor: preset.color }} />
+                      <span>{preset.name}</span>
+                    </button>
                   ))}
                 </div>
               </div>

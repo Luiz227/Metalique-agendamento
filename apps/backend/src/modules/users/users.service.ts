@@ -3,6 +3,19 @@ import { UserRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { PrismaService } from '../../infra/prisma/prisma.service';
 
+const TECHNICIAN_COLOR_BY_NAME: Record<string, string> = {
+  renan: '#1E3A8A',
+  'matheus oliveira': '#166534',
+  carlos: '#DC2626',
+  'matheus cunha': '#F97316',
+  andre: '#EC4899',
+  felipe: '#EAB308',
+  agnaldo: '#6B7280',
+  'matheus rodrigo': '#C084FC',
+  'carlos henrique': '#D946EF',
+  allan: '#581C87'
+};
+
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
@@ -12,6 +25,7 @@ export class UsersService {
   }
 
   async list() {
+    await this.syncPresetTechnicianColors();
     const rows = await this.prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
       include: { technician: { select: { id: true, name: true, color: true, active: true } } }
@@ -49,7 +63,7 @@ export class UsersService {
         update: {
           name: row.name,
           active: row.active,
-          color: this.parseColor(body.technicianColor)
+          color: this.resolveTechnicianColor(row.name, body.technicianColor)
         },
         create: {
           userId: row.id,
@@ -58,7 +72,7 @@ export class UsersService {
           baseAddress: 'Não informado',
           specialties: [],
           active: row.active,
-          color: this.parseColor(body.technicianColor)
+          color: this.resolveTechnicianColor(row.name, body.technicianColor)
         }
       });
     }
@@ -88,7 +102,7 @@ export class UsersService {
         update: {
           name: row.name,
           active: row.active,
-          color: this.parseColor(body.technicianColor)
+          color: this.resolveTechnicianColor(row.name, body.technicianColor)
         },
         create: {
           userId: row.id,
@@ -97,7 +111,7 @@ export class UsersService {
           baseAddress: 'Não informado',
           specialties: [],
           active: row.active,
-          color: this.parseColor(body.technicianColor)
+          color: this.resolveTechnicianColor(row.name, body.technicianColor)
         }
       });
     } else {
@@ -125,5 +139,30 @@ export class UsersService {
   private parseColor(input: unknown): string {
     const color = String(input ?? '#2563eb').trim();
     return /^#([0-9a-fA-F]{6})$/.test(color) ? color : '#2563eb';
+  }
+
+  private normalizeName(name: string): string {
+    return name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .replace(/\s+/g, ' ')
+      .toLowerCase();
+  }
+
+  private resolveTechnicianColor(name: string, input: unknown): string {
+    return TECHNICIAN_COLOR_BY_NAME[this.normalizeName(name)] ?? this.parseColor(input);
+  }
+
+  private async syncPresetTechnicianColors() {
+    const technicians = await this.prisma.technician.findMany({
+      select: { id: true, name: true, color: true }
+    });
+    const updates = technicians.flatMap((technician) => {
+      const expected = TECHNICIAN_COLOR_BY_NAME[this.normalizeName(technician.name)];
+      if (!expected || technician.color.toUpperCase() === expected.toUpperCase()) return [];
+      return [this.prisma.technician.update({ where: { id: technician.id }, data: { color: expected } })];
+    });
+    if (updates.length) await Promise.all(updates);
   }
 }

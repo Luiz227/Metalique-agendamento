@@ -1,4 +1,4 @@
-const CACHE_NAME = "agenda-metalique-v3";
+const CACHE_NAME = "agenda-metalique-v4";
 const APP_SHELL = ["/", "/login", "/manifest.webmanifest", "/images/logo-metalique-256.png", "/favicon.ico"];
 
 function isNavigationRequest(request) {

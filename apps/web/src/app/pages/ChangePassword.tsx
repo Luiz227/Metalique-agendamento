@@ -6,6 +6,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { ApiError, api, getToken, getUser, setSession, type ApiUser } from '../services/api';
+import { useForcedDarkTheme } from '../hooks/useForcedDarkTheme';
 
 function destinationByRole(role: ApiUser['role']) {
   if (role === 'TECHNICIAN') return '/technician';
@@ -14,6 +15,7 @@ function destinationByRole(role: ApiUser['role']) {
 }
 
 export default function ChangePassword() {
+  useForcedDarkTheme();
   const navigate = useNavigate();
   const user = getUser();
   const token = getToken();

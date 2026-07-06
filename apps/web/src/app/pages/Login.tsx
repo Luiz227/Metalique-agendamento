@@ -7,8 +7,10 @@ import { Checkbox } from '../components/ui/checkbox';
 import { CalendarCheck2, MapPin, Users } from 'lucide-react';
 import Logo from '../components/Logo';
 import { ApiError, api, setSession, type ApiUser } from '../services/api';
+import { useForcedDarkTheme } from '../hooks/useForcedDarkTheme';
 
 export default function Login() {
+  useForcedDarkTheme();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

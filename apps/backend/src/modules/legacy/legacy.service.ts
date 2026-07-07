@@ -3755,11 +3755,24 @@ export class LegacyService {
     const emailMatch = headerSegment.match(/E-?mail:\s*([^\s]+@[^\s]+)/i);
     if (emailMatch) fields.clientEmail = this.cleanExtractedValue(emailMatch[1]);
 
-    const vendorNameMatch = text.match(/(?:Vendedor(?:a)?|Consultor(?:a)?|Respons[aÃ¡]vel\s+comercial)\s*:\s*([^\n\r]+?)(?=\s+E-?mail(?:\s+do\s+vendedor)?\s*:|\n|$)/i);
-    if (vendorNameMatch) fields.vendorName = this.cleanExtractedValue(vendorNameMatch[1]);
+    // SIGE prints both values on the same line: "Vendedor(a): Nome Email: endereco".
+    const vendorLineMatch = text.match(
+      /(?:Vendedor(?:\(a\)|a)?|Consultor(?:\(a\)|a)?|Respons[^\s:]*\s+comercial)\s*:\s*([^\n\r]+?)\s+E-?mail\s*:\s*([^\s]+@[^\s]+)/i,
+    );
+    if (vendorLineMatch) {
+      fields.vendorName = this.cleanExtractedValue(vendorLineMatch[1]);
+      fields.vendorEmail = this.cleanExtractedValue(vendorLineMatch[2]);
+    } else {
+      const vendorNameMatch = text.match(
+        /(?:Vendedor(?:\(a\)|a)?|Consultor(?:\(a\)|a)?|Respons[^\s:]*\s+comercial)\s*:\s*([^\n\r]+?)(?=\s+E-?mail(?:\s+do\s+vendedor)?\s*:|\n|$)/i,
+      );
+      if (vendorNameMatch) fields.vendorName = this.cleanExtractedValue(vendorNameMatch[1]);
 
-    const vendorEmailMatch = text.match(/(?:E-?mail\s+(?:do\s+)?(?:vendedor|consultor|comercial)|E-?mail\s+comercial)\s*:\s*([^\s]+@[^\s]+)/i);
-    if (vendorEmailMatch) fields.vendorEmail = this.cleanExtractedValue(vendorEmailMatch[1]);
+      const vendorEmailMatch = text.match(
+        /(?:E-?mail\s+(?:do\s+)?(?:vendedor|consultor|comercial)|E-?mail\s+comercial)\s*:\s*([^\s]+@[^\s]+)/i,
+      );
+      if (vendorEmailMatch) fields.vendorEmail = this.cleanExtractedValue(vendorEmailMatch[1]);
+    }
 
     const addressMatch = headerSegment.match(/Endere[cç]o:\s*([\s\S]*?)(?=\s+E-?mail:|\nCidade:|\nBairro:|\nCEP:|$)/i);
     if (addressMatch) fields.clientAddress = this.cleanExtractedValue(addressMatch[1]);
@@ -4045,5 +4058,4 @@ const CHECKLIST_KEYS = [
 ] as const;
 
 type ChecklistKey = (typeof CHECKLIST_KEYS)[number];
-
 

@@ -1145,6 +1145,7 @@ export class LegacyService {
       appointment.serviceItemDescription || (kind === 'start'
         ? 'INSTALACAO (START / OU TREINAMENTO) TODAS AS MAQUINAS'
         : 'MANUTENCAO CORRETIVA LASER F OU DOBRADEIRA');
+    const serviceRows = this.parseServiceOrderRows(serviceCode, serviceDescription);
     const problemText = appointment.problemDescription?.trim() || appointment.serviceType || 'Nao informado';
     const placeholders: Record<string, string> = {
       Bairro: address.bairro,
@@ -1208,7 +1209,10 @@ export class LegacyService {
       const file = zip.file(name);
       if (!file) continue;
       const content = await file.async('string');
-      let updated = this.replaceDocxPlaceholders(content, placeholders, {
+      const expandedContent = name === 'word/document.xml'
+        ? this.expandDocxServiceRows(content, serviceRows, kind)
+        : content;
+      let updated = this.replaceDocxPlaceholders(expandedContent, placeholders, {
         notesText: report.summary?.trim() || 'Nao informado',
         acceptanceDate: report.finishedAt ? new Date(report.finishedAt) : new Date()
       });
@@ -2032,6 +2036,53 @@ export class LegacyService {
     const bytes = Buffer.from(base64 ?? '', 'base64');
     if (meta.includes('image/png')) return pdf.embedPng(bytes);
     return pdf.embedJpg(bytes);
+  }
+
+  private parseServiceOrderRows(codeValue: string, descriptionValue: string) {
+    const codes = [...new Set(
+      codeValue
+        .split(/\s*(?:\/|;|\r?\n)\s*/)
+        .map((code) => code.trim())
+        .filter(Boolean)
+    )];
+    const descriptionsByCode = new Map<string, string>();
+    const descriptionPattern = /(?:^|\s)(\d{4,})\s*-\s*([\s\S]*?)(?=\s+\d{4,}\s*-\s*|$)/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = descriptionPattern.exec(descriptionValue)) !== null) {
+      descriptionsByCode.set(match[1], match[2].replace(/\s+/g, ' ').trim());
+    }
+
+    const orderedCodes = codes.length ? codes : [...descriptionsByCode.keys()];
+    if (!orderedCodes.length) {
+      return [{ code: codeValue.trim(), description: descriptionValue.trim() }];
+    }
+
+    return orderedCodes.map((code, index) => ({
+      code,
+      description: descriptionsByCode.get(code)
+        || (orderedCodes.length === 1 ? descriptionValue.trim() : `Servico ${index + 1}`)
+    }));
+  }
+
+  private expandDocxServiceRows(
+    xml: string,
+    services: Array<{ code: string; description: string }>,
+    kind: 'start' | 'avulsa'
+  ) {
+    const codeKey = kind === 'start' ? 'CodigoServico' : 'CodigoProduto';
+    const descriptionKey = kind === 'start' ? 'DescricaoServico' : 'DescricaoProduto';
+    const rowPattern = /<w:tr\b[\s\S]*?<\/w:tr>/g;
+
+    return xml.replace(rowPattern, (row) => {
+      if (!row.includes(`##${codeKey}##`) || !row.includes(`##${descriptionKey}##`)) return row;
+      return services
+        .map((service) => this.replaceDocxPlaceholders(row, {
+          [codeKey]: service.code,
+          [descriptionKey]: service.description
+        }))
+        .join('');
+    });
   }
 
   private replaceDocxPlaceholders(
@@ -4058,4 +4109,3 @@ const CHECKLIST_KEYS = [
 ] as const;
 
 type ChecklistKey = (typeof CHECKLIST_KEYS)[number];
-

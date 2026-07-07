@@ -716,28 +716,26 @@ export class LegacyService {
           attachment.kind === ATTACHMENT_KIND.VEHICLE_PICKUP_VIDEO ||
           attachment.originalName.toLowerCase().startsWith('retirada-veiculo-')
       );
-      const hasReturnVideo = vehicleControl.attachments.some(
-        (attachment) =>
-          attachment.kind === ATTACHMENT_KIND.VEHICLE_RETURN_VIDEO ||
-          attachment.originalName.toLowerCase().startsWith('devolucao-veiculo-')
-      );
       if (!hasPickupVideo) throw new BadRequestException('Envie primeiro o video de retirada do veiculo.');
-      if (!hasReturnVideo) {
-        throw new BadRequestException('Envie o video de devolucao do veiculo antes de finalizar o relatorio.');
-      }
       const mileageControl = await this.prisma.appointment.findUnique({
         where: { id },
-        select: { vehiclePickupMileage: true, vehicleReturnMileage: true }
+        select: { vehiclePickupMileage: true }
       });
-      if (mileageControl?.vehiclePickupMileage == null || mileageControl.vehicleReturnMileage == null) {
-        throw new BadRequestException('Registre as quilometragens de retirada e devolucao do veiculo.');
+      if (mileageControl?.vehiclePickupMileage == null) {
+        throw new BadRequestException('Registre a quilometragem de retirada do veiculo.');
       }
     }
 
     await this.prisma.statusLog.create({
-      data: { appointmentId: id, status: 'COMPLETED_SUCCESS', observation: summary ?? 'Atendimento finalizado pelo técnico' }
+      data: {
+        appointmentId: id,
+        status: vehicleControl.transportMode === 'CAR' ? 'TECHNICAL_REPORT_SUBMITTED' : 'COMPLETED_SUCCESS',
+        observation: summary ?? 'Relatorio tecnico enviado'
+      }
     });
-    await this.prisma.appointment.update({ where: { id }, data: { status: AppointmentStatus.COMPLETED } });
+    if (vehicleControl.transportMode !== 'CAR') {
+      await this.prisma.appointment.update({ where: { id }, data: { status: AppointmentStatus.COMPLETED } });
+    }
 
     if (summary || report?.clientSignatureDataUrl || report?.technicianSignatureDataUrl) {
       const appointment = await this.prisma.appointment.findUnique({
@@ -2081,7 +2079,7 @@ export class LegacyService {
 
     const appointment = await this.prisma.appointment.findUnique({
       where: { id },
-      include: { vehicle: true }
+      include: { vehicle: true, attachments: { select: { kind: true } } }
     });
     if (!appointment || appointment.technicianId !== technician.id) {
       throw new NotFoundException('Agendamento nao encontrado para este tecnico.');
@@ -2094,6 +2092,12 @@ export class LegacyService {
     }
     if (stage === 'return' && appointment.vehiclePickupMileage == null) {
       throw new BadRequestException('Registre primeiro a quilometragem de retirada.');
+    }
+    if (
+      stage === 'return' &&
+      !appointment.attachments.some((attachment) => attachment.kind === ATTACHMENT_KIND.TECHNICAL_REPORT)
+    ) {
+      throw new BadRequestException('Envie primeiro o relatorio tecnico e as assinaturas.');
     }
     if (stage === 'return' && mileage < (appointment.vehiclePickupMileage ?? 0)) {
       throw new BadRequestException('A KM de devolucao nao pode ser menor que a KM de retirada.');
@@ -2908,6 +2912,17 @@ export class LegacyService {
     const mimeType = file?.mimetype ?? 'application/octet-stream';
     const size = file?.size ?? 0;
     const kind = this.normalizeAttachmentKind(type, mimeType);
+    if (appointment.transportMode === 'CAR' && kind === ATTACHMENT_KIND.VEHICLE_RETURN_VIDEO) {
+      const hasTechnicalReport = appointment.attachments.some(
+        (attachment) => attachment.kind === ATTACHMENT_KIND.TECHNICAL_REPORT
+      );
+      if (!hasTechnicalReport) {
+        throw new BadRequestException('Envie o relatorio tecnico e as assinaturas antes do video de devolucao.');
+      }
+      if (appointment.vehicleReturnMileage == null) {
+        throw new BadRequestException('Registre a quilometragem de devolucao antes de enviar o video.');
+      }
+    }
     if (
       appointment.transportMode === 'CAR' &&
       (kind === ATTACHMENT_KIND.TECHNICAL_MEDIA || kind === ATTACHMENT_KIND.TECHNICAL_DOCUMENT)
@@ -2982,6 +2997,25 @@ export class LegacyService {
         publicUrl: uploadResult.publicUrl
       }
     });
+    if (appointment.transportMode === 'CAR' && kind === ATTACHMENT_KIND.VEHICLE_RETURN_VIDEO) {
+      const reportLog = await this.prisma.statusLog.findFirst({
+        where: { appointmentId, status: 'TECHNICAL_REPORT_SUBMITTED' },
+        orderBy: { createdAt: 'desc' }
+      });
+      await this.prisma.$transaction([
+        this.prisma.statusLog.create({
+          data: {
+            appointmentId,
+            status: 'COMPLETED_SUCCESS',
+            observation: reportLog?.observation ?? 'Atendimento finalizado apos devolucao do veiculo'
+          }
+        }),
+        this.prisma.appointment.update({
+          where: { id: appointmentId },
+          data: { status: AppointmentStatus.COMPLETED }
+        })
+      ]);
+    }
     return {
       ok: true,
       type: type ?? 'midia-tecnica',

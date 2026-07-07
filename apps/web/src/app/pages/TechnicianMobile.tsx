@@ -230,14 +230,13 @@ export default function TechnicianMobile() {
     (item) => item.kind === 'VEHICLE_RETURN_VIDEO' || item.originalName.toLowerCase().startsWith('devolucao-veiculo-')
   );
   const missingVehiclePickupVideo = isCarTrip && !pickupVehicleVideo;
-  const missingVehicleReturnVideo = isCarTrip && !returnVehicleVideo;
   const canSendReport =
     Boolean(report.summary) &&
     Boolean(clientSignatureDataUrl) &&
     Boolean(technicianSignatureDataUrl) &&
     !savingReport &&
     !missingVehiclePickupVideo &&
-    !missingVehicleReturnVideo;
+    !currentGeneratedReport;
   const weeklyTrips = useMemo(
     () => appointments.filter((item) => isInCurrentWeek(item.date) && !wasFinishedByTechnician(item)),
     [appointments]
@@ -286,8 +285,8 @@ export default function TechnicianMobile() {
 
   async function saveReport() {
     if (!current) return;
-    if (isCarTrip && (!pickupVehicleVideo || !returnVehicleVideo)) {
-      setErrorMessage('Para viagens de carro, envie o video da retirada e o video da devolucao do veiculo antes de finalizar.');
+    if (isCarTrip && !pickupVehicleVideo) {
+      setErrorMessage('Para viagens de carro, envie primeiro o video e a quilometragem de retirada.');
       return;
     }
     setSavingReport(true);
@@ -320,7 +319,9 @@ export default function TechnicianMobile() {
       clearSignature('client');
       setTechnicianSignatureDataUrl(savedTechnicianSignature);
       setReport({ summary: '' });
-      setMessage('Relatório enviado com sucesso e atendimento finalizado.');
+      setMessage(isCarTrip
+        ? 'Relatorio e anexos enviados ao Drive. Finalize depois com a KM e o video de devolucao.'
+        : 'Relatorio enviado com sucesso e atendimento finalizado.');
       await load();
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : String(err || 'Erro ao enviar relatório/anexos'));
@@ -385,7 +386,7 @@ export default function TechnicianMobile() {
       await uploadFileNow(file, type, buildDefaultAttachmentName(file.name, category));
       setMessage(stage === 'pickup'
         ? 'Video de retirada enviado. O relatorio tecnico foi liberado.'
-        : 'Video de devolucao enviado com sucesso.');
+        : 'Video de devolucao enviado. Atendimento finalizado com sucesso.');
       await load(true);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Nao foi possivel enviar o video do veiculo.');
@@ -853,7 +854,7 @@ export default function TechnicianMobile() {
                       }}
                     />
                   </label>
-                  {pickupVehicleVideo && (
+                  {pickupVehicleVideo && currentGeneratedReport && (
                   <div className="space-y-3">
                   <label className="block space-y-2">
                     <span className="text-sm font-medium">Quilometragem na devolucao</span>
@@ -908,6 +909,11 @@ export default function TechnicianMobile() {
                     />
                   </label>
                   </div>
+                  )}
+                  {pickupVehicleVideo && !currentGeneratedReport && (
+                    <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-100">
+                      Envie primeiro o relatorio tecnico, os anexos e as assinaturas. Depois a devolucao do veiculo sera liberada.
+                    </div>
                   )}
                 </div>
               </div>
@@ -1035,9 +1041,17 @@ export default function TechnicianMobile() {
         )}
 
         {activeSection === 'DETAILS' && (!isCarTrip || Boolean(pickupVehicleVideo)) && (
-        <Button className="h-12 w-full rounded-xl bg-[#c8142f] hover:bg-[#a81027]" disabled={!canSendReport} onClick={saveReport}>
-          {savingReport ? 'Enviando...' : `Enviar relatório técnico${pendingAttachments.length ? ` + ${pendingAttachments.length} anexo(s)` : ''}`}
-        </Button>
+        currentGeneratedReport ? (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center text-sm text-emerald-300">
+            {isCarTrip
+              ? 'Relatorio tecnico enviado ao Drive. O atendimento permanece aberto ate a devolucao do veiculo.'
+              : 'Relatorio tecnico enviado ao Drive e atendimento finalizado.'}
+          </div>
+        ) : (
+          <Button className="h-12 w-full rounded-xl bg-[#c8142f] hover:bg-[#a81027]" disabled={!canSendReport} onClick={saveReport}>
+            {savingReport ? 'Enviando...' : `Enviar relatório técnico${pendingAttachments.length ? ` + ${pendingAttachments.length} anexo(s)` : ''}`}
+          </Button>
+        )
         )}
 
         {message && <p className="text-center text-sm text-green-600 dark:text-green-400">{message}</p>}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Edit, Shield, Trash2, UserPlus, Users as UsersIcon, X } from 'lucide-react';
+import { Edit, Eye, EyeOff, Shield, Trash2, UserPlus, Users as UsersIcon, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -70,6 +70,7 @@ export default function Users() {
   const [error, setError] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<UserForm>(emptyForm);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function load() {
     setUsers(await api<UserWithRelations[]>('/users'));
@@ -82,11 +83,13 @@ export default function Users() {
   function startCreate() {
     setEditingId(null);
     setForm(emptyForm);
+    setShowPassword(false);
     setError('');
   }
 
   function startEdit(user: UserWithRelations) {
     setEditingId(user.id);
+    setShowPassword(false);
     setForm({
       name: user.name,
       email: user.email,
@@ -181,7 +184,12 @@ export default function Users() {
               className="bg-zinc-800/50 border-zinc-700"
             />
             <Input required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
-            <Input required={!editingId} placeholder={editingId ? 'Nova senha, se quiser alterar' : 'Senha inicial'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+            <div className="relative">
+              <Input required={!editingId} type={showPassword ? 'text' : 'password'} placeholder={editingId ? 'Nova senha, se quiser alterar' : 'Senha inicial'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="bg-zinc-800/50 border-zinc-700 pr-11" />
+              <button type="button" onClick={() => setShowPassword((current) => !current)} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-zinc-400 hover:text-white" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}>
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
             <Select value={form.role} onValueChange={(role) => setForm({ ...form, role: role as SelectableRole })}>
               <SelectTrigger className="bg-zinc-800/50 border-zinc-700">
                 <SelectValue />

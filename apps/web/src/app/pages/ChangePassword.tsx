@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { KeyRound } from 'lucide-react';
+import { Eye, EyeOff, KeyRound } from 'lucide-react';
 import Logo from '../components/Logo';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -21,6 +21,8 @@ export default function ChangePassword() {
   const token = getToken();
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -67,12 +69,22 @@ export default function ChangePassword() {
         <form className="mt-7 space-y-5" onSubmit={submit}>
           <div className="space-y-2">
             <Label htmlFor="new-password" className="text-zinc-300">Nova senha</Label>
-            <Input id="new-password" type="password" minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} className="border-zinc-700 bg-zinc-800/50 text-white" required />
+            <div className="relative">
+              <Input id="new-password" type={showPassword ? 'text' : 'password'} minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} className="border-zinc-700 bg-zinc-800/50 pr-11 text-white" required />
+              <button type="button" onClick={() => setShowPassword((current) => !current)} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-zinc-400 hover:text-white" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}>
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
             <p className="text-xs text-zinc-500">Use pelo menos 8 caracteres.</p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirm-password" className="text-zinc-300">Confirmar nova senha</Label>
-            <Input id="confirm-password" type="password" minLength={8} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} className="border-zinc-700 bg-zinc-800/50 text-white" required />
+            <div className="relative">
+              <Input id="confirm-password" type={showConfirmation ? 'text' : 'password'} minLength={8} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} className="border-zinc-700 bg-zinc-800/50 pr-11 text-white" required />
+              <button type="button" onClick={() => setShowConfirmation((current) => !current)} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-zinc-400 hover:text-white" aria-label={showConfirmation ? 'Ocultar senha' : 'Mostrar senha'}>
+                {showConfirmation ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
           </div>
           {error && <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</p>}
           <Button className="w-full bg-red-600 hover:bg-red-700" size="lg" disabled={saving}>

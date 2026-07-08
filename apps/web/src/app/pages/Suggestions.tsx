@@ -37,18 +37,18 @@ function buildSuggestionReason(a: Appointment, b: Appointment) {
   const sameTechnician = Boolean(techA && techB && techA === techB);
 
   if (sameDay && !sameTechnician) {
-    return 'Atendimentos proximos no mesmo dia: avaliar dividir o mesmo carro ou concentrar a rota com um tecnico.';
+    return 'Atendimentos próximos no mesmo dia: avaliar dividir o mesmo carro ou concentrar a rota com um técnico.';
   }
 
   if (!sameDay && !sameTechnician) {
-    return 'Atendimentos proximos em dias diferentes: avaliar reagendar ou enviar um tecnico para atender os dois clientes.';
+    return 'Atendimentos próximos em dias diferentes: avaliar reagendar ou enviar um técnico para atender os dois clientes.';
   }
 
   if (!sameDay && sameTechnician) {
-    return 'Mesmo tecnico com clientes proximos em dias diferentes: avaliar juntar as visitas na mesma viagem.';
+    return 'Mesmo técnico com clientes próximos em dias diferentes: avaliar juntar as visitas na mesma viagem.';
   }
 
-  return 'Atendimentos proximos: avaliar a melhor sequencia para reduzir deslocamento.';
+  return 'Atendimentos próximos: avaliar a melhor sequência para reduzir deslocamento.';
 }
 
 function buildFallbackSuggestions(appointments: Appointment[]) {
@@ -109,7 +109,7 @@ export default function Suggestions() {
         setAppointments(loadedAppointments.filter((appointment) => appointment.status !== 'CRITICAL'));
         setError('');
       })
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Erro ao carregar sugestoes'));
+      .catch((err) => setError(err instanceof ApiError ? err.message : 'Erro ao carregar sugestões'));
   };
 
   useEffect(loadSuggestions, []);
@@ -149,8 +149,8 @@ export default function Suggestions() {
         <div className="flex items-center gap-3">
           <Sparkles className="h-7 w-7 text-purple-400" />
           <div>
-            <h1 className="text-2xl font-bold text-white">Sugestoes Inteligentes</h1>
-            <p className="text-zinc-400">A tela mostra as sugestoes salvas na API e tambem as oportunidades detectadas no mapa.</p>
+            <h1 className="text-2xl font-bold text-white">Sugestões Inteligentes</h1>
+            <p className="text-zinc-400">A tela mostra as sugestões salvas na API e também as oportunidades detectadas no mapa.</p>
           </div>
         </div>
       </div>
@@ -166,7 +166,7 @@ export default function Suggestions() {
               </div>
               <div>
                 <div className="text-3xl font-bold text-white">{mergedSuggestions.length}</div>
-                <div className="text-sm text-zinc-300">Sugestoes Disponiveis</div>
+                <div className="text-sm text-zinc-300">Sugestões Disponíveis</div>
               </div>
             </div>
           </CardContent>
@@ -205,7 +205,7 @@ export default function Suggestions() {
         {mergedSuggestions.length === 0 && (
           <Card className="bg-zinc-900/50 border-zinc-800">
             <CardContent className="p-8 text-center text-sm text-zinc-300">
-              Nenhuma sugestao encontrada. Cadastre atendimentos proximos para o sistema calcular oportunidades.
+              Nenhuma sugestão encontrada. Cadastre atendimentos próximos para o sistema calcular oportunidades.
             </CardContent>
           </Card>
         )}
@@ -242,7 +242,7 @@ export default function Suggestions() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <Users className="h-4 w-4 text-zinc-400 flex-shrink-0" />
-                          <span className="text-sm font-medium text-white truncate">{appointment.technician?.name ?? 'Sem tecnico'}</span>
+                          <span className="text-sm font-medium text-white truncate">{appointment.technician?.name ?? 'Sem técnico'}</span>
                         </div>
                         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400">
                           <span>{appointment.client?.name ?? 'Cliente'}</span>
@@ -282,7 +282,7 @@ export default function Suggestions() {
                     <>
                       <Button className="flex-1 bg-purple-500 hover:bg-purple-600" onClick={() => updateSuggestion(suggestion.id, 'ACCEPTED')}>
                         <Check className="h-4 w-4 mr-2" />
-                        Aplicar Sugestao
+                        Aplicar Sugestão
                       </Button>
                       <Button variant="outline" className="border-zinc-700 text-red-400 hover:bg-red-500/10" onClick={() => updateSuggestion(suggestion.id, 'IGNORED')}>
                         <X className="h-4 w-4" />
@@ -290,7 +290,7 @@ export default function Suggestions() {
                     </>
                   ) : (
                     <div className="text-xs text-zinc-400">
-                      Esta sugestao aparece no mapa e agora esta visivel aqui tambem, mesmo antes de ser persistida pela API.
+                      Está sugestão aparece no mapa e agora está visivel aqui também, mesmo antes de ser persistida pela API.
                     </div>
                   )}
                 </div>

@@ -15,7 +15,7 @@ type PendingAttachment = {
   file: File;
   displayName: string;
   type: 'midia-tecnica' | 'documento-tecnico' | 'video-retirada-veiculo' | 'video-devolucao-veiculo';
-  category: 'general-media' | 'general-document' | 'car-pickup-video' | 'car-return-video';
+  category: 'general-media' | 'general-document' | 'car-pickup-vídeo' | 'car-return-vídeo';
   previewUrl?: string;
 };
 
@@ -31,7 +31,7 @@ async function compressImageForUpload(file: File) {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('Nao foi possivel ler a imagem selecionada.'));
+      img.onerror = () => reject(new Error('Não foi possível ler a imagem selecionada.'));
       img.src = imageUrl;
     });
 
@@ -80,7 +80,7 @@ async function showBrowserNotification(title: string, options?: NotificationOpti
       await registration.showNotification(title, options);
     }
   } catch {
-    // Ignora falhas de notificacao para nao quebrar a tela do tecnico.
+    // Ignora falhas de notificação para não quebrar a tela do técnico.
   }
 }
 
@@ -88,8 +88,8 @@ function buildDefaultAttachmentName(
   fileName: string,
   category: PendingAttachment['category']
 ) {
-  if (category === 'car-pickup-video') return `retirada-veiculo-${fileName}`;
-  if (category === 'car-return-video') return `devolucao-veiculo-${fileName}`;
+  if (category === 'car-pickup-vídeo') return `retirada-veiculo-${fileName}`;
+  if (category === 'car-return-vídeo') return `devolucao-veiculo-${fileName}`;
   return fileName;
 }
 
@@ -154,10 +154,10 @@ export default function TechnicianMobile() {
     } catch (err) {
       if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
         clearSession();
-        setAppointmentsError('Sessao expirada. Saia e entre novamente para carregar seus atendimentos.');
+        setAppointmentsError('Sessão expirada. Saia e entre novamente para carregar seus atendimentos.');
         return;
       }
-      setAppointmentsError(err instanceof Error ? err.message : 'Nao foi possivel carregar os atendimentos.');
+      setAppointmentsError(err instanceof Error ? err.message : 'Não foi possível carregar os atendimentos.');
     } finally {
       setLoadingAppointments(false);
     }
@@ -221,7 +221,7 @@ export default function TechnicianMobile() {
   const upcoming = appointments.filter((item) => item.id !== current?.id && !wasFinishedByTechnician(item));
   const currentClientName = current?.client?.name ?? 'Cliente';
   const currentClientPhone = current?.client?.phone ?? '';
-  const currentAddress = current?.fullAddress ?? 'Endereco nao informado';
+  const currentAddress = current?.fullAddress ?? 'Endereço não informado';
   const isCarTrip = current?.transportMode === 'CAR';
   const pickupVehicleVideo = (current?.attachments ?? []).find(
     (item) => item.kind === 'VEHICLE_PICKUP_VIDEO' || item.originalName.toLowerCase().startsWith('retirada-veiculo-')
@@ -286,7 +286,7 @@ export default function TechnicianMobile() {
   async function saveReport() {
     if (!current) return;
     if (isCarTrip && !pickupVehicleVideo) {
-      setErrorMessage('Para viagens de carro, envie primeiro o video e a quilometragem de retirada.');
+      setErrorMessage('Para viagens de carro, envie primeiro o vídeo e a quilometragem de retirada.');
       return;
     }
     setSavingReport(true);
@@ -320,8 +320,8 @@ export default function TechnicianMobile() {
       setTechnicianSignatureDataUrl(savedTechnicianSignature);
       setReport({ summary: '' });
       setMessage(isCarTrip
-        ? 'Relatorio e anexos enviados ao Drive. Finalize depois com a KM e o video de devolucao.'
-        : 'Relatorio enviado com sucesso e atendimento finalizado.');
+        ? 'Relatório e anexos enviados ao Drive. Finalize depois com a KM e o vídeo de devolução.'
+        : 'Relatório enviado com sucesso e atendimento finalizado.');
       await load();
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : String(err || 'Erro ao enviar relatório/anexos'));
@@ -356,11 +356,11 @@ export default function TechnicianMobile() {
   }
 
   async function saveVehicleMileage(stage: 'pickup' | 'return') {
-    if (!current) throw new Error('Agendamento nao selecionado.');
+    if (!current) throw new Error('Agendamento não selecionado.');
     const mileageText = stage === 'pickup' ? pickupMileage : returnMileage;
     const mileage = Number(mileageText);
     if (!Number.isInteger(mileage) || mileage < 0) {
-      throw new Error(`Informe a quilometragem de ${stage === 'pickup' ? 'retirada' : 'devolucao'}.`);
+      throw new Error(`Informe a quilometragem de ${stage === 'pickup' ? 'retirada' : 'devolução'}.`);
     }
     await api(`/technician/appointments/${current.id}/vehicle-mileage`, {
       method: 'POST',
@@ -373,11 +373,11 @@ export default function TechnicianMobile() {
     const mileageText = stage === 'pickup' ? pickupMileage : returnMileage;
     const mileage = Number(mileageText);
     if (!Number.isInteger(mileage) || mileage < 0) {
-      setErrorMessage(`Informe a quilometragem de ${stage === 'pickup' ? 'retirada' : 'devolucao'} antes de enviar o video.`);
+      setErrorMessage(`Informe a quilometragem de ${stage === 'pickup' ? 'retirada' : 'devolução'} antes de enviar o vídeo.`);
       return;
     }
     const type = stage === 'pickup' ? 'video-retirada-veiculo' : 'video-devolucao-veiculo';
-    const category = stage === 'pickup' ? 'car-pickup-video' : 'car-return-video';
+    const category = stage === 'pickup' ? 'car-pickup-vídeo' : 'car-return-vídeo';
     setUploadingVehicleStage(stage);
     setMessage('');
     setErrorMessage('');
@@ -385,11 +385,11 @@ export default function TechnicianMobile() {
       await saveVehicleMileage(stage);
       await uploadFileNow(file, type, buildDefaultAttachmentName(file.name, category));
       setMessage(stage === 'pickup'
-        ? 'Video de retirada enviado. O relatorio tecnico foi liberado.'
-        : 'Video de devolucao enviado. Atendimento finalizado com sucesso.');
+        ? 'Vídeo de retirada enviado. O relatório técnico foi liberado.'
+        : 'Vídeo de devolução enviado. Atendimento finalizado com sucesso.');
       await load(true);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Nao foi possivel enviar o video do veiculo.');
+      setErrorMessage(err instanceof Error ? err.message : 'Não foi possível enviar o vídeo do veículo.');
     } finally {
       setUploadingVehicleStage(null);
     }
@@ -414,7 +414,7 @@ export default function TechnicianMobile() {
       previewUrl
     };
     setPendingAttachments((prev) => {
-      if (category === 'car-pickup-video' || category === 'car-return-video') {
+      if (category === 'car-pickup-vídeo' || category === 'car-return-vídeo') {
         const previous = prev.find((entry) => entry.category === category);
         if (previous?.previewUrl) URL.revokeObjectURL(previous.previewUrl);
         return [...prev.filter((entry) => entry.category !== category), item];
@@ -524,13 +524,13 @@ export default function TechnicianMobile() {
           <div className="rounded-2xl bg-card p-5">
             <h1 className="text-xl font-bold">Meus Atendimentos</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              {user?.name ? `Usuario logado: ${user.name}` : 'Usuario tecnico'}
+              {user?.name ? `Usuário logado: ${user.name}` : 'Usuário técnico'}
             </p>
           </div>
 
           {loadingAppointments ? (
             <div className="rounded-2xl border bg-card p-5 text-muted-foreground">
-              Carregando atendimentos do tecnico...
+              Carregando atendimentos do técnico...
             </div>
           ) : appointmentsError ? (
             <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-5">
@@ -543,9 +543,9 @@ export default function TechnicianMobile() {
             </div>
           ) : (
             <div className="rounded-2xl border bg-card p-5 text-muted-foreground">
-              <p>Nenhum atendimento encontrado para este tecnico.</p>
+              <p>Nenhum atendimento encontrado para este técnico.</p>
               <p className="mt-2 text-sm">
-                Se existir agendamento confirmado, verifique se o usuario tecnico esta vinculado ao cadastro do tecnico correto.
+                Se existir agendamento confirmado, verifique se o usuário técnico está vinculado ao cadastro do técnico correto.
               </p>
               <Button className="mt-4 w-full" onClick={() => load()}>
                 <RefreshCw className="mr-2 h-4 w-4" />
@@ -564,8 +564,8 @@ export default function TechnicianMobile() {
     <div className="min-h-screen bg-background px-3 py-4 sm:px-4 sm:py-6">
       <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
         <div className="rounded-2xl bg-gradient-to-r from-[#c8142f] to-[#e3273e] px-4 py-5 sm:px-6">
-          <h1 className="text-xl font-bold text-white sm:text-2xl">Ola, {user?.name ?? current.technician?.name ?? 'Tecnico'}</h1>
-          <p className="mt-1 text-sm text-red-100 sm:text-base">Voce tem {appointments.length} atendimento(s) vinculado(s)</p>
+          <h1 className="text-xl font-bold text-white sm:text-2xl">Olá, {user?.name ?? current.technician?.name ?? 'Técnico'}</h1>
+          <p className="mt-1 text-sm text-red-100 sm:text-base">Você tem {appointments.length} atendimento(s) vinculado(s)</p>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
@@ -638,7 +638,7 @@ export default function TechnicianMobile() {
         <Card className="rounded-2xl">
           <CardHeader>
             <div className="flex items-center justify-between gap-2">
-              <CardTitle className="text-base sm:text-lg">Proximo Atendimento</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Próximo Atendimento</CardTitle>
               <Badge className={tone.color}>{statusLabel(current.status)}</Badge>
             </div>
           </CardHeader>
@@ -647,7 +647,7 @@ export default function TechnicianMobile() {
               <h3 className="text-lg font-bold sm:text-xl break-words">{currentClientName}</h3>
               <div className="mt-3 space-y-2 text-sm">
                 <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="h-4 w-4 shrink-0" /><span>{formatDate(current.date)}</span></div>
-                <div className="flex items-center gap-2 text-muted-foreground"><Clock className="h-4 w-4 shrink-0" /><span>{formatTime(current.startTime)} ate {formatTime(current.endTime)}</span></div>
+                <div className="flex items-center gap-2 text-muted-foreground"><Clock className="h-4 w-4 shrink-0" /><span>{formatTime(current.startTime)} até {formatTime(current.endTime)}</span></div>
                 <div className="flex items-start gap-2 text-muted-foreground"><MapPin className="mt-0.5 h-4 w-4 shrink-0" /><span className="break-words">{currentAddress}</span></div>
                 {currentClientPhone && <div className="flex items-center gap-2 text-muted-foreground"><Phone className="h-4 w-4 shrink-0" /><span>{currentClientPhone}</span></div>}
               </div>
@@ -657,14 +657,14 @@ export default function TechnicianMobile() {
 
             {current.serviceType && (
               <div className="rounded-xl border bg-card p-4">
-                <p className="text-xs text-muted-foreground">Nome do servico</p>
+                <p className="text-xs text-muted-foreground">Nome do serviço</p>
                 <p className="mt-1 text-sm sm:text-base break-words">{current.serviceType}</p>
               </div>
             )}
 
             {current.problemDescription && (
               <div className="rounded-xl border bg-card p-4">
-                <p className="text-xs text-muted-foreground">Descricao do servico</p>
+                <p className="text-xs text-muted-foreground">Descrição do serviço</p>
                 <p className="mt-1 text-sm sm:text-base break-words">{current.problemDescription}</p>
               </div>
             )}
@@ -681,17 +681,17 @@ export default function TechnicianMobile() {
                 <div className="flex items-start gap-3">
                   <Car className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-amber-100">Veiculo da viagem</p>
+                    <p className="text-sm font-semibold text-amber-100">Veículo da viagem</p>
                     {current.vehicle ? (
                       <div className="mt-2 space-y-1 text-sm text-amber-50/90">
                         <p className="font-medium">{current.vehicle.name} - {current.vehicle.plate}</p>
-                        <p>Ano: {current.vehicle.year ?? 'Nao informado'} | KM: {new Intl.NumberFormat('pt-BR').format(current.vehicle.mileage ?? 0)}</p>
+                        <p>Ano: {current.vehicle.year ?? 'Não informado'} | KM: {new Intl.NumberFormat('pt-BR').format(current.vehicle.mileage ?? 0)}</p>
                       </div>
                     ) : (
-                      <p className="mt-2 text-sm text-amber-50/90">Veiculo ainda nao informado pela logistica.</p>
+                      <p className="mt-2 text-sm text-amber-50/90">Veículo ainda não informado pela logística.</p>
                     )}
                     <p className="mt-2 text-xs text-amber-100/80">
-                      Grave o video da retirada antes de sair e o video da devolucao ao retornar com o veiculo.
+                      Grave o vídeo da retirada antes de sair e o vídeo da devolução ao retornar com o veículo.
                     </p>
                   </div>
                 </div>
@@ -703,12 +703,12 @@ export default function TechnicianMobile() {
                 <div className="flex items-start gap-3">
                   <Plane className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />
                   <div className="min-w-0 space-y-1 text-sm text-sky-50/90">
-                    <p className="font-semibold text-sky-100">Informacoes da viagem aerea</p>
-                    <p><strong>Aeroporto do voo de ida:</strong> {current.flightOutboundAirport || current.flightAirport || 'Nao informado'}</p>
-                    <p><strong>Aeroporto do voo de volta:</strong> {current.flightReturnAirport || current.flightAirport || 'Nao informado'}</p>
-                    <p><strong>Voo de ida:</strong> {current.flightDepartureAt ? new Date(current.flightDepartureAt).toLocaleString('pt-BR') : 'Nao informado'}</p>
-                    <p><strong>Voo de volta:</strong> {current.flightReturnAt ? new Date(current.flightReturnAt).toLocaleString('pt-BR') : 'Nao informado'}</p>
-                    <p className="pt-1 text-xs text-sky-100/80">Viagens aereas nao exigem videos de retirada ou devolucao de veiculo.</p>
+                    <p className="font-semibold text-sky-100">Informações da viagem aérea</p>
+                    <p><strong>Aeroporto do voo de ida:</strong> {current.flightOutboundAirport || current.flightAirport || 'Não informado'}</p>
+                    <p><strong>Aeroporto do voo de volta:</strong> {current.flightReturnAirport || current.flightAirport || 'Não informado'}</p>
+                    <p><strong>Voo de ida:</strong> {current.flightDepartureAt ? new Date(current.flightDepartureAt).toLocaleString('pt-BR') : 'Não informado'}</p>
+                    <p><strong>Voo de volta:</strong> {current.flightReturnAt ? new Date(current.flightReturnAt).toLocaleString('pt-BR') : 'Não informado'}</p>
+                    <p className="pt-1 text-xs text-sky-100/80">Viagens aéreas não exigem vídeos de retirada ou devolução de veículo.</p>
                   </div>
                 </div>
               </div>
@@ -734,7 +734,7 @@ export default function TechnicianMobile() {
         <Card className="rounded-2xl">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base sm:text-lg">Calendario do tecnico</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Calendário do técnico</CardTitle>
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" onClick={() => setMonthCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))}>{"<"}</Button>
                 <span className="text-sm">
@@ -766,24 +766,24 @@ export default function TechnicianMobile() {
 
         {activeSection === 'DETAILS' && (!isCarTrip || Boolean(pickupVehicleVideo)) && (
         <Card className="rounded-2xl">
-          <CardHeader><CardTitle className="text-base sm:text-lg">Relatorio Tecnico</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base sm:text-lg">Relatório Técnico</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
               <p className="text-xs font-medium text-blue-700 dark:text-blue-200">OS oficial do atendimento</p>
               <p className="mt-2 text-[11px] text-muted-foreground">
-                O sistema usa o template oficial interno e preenche a OS final com os dados do agendamento, relato tecnico e assinaturas.
+                O sistema usa o template oficial interno e preenche a OS final com os dados do agendamento, relato técnico e assinaturas.
               </p>
               {currentGeneratedReport?.publicUrl && (
                 <div className="mt-2">
                   <a href={resolveApiAssetUrl(currentGeneratedReport.publicUrl) ?? undefined} target="_blank" rel="noreferrer">
-                    <Button type="button" variant="outline" className="w-full">Ver ultima OS preenchida</Button>
+                    <Button type="button" variant="outline" className="w-full">Ver última OS preenchida</Button>
                   </a>
                 </div>
               )}
             </div>
             <Textarea
               className="min-h-36 text-base"
-              placeholder="Consideracoes do tecnico"
+              placeholder="Considerações do técnico"
               value={report.summary}
               onChange={(e) => setReport({ summary: e.target.value })}
             />
@@ -793,13 +793,13 @@ export default function TechnicianMobile() {
 
         {activeSection === 'DETAILS' && (
         <Card className="rounded-2xl">
-          <CardHeader><CardTitle className="text-base sm:text-lg">Fotos, Videos e Documentos</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base sm:text-lg">Fotos, Vídeos e Documentos</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {isCarTrip && (
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
-                <p className="text-sm font-semibold text-amber-300">Controle obrigatorio do veiculo</p>
+                <p className="text-sm font-semibold text-amber-300">Controle obrigatorio do veículo</p>
                 <p className="mt-1 text-xs text-amber-100/90">
-                  Primeiro envie o video da retirada. Depois o sistema libera as consideracoes, os demais anexos e as assinaturas.
+                  Primeiro envie o vídeo da retirada. Depois o sistema libera as considerações, os demais anexos e as assinaturas.
                 </p>
                 <div className="mt-3 grid grid-cols-1 gap-3">
                   <label className="space-y-2">
@@ -823,7 +823,7 @@ export default function TechnicianMobile() {
                         setMessage('Quilometragem de retirada salva.');
                         await load(true);
                       } catch (err) {
-                        setErrorMessage(err instanceof Error ? err.message : 'Nao foi possivel salvar a quilometragem.');
+                        setErrorMessage(err instanceof Error ? err.message : 'Não foi possível salvar a quilometragem.');
                       }
                     }}
                   >
@@ -831,9 +831,9 @@ export default function TechnicianMobile() {
                   </Button>
                   <label className="flex min-h-20 cursor-pointer items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-background/70 px-4 py-3 text-left">
                     <div>
-                      <p className="text-sm font-medium">Video de retirada do veiculo</p>
+                      <p className="text-sm font-medium">Vídeo de retirada do veículo</p>
                       <p className="text-xs text-muted-foreground">
-                        {pickupVehicleVideo ? pickupVehicleVideo.originalName : 'Ainda nao enviado'}
+                        {pickupVehicleVideo ? pickupVehicleVideo.originalName : 'Ainda não enviado'}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -857,7 +857,7 @@ export default function TechnicianMobile() {
                   {pickupVehicleVideo && currentGeneratedReport && (
                   <div className="space-y-3">
                   <label className="block space-y-2">
-                    <span className="text-sm font-medium">Quilometragem na devolucao</span>
+                    <span className="text-sm font-medium">Quilometragem na devolução</span>
                     <Input
                       type="number"
                       min={Number(pickupMileage || 0)}
@@ -874,25 +874,25 @@ export default function TechnicianMobile() {
                       setErrorMessage('');
                       try {
                         await saveVehicleMileage('return');
-                        setMessage('Quilometragem de devolucao salva e veiculo atualizado.');
+                        setMessage('Quilometragem de devolução salva e veículo atualizado.');
                         await load(true);
                       } catch (err) {
-                        setErrorMessage(err instanceof Error ? err.message : 'Nao foi possivel salvar a quilometragem.');
+                        setErrorMessage(err instanceof Error ? err.message : 'Não foi possível salvar a quilometragem.');
                       }
                     }}
                   >
-                    {current.vehicleReturnMileage != null ? 'Atualizar KM de devolucao' : 'Salvar KM de devolucao'}
+                    {current.vehicleReturnMileage != null ? 'Atualizar KM de devolução' : 'Salvar KM de devolução'}
                   </Button>
                   <label className="flex min-h-20 cursor-pointer items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-background/70 px-4 py-3 text-left">
                     <div>
-                      <p className="text-sm font-medium">Video de devolucao do veiculo</p>
+                      <p className="text-sm font-medium">Vídeo de devolução do veículo</p>
                       <p className="text-xs text-muted-foreground">
-                        {returnVehicleVideo ? returnVehicleVideo.originalName : 'Enviar ao devolver o veiculo'}
+                        {returnVehicleVideo ? returnVehicleVideo.originalName : 'Enviar ao devolver o veículo'}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant={returnVehicleVideo ? 'default' : 'secondary'}>
-                        {returnVehicleVideo ? 'Enviado' : uploadingVehicleStage === 'return' ? 'Enviando' : 'Obrigatorio ao finalizar'}
+                        {returnVehicleVideo ? 'Enviado' : uploadingVehicleStage === 'return' ? 'Enviando' : 'Obrigatório ao finalizar'}
                       </Badge>
                       <Video className="h-5 w-5" />
                     </div>
@@ -912,7 +912,7 @@ export default function TechnicianMobile() {
                   )}
                   {pickupVehicleVideo && !currentGeneratedReport && (
                     <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-100">
-                      Envie primeiro o relatorio tecnico, os anexos e as assinaturas. Depois a devolucao do veiculo sera liberada.
+                      Envie primeiro o relatório técnico, os anexos e as assinaturas. Depois a devolução do veículo será liberada.
                     </div>
                   )}
                 </div>
@@ -920,7 +920,7 @@ export default function TechnicianMobile() {
             )}
             {isCarTrip && !pickupVehicleVideo && (
               <div className="rounded-xl border border-dashed border-amber-500/40 p-4 text-center text-sm text-muted-foreground">
-                As consideracoes tecnicas, os outros arquivos e as assinaturas serao liberados depois do envio do video de retirada.
+                As considerações técnicas, os outros arquivos e as assinaturas serão liberados depois do envio do vídeo de retirada.
               </div>
             )}
             {(!isCarTrip || Boolean(pickupVehicleVideo)) && (
@@ -928,12 +928,12 @@ export default function TechnicianMobile() {
             <div className="grid grid-cols-2 gap-3">
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
               <Camera className="h-5 w-5" />
-              <span className="text-xs">Camera</span>
+              <span className="text-xs">Câmera</span>
               <Input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addAttachment(e.target.files?.[0], 'midia-tecnica'); e.currentTarget.value = ''; }} />
             </label>
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
               <Video className="h-5 w-5" />
-              <span className="text-xs">Video</span>
+              <span className="text-xs">Vídeo</span>
               <Input type="file" accept="video/*" capture="environment" className="hidden" onChange={(e) => { addAttachment(e.target.files?.[0], 'midia-tecnica'); e.currentTarget.value = ''; }} />
             </label>
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
@@ -964,13 +964,13 @@ export default function TechnicianMobile() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-medium">{item.file.name}</p>
                       <p className="text-[11px] text-muted-foreground">
-                        {item.category === 'car-pickup-video'
-                          ? 'Video de retirada do veiculo'
-                          : item.category === 'car-return-video'
-                            ? 'Video de devolucao do veiculo'
+                        {item.category === 'car-pickup-vídeo'
+                          ? 'Vídeo de retirada do veículo'
+                          : item.category === 'car-return-vídeo'
+                            ? 'Vídeo de devolução do veículo'
                             : item.type === 'documento-tecnico'
-                              ? 'Documento tecnico'
-                              : 'Midia tecnica'}
+                              ? 'Documento técnico'
+                              : 'Mídia tecnica'}
                       </p>
                       <p className="text-[11px] text-muted-foreground">{Math.max(1, Math.round(item.file.size / 1024))} KB</p>
                     </div>
@@ -989,7 +989,7 @@ export default function TechnicianMobile() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Fotos, videos e documentos enviados aqui tambem seguem para a pasta do atendimento no Google Drive.
+              Fotos, vídeos e documentos enviados aqui também seguem para a pasta do atendimento no Google Drive.
             </p>
             </>
             )}
@@ -1003,7 +1003,7 @@ export default function TechnicianMobile() {
           <CardHeader><CardTitle className="text-base sm:text-lg">Assinaturas</CardTitle></CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-3">
-              <p className="text-sm font-medium">Assinatura do tecnico</p>
+              <p className="text-sm font-medium">Assinatura do técnico</p>
               <canvas
                 ref={technicianSignatureCanvasRef}
                 width={640}
@@ -1016,7 +1016,7 @@ export default function TechnicianMobile() {
                 onPointerLeave={() => stopSignature('technician')}
               />
               <Button type="button" variant="outline" className="w-full" onClick={() => clearSignature('technician')}>
-                Limpar assinatura do tecnico
+                Limpar assinatura do técnico
               </Button>
             </div>
             <div className="space-y-3">
@@ -1044,8 +1044,8 @@ export default function TechnicianMobile() {
         currentGeneratedReport ? (
           <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center text-sm text-emerald-300">
             {isCarTrip
-              ? 'Relatorio tecnico enviado ao Drive. O atendimento permanece aberto ate a devolucao do veiculo.'
-              : 'Relatorio tecnico enviado ao Drive e atendimento finalizado.'}
+              ? 'Relatório técnico enviado ao Drive. O atendimento permanece aberto até a devolução do veículo.'
+              : 'Relatório técnico enviado ao Drive e atendimento finalizado.'}
           </div>
         ) : (
           <Button className="h-12 w-full rounded-xl bg-[#c8142f] hover:bg-[#a81027]" disabled={!canSendReport} onClick={saveReport}>
@@ -1059,9 +1059,9 @@ export default function TechnicianMobile() {
 
         {activeSection === 'DETAILS' && (
         <Card className="rounded-2xl">
-          <CardHeader><CardTitle className="text-base sm:text-lg">Proximos Atendimentos</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base sm:text-lg">Próximos Atendimentos</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            {upcoming.length === 0 && <p className="text-sm text-muted-foreground">Sem proximos atendimentos.</p>}
+            {upcoming.length === 0 && <p className="text-sm text-muted-foreground">Sem próximos atendimentos.</p>}
             {upcoming.map((apt) => (
               <button key={apt.id} onClick={() => setSelectedId(apt.id)} className="flex w-full items-center gap-3 rounded-xl border bg-card p-3 text-left">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">

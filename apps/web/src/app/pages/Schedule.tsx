@@ -296,7 +296,7 @@ export default function Schedule() {
                                   borderLeft: `3px solid ${normalizeTechnicianColor(appointment.technician?.color)}`
                                 }}
                               >
-                                <span className="font-semibold">{appointment.technician?.name ?? 'Sem tecnico'}</span>
+                                <span className="font-semibold">{appointment.technician?.name ?? 'Sem técnico'}</span>
                                 <span className="text-white/85"> / {shortCompanyName(appointment.client?.name ?? 'Cliente')}</span>
                               </div>
                             ))}

@@ -16,6 +16,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [showPasswordHelp, setShowPasswordHelp] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -65,7 +66,7 @@ export default function Login() {
           </h1>
 
           <p className="text-xl text-zinc-300 mb-12">
-            Organize atendimentos, viagens e tecnicos com controle operacional completo.
+            Organize atendimentos, viagens e técnicos com controle operacional completo.
           </p>
 
           <div className="space-y-6">
@@ -75,7 +76,7 @@ export default function Login() {
               </div>
               <div>
                 <h3 className="font-semibold mb-1">Monitoramento em Tempo Real</h3>
-                <p className="text-zinc-400 text-sm">Visualize tecnicos, rotas e atendimentos no mapa operacional.</p>
+                <p className="text-zinc-400 text-sm">Visualize técnicos, rotas e atendimentos no mapa operacional.</p>
               </div>
             </div>
 
@@ -94,8 +95,8 @@ export default function Login() {
                 <Users className="h-5 w-5 text-red-400" />
               </div>
               <div>
-                <h3 className="font-semibold mb-1">Gestao Completa</h3>
-                <p className="text-zinc-400 text-sm">Tecnicos, veiculos, hoteis e custos em uma unica plataforma.</p>
+                <h3 className="font-semibold mb-1">Gestão Completa</h3>
+                <p className="text-zinc-400 text-sm">Técnicos, veículos, hotéis e custos em uma única plataforma.</p>
               </div>
             </div>
           </div>
@@ -163,9 +164,13 @@ export default function Login() {
                     Lembrar-me
                   </Label>
                 </div>
-                <a href="#" className="text-sm text-red-400 hover:text-red-300">
+                <button
+                  type="button"
+                  className="text-sm text-red-400 hover:text-red-300"
+                  onClick={() => setShowPasswordHelp(true)}
+                >
                   Esqueceu a senha?
-                </a>
+                </button>
               </div>
 
               <Button
@@ -182,6 +187,26 @@ export default function Login() {
             <div className="mt-6 text-center text-sm text-zinc-500">
               Sistema de Agendamento da Metalique
             </div>
+
+            {showPasswordHelp && (
+              <div className="mt-6 rounded-xl border border-red-500/30 bg-red-950/30 p-4 text-sm text-zinc-200" role="status">
+                <p className="font-semibold text-white">Solicite uma nova senha</p>
+                <p className="mt-2 leading-relaxed">
+                  Entre em contato pelo número{' '}
+                  <a className="font-semibold text-red-300 hover:text-red-200" href="tel:+5515997016833">
+                    (15) 99701-6833
+                  </a>{' '}
+                  e solicite a redefinição da sua senha.
+                </p>
+                <button
+                  type="button"
+                  className="mt-3 font-medium text-red-300 hover:text-red-200"
+                  onClick={() => setShowPasswordHelp(false)}
+                >
+                  Fechar aviso
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

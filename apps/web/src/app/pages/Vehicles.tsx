@@ -35,7 +35,7 @@ export default function Vehicles() {
       const response = await api<Vehicle[]>('/resources/vehicles');
       setVehicles(response);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Nao foi possivel carregar os veiculos.');
+      setError(err instanceof Error ? err.message : 'Não foi possível carregar os veículos.');
       setVehicles([]);
     } finally {
       setLoading(false);
@@ -94,7 +94,7 @@ export default function Vehicles() {
       resetForm();
       await loadVehicles();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Nao foi possivel salvar o veiculo.');
+      setError(err instanceof Error ? err.message : 'Não foi possível salvar o veículo.');
     } finally {
       setSaving(false);
     }
@@ -108,7 +108,7 @@ export default function Vehicles() {
       });
       await loadVehicles();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Nao foi possivel alterar o status do veiculo.');
+      setError(err instanceof Error ? err.message : 'Não foi possível alterar o status do veículo.');
     }
   }
 
@@ -118,7 +118,7 @@ export default function Vehicles() {
       await api<Vehicle>(`/resources/vehicles/${id}/maintenance`, { method: 'POST' });
       await loadVehicles();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Nao foi possivel registrar a manutencao.');
+      setError(err instanceof Error ? err.message : 'Não foi possível registrar a manutenção.');
     }
   }
 
@@ -128,13 +128,13 @@ export default function Vehicles() {
         <div className="flex items-center gap-3">
           <Car className="h-7 w-7 text-blue-400" />
           <div>
-            <h1 className="text-2xl font-bold text-white">Veiculos</h1>
-            <p className="text-zinc-400">Cadastre nome do veiculo, ano, placa e quilometragem da frota.</p>
+            <h1 className="text-2xl font-bold text-white">Veículos</h1>
+            <p className="text-zinc-400">Cadastre nome do veículo, ano, placa e quilometragem da frota.</p>
           </div>
         </div>
         <Button className="bg-blue-500 hover:bg-blue-600" onClick={resetForm}>
           <Plus className="mr-2 h-4 w-4" />
-          Novo veiculo
+          Novo veículo
         </Button>
       </div>
 
@@ -156,25 +156,25 @@ export default function Vehicles() {
         <Card className="bg-zinc-900/50 border-zinc-800">
           <CardContent className="p-6">
             <div className="text-2xl font-bold text-white">{activeVehicles.length}</div>
-            <div className="text-xs text-zinc-400">Veiculos ativos</div>
+            <div className="text-xs text-zinc-400">Veículos ativos</div>
           </CardContent>
         </Card>
         <Card className="bg-zinc-900/50 border-zinc-800">
           <CardContent className="p-6">
             <div className="text-2xl font-bold text-white">{inactiveVehicles.length}</div>
-            <div className="text-xs text-zinc-400">Veiculos inativos</div>
+            <div className="text-xs text-zinc-400">Veículos inativos</div>
           </CardContent>
         </Card>
       </div>
 
       <Card className="bg-zinc-900/50 border-zinc-800">
         <CardHeader>
-          <CardTitle className="text-white">{editingId ? 'Editar veiculo' : 'Cadastrar veiculo'}</CardTitle>
+          <CardTitle className="text-white">{editingId ? 'Editar veículo' : 'Cadastrar veículo'}</CardTitle>
         </CardHeader>
         <CardContent>
           <form className="grid gap-4 lg:grid-cols-4" onSubmit={handleSubmit}>
             <label className="space-y-2 lg:col-span-2">
-              <span className="text-sm text-zinc-300">Nome do veiculo</span>
+              <span className="text-sm text-zinc-300">Nome do veículo</span>
               <input
                 className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-white outline-none focus:border-blue-500"
                 value={form.name}
@@ -221,11 +221,11 @@ export default function Vehicles() {
             <div className="flex items-end gap-3 lg:col-span-4">
               <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={saving} type="submit">
                 <Save className="mr-2 h-4 w-4" />
-                {saving ? 'Salvando...' : editingId ? 'Salvar alteracoes' : 'Cadastrar veiculo'}
+                {saving ? 'Salvando...' : editingId ? 'Salvar alterações' : 'Cadastrar veículo'}
               </Button>
               {editingId ? (
                 <Button className="border-zinc-700 text-zinc-200" disabled={saving} type="button" variant="outline" onClick={resetForm}>
-                  Cancelar edicao
+                  Cancelar edição
                 </Button>
               ) : null}
             </div>
@@ -236,11 +236,11 @@ export default function Vehicles() {
 
       {loading ? (
         <Card className="bg-zinc-900/50 border-zinc-800">
-          <CardContent className="p-8 text-center text-sm text-zinc-500">Carregando veiculos...</CardContent>
+          <CardContent className="p-8 text-center text-sm text-zinc-500">Carregando veículos...</CardContent>
         </Card>
       ) : vehicles.length === 0 ? (
         <Card className="bg-zinc-900/50 border-zinc-800">
-          <CardContent className="p-8 text-center text-sm text-zinc-500">Nenhum veiculo cadastrado ainda.</CardContent>
+          <CardContent className="p-8 text-center text-sm text-zinc-500">Nenhum veículo cadastrado ainda.</CardContent>
         </Card>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -272,19 +272,19 @@ export default function Vehicles() {
                   <div className="flex items-start gap-3 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-red-200">
                     <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
                     <div>
-                      <p className="font-semibold">Manutencao necessaria</p>
-                      <p className="text-xs">O veiculo rodou {new Intl.NumberFormat('pt-BR').format(traveledSinceMaintenance)} km desde a ultima manutencao.</p>
+                      <p className="font-semibold">Manutenção necessária</p>
+                      <p className="text-xs">O veículo rodou {new Intl.NumberFormat('pt-BR').format(traveledSinceMaintenance)} km desde a última manutenção.</p>
                     </div>
                   </div>
                 ) : (
                   <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-300">
-                    Faltam {new Intl.NumberFormat('pt-BR').format(remainingKm)} km para a proxima manutencao.
+                    Faltam {new Intl.NumberFormat('pt-BR').format(remainingKm)} km para a próxima manutenção.
                   </div>
                 )}
                 <div className="grid gap-3 text-sm text-zinc-300 md:grid-cols-2">
                   <div>
                     <span className="block text-xs uppercase tracking-wide text-zinc-500">Ano</span>
-                    <strong>{vehicle.year ?? 'Nao informado'}</strong>
+                    <strong>{vehicle.year ?? 'Não informado'}</strong>
                   </div>
                   <div>
                     <span className="block text-xs uppercase tracking-wide text-zinc-500">Quilometragem</span>
@@ -303,7 +303,7 @@ export default function Vehicles() {
                   </Button>
                   <Button className="border-emerald-700 text-emerald-300" type="button" variant="outline" onClick={() => registerMaintenance(vehicle.id)}>
                     <Wrench className="mr-2 h-4 w-4" />
-                    Registrar manutencao
+                    Registrar manutenção
                   </Button>
                 </div>
               </CardContent>

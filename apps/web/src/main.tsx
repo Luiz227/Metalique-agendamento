@@ -44,7 +44,7 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, ErrorBo
         <div style={{ width: '100%', maxWidth: 560, border: '1px solid #27272a', borderRadius: 16, padding: 24, background: '#18181b' }}>
           <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 12 }}>O sistema encontrou um erro</h1>
           <p style={{ color: '#d4d4d8', lineHeight: 1.5, marginBottom: 16 }}>
-            {this.state.message || 'Nao foi possivel abrir a tela atual.'}
+            {this.state.message || 'Não foi possível abrir a tela atual.'}
           </p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <button
@@ -52,7 +52,7 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, ErrorBo
               onClick={() => window.location.reload()}
               style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 16px', cursor: 'pointer' }}
             >
-              Recarregar pagina
+              Recarregar página
             </button>
             <button
               type="button"
@@ -63,7 +63,7 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, ErrorBo
               }}
               style={{ background: '#27272a', color: '#fff', border: '1px solid #3f3f46', borderRadius: 10, padding: '10px 16px', cursor: 'pointer' }}
             >
-              Limpar sessao e entrar de novo
+              Limpar sessão e entrar de novo
             </button>
           </div>
         </div>

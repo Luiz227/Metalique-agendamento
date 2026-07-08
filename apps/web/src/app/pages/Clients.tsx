@@ -81,7 +81,7 @@ export default function Clients() {
             <Input placeholder="Estado (UF)" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase() })} className="bg-zinc-800/50 border-zinc-700" />
             <Input placeholder="Bairro" value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
             <Input placeholder="CEP" value={form.zipCode} onChange={(e) => setForm({ ...form, zipCode: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
-            <Input required placeholder="Endereco" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
+            <Input required placeholder="Endereço" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
             <Input placeholder="Contato" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
             <Input placeholder="Telefone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
             <Input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="bg-zinc-800/50 border-zinc-700" />
@@ -132,7 +132,7 @@ export default function Clients() {
                   {client.email}
                 </p>
               )}
-              <p className="text-xs text-zinc-500">Vendedor: {client.salesOwner?.name ?? 'Nao definido'}</p>
+              <p className="text-xs text-zinc-500">Vendedor: {client.salesOwner?.name ?? 'Não definido'}</p>
             </CardContent>
           </Card>
         ))}

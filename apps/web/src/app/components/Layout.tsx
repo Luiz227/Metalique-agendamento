@@ -98,7 +98,7 @@ export default function Layout() {
         localStorage.setItem(alertedKey, JSON.stringify(notifications.map((notification) => notification.id).slice(0, 100)));
       }
     } catch {
-      // A falha do painel de notificacoes nao deve interromper a navegacao.
+      // A falha do painel de notificações não deve interromper a navegacao.
     }
   }, [canReceiveSchedulingNotifications, user?.id]);
 
@@ -179,13 +179,13 @@ export default function Layout() {
     { name: 'Agenda', href: '/schedule', icon: Calendar, roles: ['ADMIN', 'LOGISTICS', 'SALES'] },
     { name: 'Central Agend.', href: '/appointments/manage', icon: ClipboardList, roles: ['ADMIN', 'LOGISTICS', 'SALES', 'VALIDATOR'] },
     { name: 'Meus Atendimentos', href: '/technician', icon: Calendar, roles: ['TECHNICIAN'] },
-    { name: 'Calendario', href: '/technician/calendar', icon: Calendar, roles: ['TECHNICIAN'] },
-    { name: 'Relatorio semanal', href: '/technician/weekly-report', icon: Sparkles, roles: ['TECHNICIAN'] },
-    { name: 'Tecnicos', href: '/technicians', icon: Users, roles: ['ADMIN', 'LOGISTICS', 'SALES'] },
-    { name: 'Usuarios', href: '/users', icon: Shield, roles: ['ADMIN'] },
-    { name: 'Veiculos', href: '/vehicles', icon: Car, roles: ['ADMIN', 'LOGISTICS'] },
-    { name: 'Relatorios', href: '/reports', icon: BarChart3, roles: ['ADMIN', 'LOGISTICS'] },
-    { name: 'Configuracoes', href: '/settings', icon: Settings, roles: ['ADMIN'] }
+    { name: 'Calendário', href: '/technician/calendar', icon: Calendar, roles: ['TECHNICIAN'] },
+    { name: 'Relatório semanal', href: '/technician/weekly-report', icon: Sparkles, roles: ['TECHNICIAN'] },
+    { name: 'Técnicos', href: '/technicians', icon: Users, roles: ['ADMIN', 'LOGISTICS', 'SALES'] },
+    { name: 'Usuários', href: '/users', icon: Shield, roles: ['ADMIN'] },
+    { name: 'Veículos', href: '/vehicles', icon: Car, roles: ['ADMIN', 'LOGISTICS'] },
+    { name: 'Relatórios', href: '/reports', icon: BarChart3, roles: ['ADMIN', 'LOGISTICS'] },
+    { name: 'Configurações', href: '/settings', icon: Settings, roles: ['ADMIN'] }
   ];
 
   const visibleNavigation = navigation.filter((item) => !user?.role || item.roles.includes(user.role));
@@ -231,7 +231,7 @@ export default function Layout() {
                 {profileInitial}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{user?.name ?? 'Usuario'}</p>
+                <p className="text-sm font-medium truncate">{user?.name ?? 'Usuário'}</p>
                 <p className="text-xs text-muted-foreground truncate">{user?.email ?? 'sem email'}</p>
               </div>
             </div>

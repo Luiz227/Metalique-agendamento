@@ -40,7 +40,7 @@ export default function TechnicianWeeklyReport() {
         setProfile(result);
         setSignatureDataUrl(result.signatureDataUrl || '');
       })
-      .catch((error) => setSignatureMessage(error instanceof Error ? error.message : 'Nao foi possivel carregar o perfil.'));
+      .catch((error) => setSignatureMessage(error instanceof Error ? error.message : 'Não foi possível carregar o perfil.'));
   }, []);
 
   useEffect(() => {
@@ -116,9 +116,9 @@ export default function TechnicianWeeklyReport() {
         method: 'PUT',
         body: JSON.stringify({ signatureDataUrl })
       });
-      setSignatureMessage('Assinatura salva. Ela sera usada automaticamente nos proximos relatos.');
+      setSignatureMessage('Assinatura salva. Ela será usada automaticamente nos próximos relatos.');
     } catch (error) {
-      setSignatureMessage(error instanceof Error ? error.message : 'Nao foi possivel salvar a assinatura.');
+      setSignatureMessage(error instanceof Error ? error.message : 'Não foi possível salvar a assinatura.');
     } finally {
       setSavingSignature(false);
     }
@@ -133,7 +133,7 @@ export default function TechnicianWeeklyReport() {
       setEditableReport(result.report);
       if (!result.ok) setReportError(result.report);
     } catch (error) {
-      setReportError(error instanceof Error ? error.message : 'Nao foi possivel gerar o relatorio semanal.');
+      setReportError(error instanceof Error ? error.message : 'Não foi possível gerar o relatório semanal.');
     } finally {
       setGeneratingReport(false);
     }
@@ -143,29 +143,29 @@ export default function TechnicianWeeklyReport() {
     <div className="min-h-screen bg-background px-3 py-4 sm:px-6 sm:py-6">
       <div className="mx-auto w-full max-w-3xl space-y-5">
         <div>
-          <h1 className="text-2xl font-bold">Relatorio semanal</h1>
+          <h1 className="text-2xl font-bold">Relatório semanal</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Resumo de todos os atendimentos finalizados por {profile?.name || 'voce'} na semana atual.
+            Resumo de todos os atendimentos finalizados por {profile?.name || 'você'} na semana atual.
           </p>
         </div>
 
         <Card className="rounded-2xl border-blue-500/20 bg-blue-500/5">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-blue-400" /> Relatorio com IA
+              <Sparkles className="h-5 w-5 text-blue-400" /> Relatório com IA
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Button className="w-full" onClick={generateWeeklyReport} disabled={generatingReport}>
               <Sparkles className="mr-2 h-4 w-4" />
-              {generatingReport ? 'Analisando relatos...' : weeklyReport ? 'Atualizar relatorio' : 'Gerar relatorio da semana'}
+              {generatingReport ? 'Analisando relatos...' : weeklyReport ? 'Atualizar relatório' : 'Gerar relatório da semana'}
             </Button>
             {reportError && <p className="text-sm text-red-400">{reportError}</p>}
             {weeklyReport && (
               <div className="rounded-xl border bg-background/80 p-4">
                 <p className="mb-3 text-xs text-muted-foreground">{weeklyReport.sourceCount} atendimento(s) analisado(s)</p>
                 <label className="space-y-2">
-                  <span className="text-sm font-medium">Revise e edite o relatorio</span>
+                  <span className="text-sm font-medium">Revise e edite o relatório</span>
                   <Textarea
                     className="min-h-72 text-sm leading-6"
                     value={editableReport}
@@ -180,10 +180,10 @@ export default function TechnicianWeeklyReport() {
                   variant="outline"
                   onClick={async () => {
                     await navigator.clipboard.writeText(editableReport);
-                    setCopyMessage('Relatorio revisado copiado.');
+                    setCopyMessage('Relatório revisado copiado.');
                   }}
                 >
-                  Copiar relatorio revisado
+                  Copiar relatório revisado
                 </Button>
                 {copyMessage && <p className="mt-2 text-xs text-emerald-500">{copyMessage}</p>}
               </div>
@@ -197,7 +197,7 @@ export default function TechnicianWeeklyReport() {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Assine uma vez. O sistema carregara esta assinatura automaticamente em seus proximos relatos tecnicos.
+              Assine uma vez. O sistema carregará esta assinatura automaticamente em seus próximos relatos técnicos.
             </p>
             <canvas
               ref={canvasRef}

@@ -50,7 +50,7 @@ export default function Settings() {
       setResetMessage(`Sistema redefinido. ${total} registro(s) principal(is) removido(s).`);
       setResetConfirmation('');
     } catch (error) {
-      setResetMessage(error instanceof Error ? error.message : 'Nao foi possivel redefinir o sistema.');
+      setResetMessage(error instanceof Error ? error.message : 'Não foi possível redefinir o sistema.');
     } finally {
       setResetting(false);
     }
@@ -77,11 +77,11 @@ export default function Settings() {
               <Textarea
                 value={settings.notificationEmails}
                 onChange={(e) => setSettings({ ...settings, notificationEmails: e.target.value })}
-                placeholder="gestor@empresa.com.br, logistica@empresa.com.br"
+                placeholder="gestor@empresa.com.br, logística@empresa.com.br"
                 className="min-h-24 bg-zinc-800/50 border-zinc-700"
               />
               <p className="text-xs text-zinc-400">
-                O tecnico e o cliente recebem mensagens proprias automaticamente. Aqui entram somente gestores e equipes internas; separe por virgula ou por linha.
+                O técnico e o cliente recebem mensagens próprias automaticamente. Aqui entram somente gestores e equipes internas; separe por vírgula ou por linha.
               </p>
             </div>
             <Button className="md:col-span-2 bg-blue-500 hover:bg-blue-600">Salvar Configurações</Button>
@@ -121,11 +121,11 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm leading-6 text-zinc-300">
-            Apaga agendamentos, clientes, tecnicos, veiculos, hoteis, notificacoes, relatorios e todos os usuarios de teste.
-            Somente sua conta de administrador sera mantida. Os arquivos existentes no Google Drive nao serao excluidos.
+            Apaga agendamentos, clientes, técnicos, veículos, hotéis, notificações, relatórios e todos os usuários de teste.
+            Somente sua conta de administrador será mantida. Os arquivos existentes no Google Drive não serão excluídos.
           </p>
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
-            Esta acao e definitiva e nao pode ser desfeita.
+            Está ação e definitiva e não pode ser desfeita.
           </div>
           <label className="block space-y-2">
             <span className="text-sm text-zinc-300">Digite <strong>REDEFINIR SISTEMA</strong> para confirmar</span>

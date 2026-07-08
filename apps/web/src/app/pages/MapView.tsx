@@ -335,7 +335,7 @@ export default function MapView() {
     const uniqueTechnicians = new Map<string, { name: string; firstKey: string }>();
 
     markers.forEach((marker) => {
-      const name = marker.technician?.name ?? 'Sem tecnico';
+      const name = marker.technician?.name ?? 'Sem técnico';
       uniqueTechnicians.set(technicianKey(marker), { name, firstKey: firstNameKey(name) });
     });
 
@@ -716,10 +716,10 @@ export default function MapView() {
           </CardContent>
         </Card>
         <Card className="bg-zinc-800/30 border-zinc-700">
-          <CardHeader><CardTitle className="text-sm text-white">Sugestoes proximas</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-sm text-white">Sugestões próximas</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {nearbyMapSuggestions.length === 0 && (
-              <p className="text-xs text-zinc-500">Nenhuma sugestao encontrada entre os atendimentos visiveis no mapa.</p>
+              <p className="text-xs text-zinc-500">Nenhuma sugestão encontrada entre os atendimentos visíveis no mapa.</p>
             )}
             {nearbyMapSuggestions.slice(0, 8).map((suggestion) => (
               <div key={suggestion.id} className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
@@ -728,7 +728,7 @@ export default function MapView() {
                 </p>
                 <p className="mt-1 text-amber-50">{suggestion.reason}</p>
                 <p className="mt-1 text-zinc-200">
-                  {suggestion.originAppointment.technician?.name ?? 'Sem tecnico'} + {suggestion.nearbyAppointment.technician?.name ?? 'Sem tecnico'}
+                  {suggestion.originAppointment.technician?.name ?? 'Sem técnico'} + {suggestion.nearbyAppointment.technician?.name ?? 'Sem técnico'}
                 </p>
                 <p className="mt-1 text-zinc-400">
                   {formatDate(suggestion.originAppointment.date)} - {suggestion.originAppointment.client?.name ?? 'Cliente'} / {formatDate(suggestion.nearbyAppointment.date)} - {suggestion.nearbyAppointment.client?.name ?? 'Cliente'}

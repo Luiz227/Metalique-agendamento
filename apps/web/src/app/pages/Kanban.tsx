@@ -26,7 +26,7 @@ const checklistLabels: Record<string, string> = {
   contactConfirmed: 'Contato confirmado',
   addressConfirmed: 'Endereço confirmado',
   serviceTypeConfirmed: 'Tipo de serviço confirmado',
-  technicianSelected: 'Tecnico selecionado',
+  technicianSelected: 'Técnico selecionado',
   technicianAvailability: 'Disponibilidade do técnico',
   dateTimeConfirmed: 'Data e horário confirmados',
   hotelNeedChecked: 'Necessidade de hotel conferida',
@@ -40,7 +40,7 @@ function missingItems(appointment: Appointment): string[] {
   const checklist = appointment.schedulingChecklist;
   if (!appointment.city?.trim()) list.push('Cidade');
   if (!appointment.fullAddress?.trim()) list.push('Endereço completo');
-  if (!appointment.problemDescription?.trim()) list.push('Descricao do serviço');
+  if (!appointment.problemDescription?.trim()) list.push('Descrição do serviço');
   if (!appointment.startTime) list.push('Data/hora');
 
   for (const [key, label] of Object.entries(checklistLabels)) {
@@ -66,7 +66,7 @@ function columnOf(appointment: Appointment): KanbanColumn['key'] {
     !appointment.serviceType?.trim() ||
     appointment.serviceType === 'Pendente definicao' ||
     !appointment.problemDescription?.trim() ||
-    appointment.problemDescription === 'Pendente descricao do servi??o' ||
+    appointment.problemDescription === 'Pendente descricao do servico' ||
     !appointment.technicianId ||
     !appointment.startTime;
 

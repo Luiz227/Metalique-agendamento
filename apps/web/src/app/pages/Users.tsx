@@ -133,7 +133,7 @@ export default function Users() {
       return;
     }
 
-    const confirmed = window.confirm(`Excluir o usuário ${user.name}? Esta ação remove o acesso ao sistema.`);
+    const confirmed = window.confirm(`Excluir o usuário ${user.name}? Está ação remove o acesso ao sistema.`);
     if (!confirmed) return;
 
     setError('');

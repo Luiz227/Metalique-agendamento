@@ -22,7 +22,7 @@ export default function NewAppointment() {
         toast.success('Rascunho criado. Vamos abrir o formulario completo.');
         navigate(`/appointments/${draft.id}?editing=1&source=create`, { replace: true });
       } catch (err) {
-        setError(err instanceof ApiError ? err.message : 'Nao foi possivel abrir a criacao completa do agendamento.');
+        setError(err instanceof ApiError ? err.message : 'Não foi possível abrir a criação completa do agendamento.');
       }
     })();
   }, [navigate]);

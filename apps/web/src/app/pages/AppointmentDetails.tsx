@@ -49,7 +49,7 @@ function safeDateTimeLocalValue(value?: string | null) {
 
 function safeLocaleDateTime(value?: string | null) {
   const date = toValidDate(value);
-  return date ? date.toLocaleString('pt-BR') : 'Nao informado';
+  return date ? date.toLocaleString('pt-BR') : 'Não informado';
 }
 
 function normalizeCityForMaps(city?: string | null) {
@@ -74,11 +74,11 @@ function buildMapsDestination(
 const checklistLabels: Record<ChecklistKey, string> = {
   clientConfirmed: 'Cliente confirmado',
   contactConfirmed: 'Contato confirmado',
-  addressConfirmed: 'Endereco confirmado',
-  serviceTypeConfirmed: 'Tipo de servico confirmado',
-  technicianSelected: 'Tecnico selecionado',
-  technicianAvailability: 'Disponibilidade do tecnico',
-  dateTimeConfirmed: 'Data e horario confirmados',
+  addressConfirmed: 'Endereço confirmado',
+  serviceTypeConfirmed: 'Tipo de serviço confirmado',
+  technicianSelected: 'Técnico selecionado',
+  technicianAvailability: 'Disponibilidade do técnico',
+  dateTimeConfirmed: 'Data e horário confirmados',
   hotelNeedChecked: 'Necessidade de hotel conferida',
   transportNeedChecked: 'Necessidade de transporte conferida',
   osChecked: 'OS criada',
@@ -382,12 +382,12 @@ export default function AppointmentDetails() {
         } else {
           setTravelEstimate(null);
           setLogisticsSuggestion(null);
-          setLogisticsError('Nao foi possivel calcular a sugestao automatica para esse endereco. Confira cidade, endereco e integracao do Google Maps.');
+          setLogisticsError('Não foi possível calcular a sugestão automática para esse endereço. Confira cidade, endereço e integração do Google Maps.');
         }
       } catch (err) {
         setTravelEstimate(null);
         setLogisticsSuggestion(null);
-        setLogisticsError(err instanceof Error ? err.message : 'Falha ao calcular a sugestao automatica de viagem.');
+        setLogisticsError(err instanceof Error ? err.message : 'Falha ao calcular a sugestão automática de viagem.');
       } finally {
         setTravelLoading(false);
       }
@@ -453,7 +453,7 @@ export default function AppointmentDetails() {
     try {
       const result = await parseServiceOrderPdf(file, { analyzeWithAi: true });
       if (!result.found) {
-        setServiceOrderImportMessage('Nao encontrei dados reconheciveis nesse PDF. Confira se ele veio do Sige Cloud.');
+        setServiceOrderImportMessage('Não encontrei dados reconhecíveis nesse PDF. Confira se ele veio do Sige Cloud.');
         return;
       }
 
@@ -487,7 +487,7 @@ export default function AppointmentDetails() {
       const sourceMessage = result.aiUsed
         ? 'IA analisou a OS e preencheu os campos. Confira antes de salvar.'
         : result.aiAvailable
-          ? 'A IA nao conseguiu melhorar a leitura; usei o parser de reserva. Confira os campos.'
+          ? 'A IA não conseguiu melhorar a leitura; usei o parser de reserva. Confira os campos.'
           : 'Dados importados pelo parser. Para usar IA, configure OPENAI_API_KEY no backend.';
       setServiceOrderImportMessage(sourceMessage);
     } catch (err) {
@@ -514,7 +514,7 @@ export default function AppointmentDetails() {
       setCancelReason('');
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Nao foi possivel cancelar.');
+      setError(err instanceof ApiError ? err.message : 'Não foi possível cancelar.');
     } finally {
       setSaving(false);
     }
@@ -523,7 +523,7 @@ export default function AppointmentDetails() {
   async function rescheduleAppointment() {
     if (!appointment) return;
     if (!rescheduleDate || !rescheduleTime || !rescheduleReason.trim()) {
-      setError('Preencha data, horario e motivo do reagendamento.');
+      setError('Preencha data, horário e motivo do reagendamento.');
       return;
     }
     const start = new Date(`${rescheduleDate}T${rescheduleTime}:00`);
@@ -546,7 +546,7 @@ export default function AppointmentDetails() {
       setRescheduleReason('');
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Nao foi possivel reagendar.');
+      setError(err instanceof ApiError ? err.message : 'Não foi possível reagendar.');
     } finally {
       setSaving(false);
     }
@@ -555,7 +555,7 @@ export default function AppointmentDetails() {
   async function saveEdition() {
     if (!appointment) return;
     if (!form.clientName.trim() || !form.city.trim() || !form.fullAddress.trim()) {
-      setError('Preencha ao menos cliente, cidade e endereco.');
+      setError('Preencha ao menos cliente, cidade e endereço.');
       return;
     }
     setSaving(true);
@@ -632,7 +632,7 @@ export default function AppointmentDetails() {
       setEditing(false);
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Nao foi possivel salvar as alteracoes.');
+      setError(err instanceof ApiError ? err.message : 'Não foi possível salvar as alterações.');
     } finally {
       setSaving(false);
     }
@@ -646,13 +646,13 @@ export default function AppointmentDetails() {
     try {
       const result = await api<{ email?: { sent: boolean; reason?: string; recipients?: number } }>(`/appointments/${appointment.id}/confirm`, { method: 'POST' });
       if (result.email?.sent) {
-        setEmailNotice(`Agendamento confirmado e e-mail enviado para ${result.email.recipients ?? 0} destinatario(s).`);
+        setEmailNotice(`Agendamento confirmado e e-mail enviado para ${result.email.recipients ?? 0} destinatário(s).`);
       } else {
         setError(emailFailureMessage(result.email?.reason));
       }
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Nao foi possivel confirmar o agendamento.');
+      setError(err instanceof ApiError ? err.message : 'Não foi possível confirmar o agendamento.');
     } finally {
       setSaving(false);
     }
@@ -666,23 +666,23 @@ export default function AppointmentDetails() {
     try {
       const result = await api<{ email?: { sent: boolean; reason?: string; recipients?: number } }>(`/appointments/${appointment.id}/confirmation-email`, { method: 'POST' });
       if (result.email?.sent) {
-        setEmailNotice(`E-mail enviado com sucesso para ${result.email.recipients ?? 0} destinatario(s).`);
+        setEmailNotice(`E-mail enviado com sucesso para ${result.email.recipients ?? 0} destinatário(s).`);
       } else {
         setError(emailFailureMessage(result.email?.reason));
       }
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Nao foi possivel reenviar o e-mail.');
+      setError(err instanceof ApiError ? err.message : 'Não foi possível reenviar o e-mail.');
     } finally {
       setSaving(false);
     }
   }
 
   function emailFailureMessage(reason?: string) {
-    if (reason === 'no_recipients') return 'E-mail nao enviado: nenhum destinatario foi configurado e o tecnico nao possui e-mail vinculado.';
-    if (reason === 'smtp_not_configured') return 'E-mail nao enviado: faltam as variaveis SMTP no backend do Easypanel.';
-    if (reason === 'send_failed') return 'E-mail nao enviado: o servidor SMTP recusou a conexao ou a autenticacao. Confira o log do backend.';
-    return 'E-mail nao enviado. Confira as configuracoes e o log do backend.';
+    if (reason === 'no_recipients') return 'E-mail não enviado: nenhum destinatário foi configurado e o técnico não possui e-mail vinculado.';
+    if (reason === 'smtp_not_configured') return 'E-mail não enviado: faltam as variáveis SMTP no backend do Easypanel.';
+    if (reason === 'send_failed') return 'E-mail não enviado: o servidor SMTP recusou a conexão ou a autenticação. Confira o log do backend.';
+    return 'E-mail não enviado. Confira as configurações e o log do backend.';
   }
 
   if (loading) {
@@ -697,7 +697,7 @@ export default function AppointmentDetails() {
           Voltar
         </Button>
         <Card>
-          <CardContent className="p-8 text-center text-sm text-muted-foreground">Atendimento nao encontrado.</CardContent>
+          <CardContent className="p-8 text-center text-sm text-muted-foreground">Atendimento não encontrado.</CardContent>
         </Card>
       </div>
     );
@@ -773,7 +773,7 @@ export default function AppointmentDetails() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reagendar atendimento</DialogTitle>
-            <DialogDescription>Escolha nova data, horario e motivo.</DialogDescription>
+            <DialogDescription>Escolha nova data, horário e motivo.</DialogDescription>
           </DialogHeader>
           <div className="grid md:grid-cols-2 gap-3 py-2">
             <div>
@@ -781,7 +781,7 @@ export default function AppointmentDetails() {
               <Input type="date" value={rescheduleDate} onChange={(e) => setRescheduleDate(e.target.value)} />
             </div>
             <div>
-              <label className="text-sm mb-1 block">Novo horario</label>
+              <label className="text-sm mb-1 block">Novo horário</label>
               <Input type="time" value={rescheduleTime} onChange={(e) => setRescheduleTime(e.target.value)} />
             </div>
             <div className="md:col-span-2">
@@ -824,44 +824,44 @@ export default function AppointmentDetails() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <User className="h-5 w-5 text-blue-500" />
-                Informacoes do cliente
+                Informações do cliente
               </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="text-muted-foreground">Nome</span>
-                {editing ? <Input value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.name ?? 'Nao informado'}</p>}
+                {editing ? <Input value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.name ?? 'Não informado'}</p>}
               </div>
               <div>
                 <span className="text-muted-foreground">CNPJ</span>
-                {editing ? <Input value={form.clientCnpj} onChange={(e) => setForm({ ...form, clientCnpj: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.cnpj ?? 'Nao informado'}</p>}
+                {editing ? <Input value={form.clientCnpj} onChange={(e) => setForm({ ...form, clientCnpj: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.cnpj ?? 'Não informado'}</p>}
               </div>
               <div>
                 <span className="text-muted-foreground">Email</span>
-                {editing ? <Input value={form.clientEmail} onChange={(e) => setForm({ ...form, clientEmail: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.email ?? 'Nao informado'}</p>}
+                {editing ? <Input value={form.clientEmail} onChange={(e) => setForm({ ...form, clientEmail: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.email ?? 'Não informado'}</p>}
               </div>
               <div>
                 <span className="text-muted-foreground">Telefone</span>
-                {editing ? <Input value={form.clientPhone} onChange={(e) => setForm({ ...form, clientPhone: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.phone ?? 'Nao informado'}</p>}
+                {editing ? <Input value={form.clientPhone} onChange={(e) => setForm({ ...form, clientPhone: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.phone ?? 'Não informado'}</p>}
               </div>
               <div>
                 <span className="text-muted-foreground">IE</span>
-                {editing ? <Input value={form.clientIe} onChange={(e) => setForm({ ...form, clientIe: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.ie ?? 'Nao informado'}</p>}
+                {editing ? <Input value={form.clientIe} onChange={(e) => setForm({ ...form, clientIe: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.ie ?? 'Não informado'}</p>}
               </div>
               <div>
                 <span className="text-muted-foreground">Bairro</span>
-                {editing ? <Input value={form.clientDistrict} onChange={(e) => setForm({ ...form, clientDistrict: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.district ?? 'Nao informado'}</p>}
+                {editing ? <Input value={form.clientDistrict} onChange={(e) => setForm({ ...form, clientDistrict: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.district ?? 'Não informado'}</p>}
               </div>
               <div>
                 <span className="text-muted-foreground">Estado</span>
-                {editing ? <Input value={form.clientState} onChange={(e) => setForm({ ...form, clientState: e.target.value.toUpperCase() })} className="mt-1" /> : <p className="font-medium">{appointment.client?.state ?? 'Nao informado'}</p>}
+                {editing ? <Input value={form.clientState} onChange={(e) => setForm({ ...form, clientState: e.target.value.toUpperCase() })} className="mt-1" /> : <p className="font-medium">{appointment.client?.state ?? 'Não informado'}</p>}
               </div>
               <div>
                 <span className="text-muted-foreground">CEP</span>
-                {editing ? <Input value={form.clientZipCode} onChange={(e) => setForm({ ...form, clientZipCode: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.zipCode ?? 'Nao informado'}</p>}
+                {editing ? <Input value={form.clientZipCode} onChange={(e) => setForm({ ...form, clientZipCode: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.client?.zipCode ?? 'Não informado'}</p>}
               </div>
               <div>
-                <span className="text-muted-foreground">Tipo de servico</span>
+                <span className="text-muted-foreground">Tipo de serviço</span>
                 {editing ? <Input value={form.serviceType} onChange={(e) => setForm({ ...form, serviceType: e.target.value })} className="mt-1" /> : <p className="font-medium">{appointment.serviceType || 'Pendente definicao'}</p>}
               </div>
             </CardContent>
@@ -880,7 +880,7 @@ export default function AppointmentDetails() {
                 {editing ? <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="mt-1" /> : <p className="font-medium">{formatDate(appointment.date)}</p>}
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Horario</p>
+                <p className="text-xs text-muted-foreground">Horário</p>
                 {editing ? <Input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} className="mt-1" /> : <p className="font-medium">{formatTime(appointment.startTime)}</p>}
               </div>
               <div>
@@ -898,10 +898,10 @@ export default function AppointmentDetails() {
                 )}
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Tecnico</p>
+                <p className="text-xs text-muted-foreground">Técnico</p>
                 {editing ? (
                   <select className="w-full mt-1 h-9 rounded-md border bg-background px-3 text-sm" value={form.technicianId} onChange={(e) => setForm({ ...form, technicianId: e.target.value })}>
-                    <option value="">Sem tecnico</option>
+                    <option value="">Sem técnico</option>
                     {technicians.map((tech) => (
                       <option key={tech.id} value={tech.id}>
                         {tech.name}
@@ -909,7 +909,7 @@ export default function AppointmentDetails() {
                     ))}
                   </select>
                 ) : (
-                  <p className="font-medium">{appointment.technician?.name ?? 'Sem tecnico'}</p>
+                  <p className="font-medium">{appointment.technician?.name ?? 'Sem técnico'}</p>
                 )}
               </div>
               <div>
@@ -923,7 +923,7 @@ export default function AppointmentDetails() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Car className="h-5 w-5 text-yellow-500" />
-                Logistica
+                Logística
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -931,20 +931,20 @@ export default function AppointmentDetails() {
                 <p className="text-xs text-muted-foreground mb-1">Tipo de viagem</p>
                 {editing ? (
                   <select className="w-full h-9 rounded-md border bg-background px-3 text-sm" value={form.transportMode} onChange={(e) => setForm({ ...form, transportMode: e.target.value })}>
-                    <option value="NONE">Nao precisa de viagem</option>
+                    <option value="NONE">Não precisa de viagem</option>
                     <option value="CAR">Viagem de carro</option>
-                    <option value="AIR">Viagem aerea</option>
+                    <option value="AIR">Viagem aérea</option>
                   </select>
                 ) : (
-                  <p className="text-sm">{appointment.transportMode === 'AIR' ? 'Viagem aerea' : appointment.transportMode === 'CAR' ? 'Viagem de carro' : 'Nao informado'}</p>
+                  <p className="text-sm">{appointment.transportMode === 'AIR' ? 'Viagem aérea' : appointment.transportMode === 'CAR' ? 'Viagem de carro' : 'Não informado'}</p>
                 )}
               </div>
               {((editing && form.transportMode === 'CAR') || (!editing && appointment.transportMode === 'CAR')) && (
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Veiculo</p>
+                <p className="text-xs text-muted-foreground mb-1">Veículo</p>
                 {editing ? (
                   <select className="w-full h-9 rounded-md border bg-background px-3 text-sm" value={form.vehicleId} onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}>
-                    <option value="">Nao informado</option>
+                    <option value="">Não informado</option>
                     {vehicles.map((vehicle) => (
                       <option key={vehicle.id} value={vehicle.id}>
                         {vehicle.name} - {vehicle.plate}
@@ -952,7 +952,7 @@ export default function AppointmentDetails() {
                     ))}
                   </select>
                 ) : (
-                  <p className="text-sm">{appointment.vehicle ? `${appointment.vehicle.name} - ${appointment.vehicle.plate}` : 'Nao informado'}</p>
+                  <p className="text-sm">{appointment.vehicle ? `${appointment.vehicle.name} - ${appointment.vehicle.plate}` : 'Não informado'}</p>
                 )}
               </div>
               )}
@@ -962,13 +962,13 @@ export default function AppointmentDetails() {
                 {editing ? (
                   <>
                     <div className="space-y-1">
-                      <p className="text-[11px] text-muted-foreground">Aeroporto mais proximo do cliente</p>
+                      <p className="text-[11px] text-muted-foreground">Aeroporto mais próximo do cliente</p>
                       <div className="space-y-2 rounded-md border bg-muted/20 p-3">
                         <Input
                           value={
                             travelLoading
-                              ? 'Calculando aeroporto mais proximo...'
-                              : nearestAirportLabel || 'Aeroporto nao localizado automaticamente'
+                              ? 'Calculando aeroporto mais próximo...'
+                              : nearestAirportLabel || 'Aeroporto não localizado automaticamente'
                           }
                           readOnly
                         />
@@ -1018,9 +1018,9 @@ export default function AppointmentDetails() {
                   </>
                 ) : (
                   <div className="space-y-1 text-sm">
-                    <p>Aeroporto mais proximo do cliente: {nearestAirportLabel || appointment.flightAirport || 'Nao informado'}</p>
-                    <p>Voo de ida: {appointment.flightOutboundAirport || appointment.flightAirport || 'Nao informado'}</p>
-                    <p>Voo de volta: {appointment.flightReturnAirport || appointment.flightAirport || 'Nao informado'}</p>
+                    <p>Aeroporto mais próximo do cliente: {nearestAirportLabel || appointment.flightAirport || 'Não informado'}</p>
+                    <p>Voo de ida: {appointment.flightOutboundAirport || appointment.flightAirport || 'Não informado'}</p>
+                    <p>Voo de volta: {appointment.flightReturnAirport || appointment.flightAirport || 'Não informado'}</p>
                     <p className="text-muted-foreground">Ida: {safeLocaleDateTime(appointment.flightDepartureAt)}</p>
                     <p className="text-muted-foreground">Volta: {safeLocaleDateTime(appointment.flightReturnAt)}</p>
                   </div>
@@ -1032,13 +1032,13 @@ export default function AppointmentDetails() {
                 {editing ? (
                   <div className="space-y-2">
                     <select className="w-full h-9 rounded-md border bg-background px-3 text-sm" value={form.hasHotel ? 'YES' : 'NO'} onChange={(e) => setForm({ ...form, hasHotel: e.target.value === 'YES' })}>
-                      <option value="NO">Nao tem hospedagem</option>
+                      <option value="NO">Não tem hospedagem</option>
                       <option value="YES">Tem hospedagem</option>
                     </select>
                     {form.hasHotel && (
                     <>
                     <Input placeholder="Nome do hotel" value={form.hotelName} onChange={(e) => setForm({ ...form, hotelName: e.target.value })} />
-                    <Input placeholder="Endereco do hotel" value={form.hotelAddress} onChange={(e) => setForm({ ...form, hotelAddress: e.target.value })} />
+                    <Input placeholder="Endereço do hotel" value={form.hotelAddress} onChange={(e) => setForm({ ...form, hotelAddress: e.target.value })} />
                     <Input type="number" min="0" step="0.01" placeholder="Valor da hospedagem" value={form.hotelDailyRate} onChange={(e) => setForm({ ...form, hotelDailyRate: e.target.value })} />
                     <div className="grid gap-2 sm:grid-cols-2">
                       <div>
@@ -1050,14 +1050,14 @@ export default function AppointmentDetails() {
                         <Input type="datetime-local" value={form.hotelCheckOut} onChange={(e) => setForm({ ...form, hotelCheckOut: e.target.value })} />
                       </div>
                     </div>
-                    <Textarea placeholder="Informacoes do hotel, reserva, observacoes ou regras do agendamento" value={form.hotelNotes} onChange={(e) => setForm({ ...form, hotelNotes: e.target.value })} />
+                    <Textarea placeholder="Informações do hotel, reserva, observações ou regras do agendamento" value={form.hotelNotes} onChange={(e) => setForm({ ...form, hotelNotes: e.target.value })} />
                     </>
                     )}
                   </div>
                 ) : (
                   <div className="space-y-1 text-sm">
-                    <p>{appointment.hasHotel || appointment.hotelName ? 'Tem hospedagem' : 'Nao tem hospedagem'}</p>
-                    {(appointment.hasHotel || appointment.hotelName) && <p>{appointment.hotelName || "Nao informado"}</p>}
+                    <p>{appointment.hasHotel || appointment.hotelName ? 'Tem hospedagem' : 'Não tem hospedagem'}</p>
+                    {(appointment.hasHotel || appointment.hotelName) && <p>{appointment.hotelName || "Não informado"}</p>}
                     {appointment.hotelAddress && <p className="text-muted-foreground">{appointment.hotelAddress}</p>}
                     {appointment.hotelDailyRate && <p className="text-muted-foreground">Valor: R$ {appointment.hotelDailyRate}</p>}
                     {appointment.hotelCheckIn && <p className="text-muted-foreground">Check-in: {safeLocaleDateTime(appointment.hotelCheckIn)}</p>}
@@ -1067,7 +1067,7 @@ export default function AppointmentDetails() {
                 )}
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">Endereco</p>
+                <p className="text-xs text-muted-foreground mb-1">Endereço</p>
                 {editing ? <Input value={form.fullAddress} onChange={(e) => setForm({ ...form, fullAddress: e.target.value })} /> : <p className="text-sm">{appointment.fullAddress}</p>}
                 <div className="mt-3 space-y-3">
                   <p className="text-[11px] text-muted-foreground">Base fixa de saida: {COMPANY_BASE_ADDRESS}</p>
@@ -1080,26 +1080,26 @@ export default function AppointmentDetails() {
                           ? 'border-amber-500/30 bg-amber-500/10'
                           : 'border-border bg-muted/20'
                     }`}>
-                      <p className="text-sm font-semibold text-foreground">Sugestao de viagem</p>
+                      <p className="text-sm font-semibold text-foreground">Sugestão de viagem</p>
                       {travelLoading && (
-                        <p className="mt-1 text-xs text-muted-foreground">O sistema esta calculando automaticamente se a viagem deve ser de carro ou de aviao.</p>
+                        <p className="mt-1 text-xs text-muted-foreground">O sistema está calculando automaticamente se a viagem deve ser de carro ou de avião.</p>
                       )}
                       {!travelLoading && logisticsSuggestion?.suggestedMode && (
                         <>
                           <p className="mt-1 text-sm font-semibold text-blue-200">
-                            Sugestao automatica: {logisticsSuggestion.suggestedMode === 'AIR' ? 'viagem aerea' : 'viagem de carro'}
+                            Sugestão automática: {logisticsSuggestion.suggestedMode === 'AIR' ? 'viagem aérea' : 'viagem de carro'}
                           </p>
                           {logisticsSuggestion.suggestedReason && (
                             <p className="mt-1 text-xs text-muted-foreground">{logisticsSuggestion.suggestedReason}</p>
                           )}
                           {logisticsSuggestion.nearestAirport && (
                             <div className="mt-2 text-xs text-muted-foreground">
-                              <p>Aeroporto mais proximo: {logisticsSuggestion.nearestAirport.name || 'Nao identificado'}</p>
+                              <p>Aeroporto mais próximo: {logisticsSuggestion.nearestAirport.name || 'Não identificado'}</p>
                               {logisticsSuggestion.nearestAirport.formattedAddress && (
                                 <p>{logisticsSuggestion.nearestAirport.formattedAddress}</p>
                               )}
                               {logisticsSuggestion.nearestAirport.distanceText && (
-                                <p>Distancia do cliente ate o aeroporto: {logisticsSuggestion.nearestAirport.distanceText}</p>
+                                <p>Distancia do cliente até o aeroporto: {logisticsSuggestion.nearestAirport.distanceText}</p>
                               )}
                             </div>
                           )}
@@ -1109,7 +1109,7 @@ export default function AppointmentDetails() {
                         <p className="mt-1 text-xs text-amber-200">{logisticsError}</p>
                       )}
                       {!travelLoading && !logisticsSuggestion?.suggestedMode && !logisticsError && (
-                        <p className="mt-1 text-xs text-muted-foreground">Preencha o endereco completo e a cidade para o sistema gerar a sugestao automaticamente.</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Preencha o endereço completo e a cidade para o sistema gerar a sugestão automaticamente.</p>
                       )}
                     </div>
                   )}
@@ -1117,14 +1117,14 @@ export default function AppointmentDetails() {
                     <div className="rounded-md border border-cyan-500/20 bg-cyan-500/10 p-3">
                       <div className="flex items-center gap-2 text-xs text-cyan-100">
                         <MapPin className="h-4 w-4" />
-                        Aeroporto sugerido para esta viagem
+                        Aeroporto sugerido para está viagem
                       </div>
-                      <p className="mt-1 text-sm font-semibold text-white">{logisticsSuggestion.nearestAirport.name || 'Nao identificado'}</p>
+                      <p className="mt-1 text-sm font-semibold text-white">{logisticsSuggestion.nearestAirport.name || 'Não identificado'}</p>
                       {logisticsSuggestion.nearestAirport.formattedAddress && (
                         <p className="mt-1 text-xs text-cyan-50/90">{logisticsSuggestion.nearestAirport.formattedAddress}</p>
                       )}
                       {logisticsSuggestion.nearestAirport.distanceText && (
-                        <p className="mt-1 text-xs text-cyan-100/80">Distancia do cliente ate o aeroporto: {logisticsSuggestion.nearestAirport.distanceText}</p>
+                        <p className="mt-1 text-xs text-cyan-100/80">Distancia do cliente até o aeroporto: {logisticsSuggestion.nearestAirport.distanceText}</p>
                       )}
                     </div>
                   )}
@@ -1135,14 +1135,14 @@ export default function AppointmentDetails() {
                           <Clock className="h-4 w-4" />
                           Tempo de carro
                         </div>
-                        <p className="mt-1 text-sm font-semibold">{travelEstimate?.durationText ?? 'Nao calculado'}</p>
+                        <p className="mt-1 text-sm font-semibold">{travelEstimate?.durationText ?? 'Não calculado'}</p>
                       </div>
                       <div className="rounded-md border bg-muted/30 p-3">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Route className="h-4 w-4" />
                           Distancia da Metalique
                         </div>
-                        <p className="mt-1 text-sm font-semibold">{travelEstimate?.distanceText ?? 'Nao calculado'}</p>
+                        <p className="mt-1 text-sm font-semibold">{travelEstimate?.distanceText ?? 'Não calculado'}</p>
                       </div>
                       {logisticsSuggestion?.nearestAirport && (
                         <div className="rounded-md border bg-muted/30 p-3">
@@ -1150,7 +1150,7 @@ export default function AppointmentDetails() {
                             <MapPin className="h-4 w-4" />
                             Aeroporto sugerido
                           </div>
-                          <p className="mt-1 text-sm font-semibold">{logisticsSuggestion.nearestAirport.name || 'Nao identificado'}</p>
+                          <p className="mt-1 text-sm font-semibold">{logisticsSuggestion.nearestAirport.name || 'Não identificado'}</p>
                           {logisticsSuggestion.nearestAirport.distanceText && (
                             <p className="mt-1 text-xs text-muted-foreground">{logisticsSuggestion.nearestAirport.distanceText} do cliente</p>
                           )}
@@ -1162,14 +1162,14 @@ export default function AppointmentDetails() {
                     <a href={routeExternalUrl} target="_blank" rel="noreferrer">
                       <Button type="button" variant="outline" className="w-full">
                         <Navigation className="mr-2 h-4 w-4" />
-                        {logisticsSuggestion?.suggestedMode === 'AIR' ? 'Abrir rota ate o aeroporto' : 'Abrir rota no Google Maps'}
+                        {logisticsSuggestion?.suggestedMode === 'AIR' ? 'Abrir rota até o aeroporto' : 'Abrir rota no Google Maps'}
                       </Button>
                     </a>
                   )}
                   {routeEmbedUrl && (
                     <div className="overflow-hidden rounded-md border">
                       <iframe
-                        title="Rota da Metalique ate o atendimento"
+                        title="Rota da Metalique até o atendimento"
                         src={routeEmbedUrl}
                         className="h-56 w-full"
                         loading="lazy"
@@ -1178,7 +1178,7 @@ export default function AppointmentDetails() {
                     </div>
                   )}
                   {!routeEmbedUrl && logisticsDestination && (
-                    <p className="text-xs text-muted-foreground">Mini mapa indisponivel: configure VITE_GOOGLE_MAPS_API_KEY no frontend.</p>
+                    <p className="text-xs text-muted-foreground">Mini mapa indisponível: configure VITE_GOOGLE_MAPS_API_KEY no frontend.</p>
                   )}
                 </div>
               </div>
@@ -1223,7 +1223,7 @@ export default function AppointmentDetails() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-yellow-500" />
-                Servico
+                Serviço
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1235,7 +1235,7 @@ export default function AppointmentDetails() {
                   <div>
                     <p className="text-sm font-medium">Modelo oficial de OS</p>
                     <p className="text-xs text-muted-foreground">
-                      Este agendamento usa apenas os templates oficiais internos. Preencha abaixo os dados do equipamento e do servico para gerar a OS final do tecnico.
+                      Este agendamento usa apenas os templates oficiais internos. Preencha abaixo os dados do equipamento e do serviço para gerar a OS final do técnico.
                     </p>
                   </div>
                   {editing && (
@@ -1243,7 +1243,7 @@ export default function AppointmentDetails() {
                       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
                           <p className="text-sm font-medium text-blue-100">Analisar OS do Sige com IA</p>
-                          <p className="text-xs text-muted-foreground">Anexe o PDF original para a IA separar servico, equipamento e relato nos campos corretos.</p>
+                          <p className="text-xs text-muted-foreground">Anexe o PDF original para a IA separar serviço, equipamento e relato nos campos corretos.</p>
                         </div>
                         <label className="inline-flex cursor-pointer items-center justify-center rounded-md border border-blue-500/30 px-4 py-2 text-sm font-semibold text-blue-100 hover:bg-blue-500/10">
                           {serviceOrderImporting ? 'Analisando...' : 'Analisar com IA'}
@@ -1287,7 +1287,7 @@ export default function AppointmentDetails() {
                 <div className="rounded-xl border border-border/70 bg-muted/10 p-4 space-y-4">
                   <div className="space-y-1">
                     <p className="text-sm font-semibold">Responsavel comercial</p>
-                    <p className="text-xs text-muted-foreground">A IA preenche estes dados quando identificar o vendedor na ordem de servico.</p>
+                    <p className="text-xs text-muted-foreground">A IA preenche estes dados quando identificar o vendedor na ordem de serviço.</p>
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="min-w-0">
@@ -1302,29 +1302,29 @@ export default function AppointmentDetails() {
                 </div>
                 <div className="rounded-xl border border-border/70 bg-muted/10 p-4 space-y-4">
                   <div className="space-y-1">
-                    <p className="text-sm font-semibold">Servico na OS</p>
-                    <p className="text-xs text-muted-foreground">Esses dados entram direto na ordem de servico final.</p>
+                    <p className="text-sm font-semibold">Serviço na OS</p>
+                    <p className="text-xs text-muted-foreground">Esses dados entram direto na ordem de serviço final.</p>
                   </div>
                   <div className="grid grid-cols-1 gap-3">
                     <div className="min-w-0">
-                      <p className="mb-1 text-[11px] text-muted-foreground">Codigo do servico</p>
-                      <Input value={form.serviceCode} placeholder="Codigo do servico" onChange={(e) => setForm({ ...form, serviceCode: e.target.value })} disabled={!editing} className="w-full" />
+                      <p className="mb-1 text-[11px] text-muted-foreground">Código do serviço</p>
+                      <Input value={form.serviceCode} placeholder="Código do serviço" onChange={(e) => setForm({ ...form, serviceCode: e.target.value })} disabled={!editing} className="w-full" />
                     </div>
                     <div className="min-w-0">
-                      <p className="mb-1 text-[11px] text-muted-foreground">Descricao do servico na OS</p>
-                      <Textarea value={form.serviceItemDescription} placeholder="Descricao do servico" onChange={(e) => setForm({ ...form, serviceItemDescription: e.target.value })} disabled={!editing} className="min-h-20 w-full" />
+                      <p className="mb-1 text-[11px] text-muted-foreground">Descrição do serviço na OS</p>
+                      <Textarea value={form.serviceItemDescription} placeholder="Descrição do serviço" onChange={(e) => setForm({ ...form, serviceItemDescription: e.target.value })} disabled={!editing} className="min-h-20 w-full" />
                     </div>
                   </div>
                 </div>
                 <div className="rounded-xl border border-border/70 bg-muted/10 p-4 space-y-4">
                   <div className="space-y-1">
                     <p className="text-sm font-semibold">Dados do equipamento</p>
-                    <p className="text-xs text-muted-foreground">Organize aqui exatamente como o tecnico deve ver e como a OS deve sair.</p>
+                    <p className="text-xs text-muted-foreground">Organize aqui exatamente como o técnico deve ver e como a OS deve sair.</p>
                   </div>
                   <div className="grid grid-cols-1 gap-3">
                     <div className="min-w-0">
-                      <p className="mb-1 text-[11px] text-muted-foreground">Codigo do equipamento</p>
-                      <Input value={form.machineCode} placeholder="Codigo do equipamento" onChange={(e) => setForm({ ...form, machineCode: e.target.value })} disabled={!editing} className="w-full" />
+                      <p className="mb-1 text-[11px] text-muted-foreground">Código do equipamento</p>
+                      <Input value={form.machineCode} placeholder="Código do equipamento" onChange={(e) => setForm({ ...form, machineCode: e.target.value })} disabled={!editing} className="w-full" />
                     </div>
                     <div className="min-w-0">
                       <p className="mb-1 text-[11px] text-muted-foreground">Nome da maquina</p>
@@ -1335,8 +1335,8 @@ export default function AppointmentDetails() {
                       <Textarea value={form.machineModel} placeholder="Modelo" onChange={(e) => setForm({ ...form, machineModel: e.target.value })} disabled={!editing} className="min-h-20 w-full" />
                     </div>
                     <div className="min-w-0">
-                      <p className="mb-1 text-[11px] text-muted-foreground">Numero de serie</p>
-                      <Input value={form.machineSerial} placeholder="Numero de serie" onChange={(e) => setForm({ ...form, machineSerial: e.target.value })} disabled={!editing} className="w-full" />
+                      <p className="mb-1 text-[11px] text-muted-foreground">Número de série</p>
+                      <Input value={form.machineSerial} placeholder="Número de série" onChange={(e) => setForm({ ...form, machineSerial: e.target.value })} disabled={!editing} className="w-full" />
                     </div>
                     <div className="min-w-0">
                       <p className="mb-1 text-[11px] text-muted-foreground">Fabricante</p>
@@ -1344,8 +1344,8 @@ export default function AppointmentDetails() {
                     </div>
                   </div>
                   <div>
-                    <p className="mb-1 text-[11px] text-muted-foreground">Observacoes do equipamento</p>
-                    <Textarea value={form.machineObservations} placeholder="Observacoes do equipamento" onChange={(e) => setForm({ ...form, machineObservations: e.target.value })} disabled={!editing} className="min-h-24" />
+                    <p className="mb-1 text-[11px] text-muted-foreground">Observações do equipamento</p>
+                    <Textarea value={form.machineObservations} placeholder="Observações do equipamento" onChange={(e) => setForm({ ...form, machineObservations: e.target.value })} disabled={!editing} className="min-h-24" />
                   </div>
                 </div>
               </div>

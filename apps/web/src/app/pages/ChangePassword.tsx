@@ -36,7 +36,7 @@ export default function ChangePassword() {
       return;
     }
     if (password !== confirmation) {
-      setError('As senhas digitadas nao conferem.');
+      setError('As senhas digitadas não conferem.');
       return;
     }
     setSaving(true);
@@ -48,7 +48,7 @@ export default function ChangePassword() {
       setSession(token, response.user);
       navigate(destinationByRole(response.user.role), { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Nao foi possivel alterar a senha.');
+      setError(err instanceof ApiError ? err.message : 'Não foi possível alterar a senha.');
     } finally {
       setSaving(false);
     }
@@ -63,7 +63,7 @@ export default function ChangePassword() {
         </div>
         <h1 className="text-2xl font-bold text-white">Crie sua nova senha</h1>
         <p className="mt-2 text-sm leading-6 text-zinc-400">
-          Ola, {user.name}. Por seguranca, altere a senha provisoria antes de acessar o sistema.
+          Olá, {user.name}. Por segurança, altere a senha provisória antes de acessar o sistema.
         </p>
 
         <form className="mt-7 space-y-5" onSubmit={submit}>

@@ -119,7 +119,7 @@ export default function Technicians() {
             .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
             .map((appointment) => (
               <div key={appointment.id} className="rounded-lg border border-zinc-800 bg-zinc-800/30 p-3">
-                <p className="text-sm text-white font-medium">{appointment.technician?.name ?? 'Sem tecnico'}</p>
+                <p className="text-sm text-white font-medium">{appointment.technician?.name ?? 'Sem técnico'}</p>
                 <p className="text-xs text-zinc-300 mt-1">{appointment.client?.name ?? 'Cliente'} - {appointment.city}</p>
                 <p className="text-xs text-zinc-500 mt-1">{formatDate(appointment.date)}</p>
               </div>

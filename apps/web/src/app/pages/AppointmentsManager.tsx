@@ -15,11 +15,11 @@ import { formatDate, formatTime, money, statusLabel } from '../services/types';
 const checklistLabels: Record<string, string> = {
   clientConfirmed: 'Cliente confirmado',
   contactConfirmed: 'Contato confirmado',
-  addressConfirmed: 'Endereco confirmado',
-  serviceTypeConfirmed: 'Tipo de servico confirmado',
-  technicianSelected: 'Tecnico selecionado',
-  technicianAvailability: 'Disponibilidade do tecnico',
-  dateTimeConfirmed: 'Data e horario confirmados',
+  addressConfirmed: 'Endereço confirmado',
+  serviceTypeConfirmed: 'Tipo de serviço confirmado',
+  technicianSelected: 'Técnico selecionado',
+  technicianAvailability: 'Disponibilidade do técnico',
+  dateTimeConfirmed: 'Data e horário confirmados',
   hotelNeedChecked: 'Necessidade de hotel conferida',
   transportNeedChecked: 'Necessidade de transporte conferida',
   osChecked: 'OS conferida',
@@ -30,9 +30,9 @@ function missingItems(appointment: Appointment): string[] {
   const list: string[] = [];
   const checklist = appointment.schedulingChecklist;
   if (!appointment.city?.trim() || appointment.city === 'A definir') list.push('Cidade');
-  if (!appointment.fullAddress?.trim()) list.push('Endereco completo');
-  if (!appointment.problemDescription?.trim() || appointment.problemDescription === 'Pendente descricao do servico') list.push('Descricao do servico');
-  if (!appointment.technicianId) list.push('Tecnico');
+  if (!appointment.fullAddress?.trim()) list.push('Endereço completo');
+  if (!appointment.problemDescription?.trim() || appointment.problemDescription === 'Pendente descricao do servico') list.push('Descrição do serviço');
+  if (!appointment.technicianId) list.push('Técnico');
   for (const [key, label] of Object.entries(checklistLabels)) {
     if (!checklist || !checklist[key as keyof NonNullable<Appointment['schedulingChecklist']>]) list.push(label);
   }
@@ -121,8 +121,8 @@ export default function AppointmentsManager() {
       toast.success('Rascunho criado. Abrindo o formulario oficial completo.');
       navigate(`/appointments/${draft.id}?editing=1&source=create`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Nao foi possivel criar o rascunho do agendamento.');
-      toast.error('Erro ao abrir a tela completa de criacao.');
+      setError(err instanceof ApiError ? err.message : 'Não foi possível criar o rascunho do agendamento.');
+      toast.error('Erro ao abrir a tela completa de criação.');
     } finally {
       setCreatingDraft(false);
     }
@@ -141,7 +141,7 @@ export default function AppointmentsManager() {
       setDeleteConfirmation('');
       toast.success(`${result.deleted} agendamento(s) excluido(s).`);
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'Nao foi possivel excluir os agendamentos.');
+      toast.error(err instanceof ApiError ? err.message : 'Não foi possível excluir os agendamentos.');
     } finally {
       setDeletingAll(false);
     }
@@ -153,7 +153,7 @@ export default function AppointmentsManager() {
         <div>
           <h1 className="text-2xl font-bold">Central de Agendamentos</h1>
           <p className="text-muted-foreground">
-            Agora a criacao comeca direto no formulario completo, sem duplicar preenchimento entre duas telas.
+            Agora a criação comeca direto no formulario completo, sem duplicar preenchimento entre duas telas.
           </p>
         </div>
         <Button variant="destructive" onClick={() => setDeleteAllOpen(true)} disabled={!items.length}>
@@ -170,7 +170,7 @@ export default function AppointmentsManager() {
           <DialogHeader>
             <DialogTitle>Excluir todos os agendamentos?</DialogTitle>
             <DialogDescription>
-              Esta acao exclui permanentemente {items.length} agendamento(s) e seus registros relacionados. Os arquivos existentes no Google Drive serao preservados.
+              Está ação exclui permanentemente {items.length} agendamento(s) e seus registros relacionados. Os arquivos existentes no Google Drive serão preservados.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -196,14 +196,14 @@ export default function AppointmentsManager() {
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-blue-100">
                   <ClipboardPenLine className="h-5 w-5" />
-                  <p className="font-medium">Formulario oficial completo em uma unica entrada</p>
+                  <p className="font-medium">Formulario oficial completo em uma única entrada</p>
                 </div>
                 <p className="max-w-2xl text-sm text-zinc-300">
                   Clique em criar e o sistema abre diretamente a tela com todos os campos:
-                  empresa, cidade, servico, tecnico, logistica, OS e checklist.
+                  empresa, cidade, serviço, técnico, logística, OS e checklist.
                 </p>
                 <p className="text-xs text-zinc-400">
-                  Se quiser parar no meio, o rascunho continua disponivel e os agendamentos salvos podem ser reabertos depois para correcao.
+                  Se quiser parar no meio, o rascunho continua disponível e os agendamentos salvos podem ser reabertos depois para correção.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -234,7 +234,7 @@ export default function AppointmentsManager() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Agendamentos com Pendencias</CardTitle>
+          <CardTitle>Agendamentos com Pendências</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {loading && <p className="text-sm text-muted-foreground">Carregando...</p>}
@@ -275,7 +275,7 @@ export default function AppointmentsManager() {
         <CardContent className="space-y-3">
           {!showFinished && (
             <p className="text-sm text-muted-foreground">
-              Clique em mostrar finalizados para consultar atendimentos encerrados e o relato do tecnico.
+              Clique em mostrar finalizados para consultar atendimentos encerrados e o relato do técnico.
             </p>
           )}
           {showFinished && loading && <p className="text-sm text-muted-foreground">Carregando...</p>}
@@ -298,28 +298,28 @@ export default function AppointmentsManager() {
 
                 <div className="grid gap-3 text-sm md:grid-cols-2 xl:grid-cols-3">
                   <div>
-                    <p className="text-xs text-muted-foreground">Tecnico</p>
-                    <p>{item.technician?.name ?? 'Sem tecnico vinculado'}</p>
+                    <p className="text-xs text-muted-foreground">Técnico</p>
+                    <p>{item.technician?.name ?? 'Sem técnico vinculado'}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Cidade</p>
-                    <p>{item.city || 'Nao informado'}</p>
+                    <p>{item.city || 'Não informado'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Endereco</p>
-                    <p>{item.fullAddress || 'Nao informado'}</p>
+                    <p className="text-xs text-muted-foreground">Endereço</p>
+                    <p>{item.fullAddress || 'Não informado'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Tipo de servico</p>
-                    <p>{item.serviceType || 'Nao informado'}</p>
+                    <p className="text-xs text-muted-foreground">Tipo de serviço</p>
+                    <p>{item.serviceType || 'Não informado'}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Maquina</p>
-                    <p>{[item.machineName, item.machineModel].filter(Boolean).join(' - ') || 'Nao informado'}</p>
+                    <p>{[item.machineName, item.machineModel].filter(Boolean).join(' - ') || 'Não informado'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Numero de serie</p>
-                    <p>{item.machineSerial || 'Nao informado'}</p>
+                    <p className="text-xs text-muted-foreground">Número de série</p>
+                    <p>{item.machineSerial || 'Não informado'}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Hospedagem</p>
@@ -331,7 +331,7 @@ export default function AppointmentsManager() {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Transporte</p>
-                    <p>{item.transportMode || (item.needsTransport ? 'Necessario' : 'Nao informado')}</p>
+                    <p>{item.transportMode || (item.needsTransport ? 'Necessario' : 'Não informado')}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Periodo</p>
@@ -340,21 +340,21 @@ export default function AppointmentsManager() {
                 </div>
 
                 <div className="rounded-md border bg-muted/30 p-3 text-sm">
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Relato do tecnico</p>
-                  <p className="whitespace-pre-wrap">{technicalReport || 'Relato nao informado.'}</p>
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Relato do técnico</p>
+                  <p className="whitespace-pre-wrap">{technicalReport || 'Relato não informado.'}</p>
                 </div>
 
                 {(item.problemDescription || item.notes || item.hotelNotes) && (
                   <div className="rounded-md border bg-muted/30 p-3 text-sm">
                     {item.problemDescription && (
                       <p>
-                        <span className="text-muted-foreground">Servico: </span>
+                        <span className="text-muted-foreground">Serviço: </span>
                         {item.problemDescription}
                       </p>
                     )}
                     {item.notes && (
                       <p>
-                        <span className="text-muted-foreground">Observacoes: </span>
+                        <span className="text-muted-foreground">Observações: </span>
                         {item.notes}
                       </p>
                     )}

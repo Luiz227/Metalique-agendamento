@@ -257,7 +257,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               {dashboard.charts.technicianUsage.length === 0 ? (
-                <div className="py-8 text-sm text-zinc-500">Cadastre técnicos e atendimentos para visualizar esta análise.</div>
+                <div className="py-8 text-sm text-zinc-500">Cadastre técnicos e atendimentos para visualizar está análise.</div>
               ) : (
                 <div className="space-y-3">
                   {dashboard.charts.technicianUsage.map((item) => (
@@ -350,12 +350,12 @@ export default function Dashboard() {
                   <span className="text-xs font-medium text-green-400">{dashboard.openSuggestions}</span>
                 </div>
                 <p className="text-xs text-zinc-400">
-                  As sugestoes aparecem automaticamente no mapa quando houver atendimentos proximos.
+                  As sugestões aparecem automaticamente no mapa quando houver atendimentos próximos.
                 </p>
               </div>
               <Link to="/map">
                 <Button variant="outline" className="w-full border-purple-500/20 text-purple-400 hover:bg-purple-500/10">
-                  Abrir mapa com sugestoes
+                  Abrir mapa com sugestões
                 </Button>
               </Link>
             </CardContent>

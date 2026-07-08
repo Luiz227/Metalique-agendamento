@@ -4,17 +4,20 @@ import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { api } from '../services/api';
+import { useNavigate } from 'react-router-dom';
 
 type NotificationItem = {
   id: string;
   title: string;
   message: string;
+  href?: string | null;
   readAt?: string | null;
   createdAt: string;
 };
 
 export default function Notifications() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     api<NotificationItem[]>('/notifications').then(setNotifications).catch(() => setNotifications([]));
@@ -30,7 +33,16 @@ export default function Notifications() {
         </Card>
       )}
       {items.map((notification) => (
-        <Card key={notification.id} className={`bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 transition-all ${!notification.readAt ? 'border-l-4 border-l-blue-500' : ''}`}>
+        <Card
+          key={notification.id}
+          role={notification.href ? 'button' : undefined}
+          tabIndex={notification.href ? 0 : undefined}
+          onClick={() => notification.href && navigate(notification.href)}
+          onKeyDown={(event) => {
+            if (notification.href && (event.key === 'Enter' || event.key === ' ')) navigate(notification.href);
+          }}
+          className={`bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 transition-all ${notification.href ? 'cursor-pointer' : ''} ${!notification.readAt ? 'border-l-4 border-l-blue-500' : ''}`}
+        >
           <CardContent className="p-4">
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0">

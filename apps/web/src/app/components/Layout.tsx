@@ -19,9 +19,9 @@ import {
   Sparkles
 } from 'lucide-react';
 import { Button } from './ui/button';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Logo from './Logo';
-import { clearSession, getUser, type ApiUser } from '../services/api';
+import { api, clearSession, connectRealtime, getUser, type ApiUser } from '../services/api';
 
 type NavigationItem = {
   name: string;
@@ -35,6 +35,37 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 };
 
+type AppNotification = {
+  id: string;
+  title: string;
+  message: string;
+  href?: string | null;
+  createdAt: string;
+};
+
+const NOTIFICATION_ROLES: ApiUser['role'][] = ['ADMIN', 'LOGISTICS', 'SALES', 'VALIDATOR'];
+
+function playNotificationSound() {
+  const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextClass) return;
+  const context = new AudioContextClass();
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = 'sine';
+  oscillator.frequency.setValueAtTime(880, context.currentTime);
+  gain.gain.setValueAtTime(0.0001, context.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.18, context.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.35);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start();
+  oscillator.stop(context.currentTime + 0.36);
+  oscillator.addEventListener('ended', () => context.close().catch(() => undefined));
+  if (context.state === 'suspended') {
+    document.addEventListener('pointerdown', () => context.resume().catch(() => undefined), { once: true });
+  }
+}
+
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -43,8 +74,46 @@ export default function Layout() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isMobileWeb, setIsMobileWeb] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
+  const notificationIdsRef = useRef<string[]>([]);
   const user = getUser();
   const profileInitial = user?.name?.trim().charAt(0).toLocaleUpperCase('pt-BR') || 'U';
+  const canReceiveSchedulingNotifications = Boolean(user?.role && NOTIFICATION_ROLES.includes(user.role));
+
+  const loadNotifications = useCallback(async () => {
+    if (!canReceiveSchedulingNotifications || !user) return;
+    try {
+      const notifications = await api<AppNotification[]>('/notifications');
+      notificationIdsRef.current = notifications.map((notification) => notification.id);
+      const seenKey = `sp-notifications-seen-${user.id}`;
+      const alertedKey = `sp-notifications-alerted-${user.id}`;
+      const seen = new Set<string>(JSON.parse(localStorage.getItem(seenKey) || '[]'));
+      const alerted = new Set<string>(JSON.parse(localStorage.getItem(alertedKey) || '[]'));
+      const unseen = notifications.filter((notification) => !seen.has(notification.id));
+      const newAlerts = notifications.filter((notification) => !alerted.has(notification.id));
+      setNotificationCount(unseen.length);
+
+      if (newAlerts.length > 0) {
+        playNotificationSound();
+        localStorage.setItem(alertedKey, JSON.stringify(notifications.map((notification) => notification.id).slice(0, 100)));
+      }
+    } catch {
+      // A falha do painel de notificacoes nao deve interromper a navegacao.
+    }
+  }, [canReceiveSchedulingNotifications, user?.id]);
+
+  useEffect(() => {
+    if (!canReceiveSchedulingNotifications) return;
+    loadNotifications();
+    const disconnect = connectRealtime(loadNotifications);
+    return disconnect;
+  }, [canReceiveSchedulingNotifications, loadNotifications]);
+
+  function markNotificationsAsSeen() {
+    if (!user) return;
+    localStorage.setItem(`sp-notifications-seen-${user.id}`, JSON.stringify(notificationIdsRef.current.slice(0, 100)));
+    setNotificationCount(0);
+  }
 
   useEffect(() => {
     const html = document.documentElement;
@@ -202,10 +271,15 @@ export default function Layout() {
             <Button variant="ghost" size="icon" onClick={toggleTheme} title="Alternar tema">
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
-            {user?.role === 'ADMIN' && (
-              <Link to="/notifications">
+            {canReceiveSchedulingNotifications && (
+              <Link to="/notifications" onClick={markNotificationsAsSeen}>
                 <Button variant="ghost" size="icon" className="relative">
                   <Bell className="h-5 w-5" />
+                  {notificationCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+                      {notificationCount > 99 ? '99+' : notificationCount}
+                    </span>
+                  )}
                 </Button>
               </Link>
             )}

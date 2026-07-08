@@ -66,7 +66,7 @@ export default function App() {
           <Route path="technician" element={<RequireRole roles={['TECHNICIAN']}><TechnicianMobile /></RequireRole>} />
           <Route path="technician/calendar" element={<RequireRole roles={['TECHNICIAN']}><TechnicianCalendar /></RequireRole>} />
           <Route path="technician/weekly-report" element={<RequireRole roles={['TECHNICIAN']}><TechnicianWeeklyReport /></RequireRole>} />
-          <Route path="notifications" element={<RequireRole roles={['ADMIN']}><Notifications /></RequireRole>} />
+          <Route path="notifications" element={<RequireRole roles={['ADMIN', 'LOGISTICS', 'SALES', 'VALIDATOR']}><Notifications /></RequireRole>} />
           <Route path="technicians" element={<RequireRole roles={['ADMIN', 'LOGISTICS', 'SALES']}><Technicians /></RequireRole>} />
           <Route path="clients" element={<Navigate to={homeByRole(user?.role)} replace />} />
           <Route path="users" element={<RequireRole roles={['ADMIN']}><Users /></RequireRole>} />

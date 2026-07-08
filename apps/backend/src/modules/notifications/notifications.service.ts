@@ -6,6 +6,7 @@ type NotificationItem = {
   id: string;
   title: string;
   message: string;
+  href?: string | null;
   readAt: string | null;
   createdAt: string;
 };
@@ -49,6 +50,7 @@ export class NotificationsService {
         id: notification.id,
         title: notification.title,
         message: notification.message,
+        href: null,
         readAt: notification.readAt?.toISOString() ?? null,
         createdAt: notification.createdAt.toISOString()
       }))
@@ -64,15 +66,17 @@ export class NotificationsService {
     const checklist = this.buildSchedulingChecklist(appointment, checklistOverride);
     const missing = CHECKLIST_KEYS.filter((key) => !checklist[key]).map((key) => CHECKLIST_LABELS[key]);
     const createdAt = appointment.updatedAt.toISOString();
+    const reminderDay = new Date().toISOString().slice(0, 10);
     const notifications: NotificationItem[] = [];
 
     if (missing.length > 0) {
       notifications.push({
-        id: `pending-${appointment.id}`,
+        id: `pending-${appointment.id}-${reminderDay}`,
         title: `Pendencia no agendamento - ${appointment.client.name}`,
         message: `Falta confirmar: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? '...' : ''}.`,
+        href: `/appointments/${appointment.id}`,
         readAt: null,
-        createdAt
+        createdAt: new Date().toISOString()
       });
       return notifications;
     }
@@ -82,6 +86,7 @@ export class NotificationsService {
         id: `released-${appointment.id}`,
         title: `Atendimento liberado para ${appointment.technician.name}`,
         message: `${appointment.client.name} esta com checklist completo e ja aparece no aplicativo do tecnico.`,
+        href: `/appointments/${appointment.id}`,
         readAt: null,
         createdAt
       });
@@ -95,6 +100,7 @@ export class NotificationsService {
         id: `upcoming-${appointment.id}`,
         title: `Atendimento se aproximando - ${appointment.client.name}`,
         message: `${appointment.technician?.name ?? 'Tecnico'} tem atendimento em ${appointment.city} no dia ${start.toLocaleDateString('pt-BR')} as ${start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`,
+        href: `/appointments/${appointment.id}`,
         readAt: null,
         createdAt: start.toISOString()
       });

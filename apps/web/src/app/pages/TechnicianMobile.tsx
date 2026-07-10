@@ -128,7 +128,7 @@ export default function TechnicianMobile() {
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [clientSignatureDataUrl, setClientSignatureDataUrl] = useState('');
   const [technicianSignatureDataUrl, setTechnicianSignatureDataUrl] = useState('');
-  const [activeTripsView, setActiveTripsView] = useState<'WEEK' | 'FINISHED'>('WEEK');
+  const [activeTripsView, setActiveTripsView] = useState<'ACTIVE' | 'FINISHED'>('ACTIVE');
   const [activeSection, setActiveSection] = useState<'LIST' | 'DETAILS' | 'CALENDAR'>('LIST');
   const [monthCursor, setMonthCursor] = useState(() => new Date());
   const knownIdsRef = useRef<Set<string>>(new Set());
@@ -237,12 +237,12 @@ export default function TechnicianMobile() {
     !savingReport &&
     !missingVehiclePickupVideo &&
     !currentGeneratedReport;
-  const weeklyTrips = useMemo(
-    () => appointments.filter((item) => isInCurrentWeek(item.date) && !wasFinishedByTechnician(item)),
+  const activeTrips = useMemo(
+    () => appointments.filter((item) => !wasFinishedByTechnician(item)),
     [appointments]
   );
   const finishedTrips = useMemo(() => appointments.filter((item) => wasFinishedByTechnician(item)), [appointments]);
-  const visibleTrips = activeTripsView === 'WEEK' ? weeklyTrips : finishedTrips;
+  const visibleTrips = activeTripsView === 'ACTIVE' ? activeTrips : finishedTrips;
 
   useEffect(() => {
     setPickupMileage(current?.vehiclePickupMileage != null ? String(current.vehiclePickupMileage) : '');
@@ -595,11 +595,11 @@ export default function TechnicianMobile() {
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
-            onClick={() => setActiveTripsView('WEEK')}
-            className={`rounded-xl border p-3 text-left ${activeTripsView === 'WEEK' ? 'border-[#c8142f] bg-[#c8142f]/10' : 'border-border bg-card'}`}
+            onClick={() => setActiveTripsView('ACTIVE')}
+            className={`rounded-xl border p-3 text-left ${activeTripsView === 'ACTIVE' ? 'border-[#c8142f] bg-[#c8142f]/10' : 'border-border bg-card'}`}
           >
-            <p className="text-xs text-muted-foreground sm:text-sm">Viagens da semana</p>
-            <p className="text-xl font-bold sm:text-2xl">{weeklyTrips.length}</p>
+            <p className="text-xs text-muted-foreground sm:text-sm">Atendimentos ativos</p>
+            <p className="text-xl font-bold sm:text-2xl">{activeTrips.length}</p>
           </button>
           <button
             type="button"
@@ -614,13 +614,13 @@ export default function TechnicianMobile() {
         <Card className="rounded-2xl">
           <CardHeader>
             <CardTitle className="text-base sm:text-lg">
-              {activeTripsView === 'WEEK' ? 'Agendamentos da semana' : 'Viagens finalizadas'}
+              {activeTripsView === 'ACTIVE' ? 'Atendimentos ativos' : 'Viagens finalizadas'}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {visibleTrips.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                {activeTripsView === 'WEEK' ? 'Nenhum agendamento na semana.' : 'Nenhuma viagem finalizada.'}
+                {activeTripsView === 'ACTIVE' ? 'Nenhum atendimento ativo encontrado.' : 'Nenhuma viagem finalizada.'}
               </p>
             )}
             {[...visibleTrips]

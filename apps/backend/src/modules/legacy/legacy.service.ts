@@ -711,12 +711,8 @@ export class LegacyService {
     });
     if (!vehicleControl) throw new NotFoundException('Agendamento nao encontrado');
     if (vehicleControl.transportMode === 'CAR') {
-      const hasPickupVideo = vehicleControl.attachments.some(
-        (attachment) =>
-          attachment.kind === ATTACHMENT_KIND.VEHICLE_PICKUP_VIDEO ||
-          attachment.originalName.toLowerCase().startsWith('retirada-veiculo-')
-      );
-      if (!hasPickupVideo) throw new BadRequestException('Envie primeiro o video de retirada do veiculo.');
+      const pickupEvidenceCount = vehicleControl.attachments.filter((attachment) => this.isVehiclePickupEvidence(attachment)).length;
+      if (pickupEvidenceCount < 4) throw new BadRequestException('Envie primeiro as 4 fotos de retirada do veiculo.');
       const mileageControl = await this.prisma.appointment.findUnique({
         where: { id },
         select: { vehiclePickupMileage: true }
@@ -2968,23 +2964,19 @@ export class LegacyService {
         (attachment) => attachment.kind === ATTACHMENT_KIND.TECHNICAL_REPORT
       );
       if (!hasTechnicalReport) {
-        throw new BadRequestException('Envie o relatorio tecnico e as assinaturas antes do video de devolucao.');
+        throw new BadRequestException('Envie o relatorio tecnico e as assinaturas antes das fotos de devolucao.');
       }
       if (appointment.vehicleReturnMileage == null) {
-        throw new BadRequestException('Registre a quilometragem de devolucao antes de enviar o video.');
+        throw new BadRequestException('Registre a quilometragem de devolucao antes de enviar as fotos.');
       }
     }
     if (
       appointment.transportMode === 'CAR' &&
       (kind === ATTACHMENT_KIND.TECHNICAL_MEDIA || kind === ATTACHMENT_KIND.TECHNICAL_DOCUMENT)
     ) {
-      const hasPickupVideo = appointment.attachments.some(
-        (attachment) =>
-          attachment.kind === ATTACHMENT_KIND.VEHICLE_PICKUP_VIDEO ||
-          attachment.originalName.toLowerCase().startsWith('retirada-veiculo-')
-      );
-      if (!hasPickupVideo) {
-        throw new BadRequestException('Envie primeiro o video de retirada do veiculo.');
+      const pickupEvidenceCount = appointment.attachments.filter((attachment) => this.isVehiclePickupEvidence(attachment)).length;
+      if (pickupEvidenceCount < 4) {
+        throw new BadRequestException('Envie primeiro as 4 fotos de retirada do veiculo.');
       }
     }
     const attachmentId = randomUUID();
@@ -3049,6 +3041,28 @@ export class LegacyService {
       }
     });
     if (appointment.transportMode === 'CAR' && kind === ATTACHMENT_KIND.VEHICLE_RETURN_VIDEO) {
+      const completedLog = await this.prisma.statusLog.findFirst({
+        where: { appointmentId, status: 'COMPLETED_SUCCESS' },
+        select: { id: true }
+      });
+      const returnEvidenceCount = await this.prisma.attachment.count({
+        where: {
+          appointmentId,
+          OR: [
+            { kind: ATTACHMENT_KIND.VEHICLE_RETURN_VIDEO },
+            { originalName: { startsWith: 'devolucao-veiculo-' } }
+          ]
+        }
+      });
+      if (completedLog || returnEvidenceCount < 4) {
+        return {
+          ok: true,
+          type: type ?? 'midia-tecnica',
+          kind,
+          fileId: uploadResult.fileId,
+          folder: uploadResult.folderPath
+        };
+      }
       const reportLog = await this.prisma.statusLog.findFirst({
         where: { appointmentId, status: 'TECHNICAL_REPORT_SUBMITTED' },
         orderBy: { createdAt: 'desc' }
@@ -3325,6 +3339,13 @@ export class LegacyService {
     return CHECKLIST_KEYS.every((key) => checklist[key]);
   }
 
+  private isVehiclePickupEvidence(attachment: { kind: string; originalName: string }) {
+    return (
+      attachment.kind === ATTACHMENT_KIND.VEHICLE_PICKUP_VIDEO ||
+      attachment.originalName.toLowerCase().startsWith('retirada-veiculo-')
+    );
+  }
+
   private normalizeAttachmentKind(type: string | undefined, mimeType: string) {
     const normalized = String(type ?? '').trim().toLowerCase();
     if (normalized === 'service-order-template') return ATTACHMENT_KIND.SERVICE_ORDER_TEMPLATE;
@@ -3334,6 +3355,8 @@ export class LegacyService {
     if (normalized === 'midia-tecnica') return ATTACHMENT_KIND.TECHNICAL_MEDIA;
     if (normalized === 'video-retirada-veiculo') return ATTACHMENT_KIND.VEHICLE_PICKUP_VIDEO;
     if (normalized === 'video-devolucao-veiculo') return ATTACHMENT_KIND.VEHICLE_RETURN_VIDEO;
+    if (normalized === 'foto-retirada-veiculo') return ATTACHMENT_KIND.VEHICLE_PICKUP_VIDEO;
+    if (normalized === 'foto-devolucao-veiculo') return ATTACHMENT_KIND.VEHICLE_RETURN_VIDEO;
     if (normalized === 'documento-tecnico') return ATTACHMENT_KIND.TECHNICAL_DOCUMENT;
     if (mimeType.startsWith('image/') || mimeType.startsWith('video/')) return ATTACHMENT_KIND.TECHNICAL_MEDIA;
     return ATTACHMENT_KIND.GENERAL;

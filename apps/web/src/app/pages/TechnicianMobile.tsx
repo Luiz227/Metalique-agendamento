@@ -14,8 +14,8 @@ type PendingAttachment = {
   id: string;
   file: File;
   displayName: string;
-  type: 'midia-tecnica' | 'documento-tecnico' | 'video-retirada-veiculo' | 'video-devolucao-veiculo';
-  category: 'general-media' | 'general-document' | 'car-pickup-vídeo' | 'car-return-vídeo';
+  type: 'midia-tecnica' | 'documento-tecnico' | 'video-retirada-veiculo' | 'video-devolucao-veiculo' | 'foto-retirada-veiculo' | 'foto-devolucao-veiculo';
+  category: 'general-media' | 'general-document' | 'car-pickup-photo' | 'car-return-photo';
   previewUrl?: string;
 };
 
@@ -86,11 +86,28 @@ async function showBrowserNotification(title: string, options?: NotificationOpti
 
 function buildDefaultAttachmentName(
   fileName: string,
-  category: PendingAttachment['category']
+  category: PendingAttachment['category'],
+  sequence?: number
 ) {
-  if (category === 'car-pickup-vídeo') return `retirada-veiculo-${fileName}`;
-  if (category === 'car-return-vídeo') return `devolucao-veiculo-${fileName}`;
+  if (category === 'car-pickup-photo') return `retirada-veiculo-foto-${sequence ?? 1}-${fileName}`;
+  if (category === 'car-return-photo') return `devolucao-veiculo-foto-${sequence ?? 1}-${fileName}`;
   return fileName;
+}
+
+const VEHICLE_PHOTOS_REQUIRED = 4;
+const VEHICLE_PHOTO_LABELS = [
+  'banco-traseiro-chao',
+  'banco-dianteiro-painel',
+  'lateral-externa',
+  'odometro-quilometragem'
+];
+
+function isPickupVehicleEvidence(attachment: { kind: string; originalName: string }) {
+  return attachment.kind === 'VEHICLE_PICKUP_VIDEO' || attachment.originalName.toLowerCase().startsWith('retirada-veiculo-');
+}
+
+function isReturnVehicleEvidence(attachment: { kind: string; originalName: string }) {
+  return attachment.kind === 'VEHICLE_RETURN_VIDEO' || attachment.originalName.toLowerCase().startsWith('devolucao-veiculo-');
 }
 
 function isInCurrentWeek(dateValue: string) {
@@ -118,6 +135,7 @@ export default function TechnicianMobile() {
   const [loadingAppointments, setLoadingAppointments] = useState(true);
   const [appointmentsError, setAppointmentsError] = useState('');
   const [report, setReport] = useState({ summary: '' });
+  const [internalNote, setInternalNote] = useState('');
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [savingReport, setSavingReport] = useState(false);
@@ -223,19 +241,17 @@ export default function TechnicianMobile() {
   const currentClientPhone = current?.client?.phone ?? '';
   const currentAddress = current?.fullAddress ?? 'Endereço não informado';
   const isCarTrip = current?.transportMode === 'CAR';
-  const pickupVehicleVideo = (current?.attachments ?? []).find(
-    (item) => item.kind === 'VEHICLE_PICKUP_VIDEO' || item.originalName.toLowerCase().startsWith('retirada-veiculo-')
-  );
-  const returnVehicleVideo = (current?.attachments ?? []).find(
-    (item) => item.kind === 'VEHICLE_RETURN_VIDEO' || item.originalName.toLowerCase().startsWith('devolucao-veiculo-')
-  );
-  const missingVehiclePickupVideo = isCarTrip && !pickupVehicleVideo;
+  const pickupVehiclePhotos = (current?.attachments ?? []).filter(isPickupVehicleEvidence);
+  const returnVehiclePhotos = (current?.attachments ?? []).filter(isReturnVehicleEvidence);
+  const pickupVehiclePhotosComplete = !isCarTrip || pickupVehiclePhotos.length >= VEHICLE_PHOTOS_REQUIRED;
+  const returnVehiclePhotosComplete = !isCarTrip || returnVehiclePhotos.length >= VEHICLE_PHOTOS_REQUIRED;
+  const missingVehiclePickupPhotos = isCarTrip && !pickupVehiclePhotosComplete;
   const canSendReport =
     Boolean(report.summary) &&
     Boolean(clientSignatureDataUrl) &&
     Boolean(technicianSignatureDataUrl) &&
     !savingReport &&
-    !missingVehiclePickupVideo &&
+    !missingVehiclePickupPhotos &&
     !currentGeneratedReport;
   const activeTrips = useMemo(
     () => appointments.filter((item) => !wasFinishedByTechnician(item)),
@@ -285,8 +301,8 @@ export default function TechnicianMobile() {
 
   async function saveReport() {
     if (!current) return;
-    if (isCarTrip && !pickupVehicleVideo) {
-      setErrorMessage('Para viagens de carro, envie primeiro o vídeo e a quilometragem de retirada.');
+    if (isCarTrip && !pickupVehiclePhotosComplete) {
+      setErrorMessage('Para viagens de carro, envie primeiro as 4 fotos e a quilometragem de retirada.');
       return;
     }
     setSavingReport(true);
@@ -319,8 +335,9 @@ export default function TechnicianMobile() {
       clearSignature('client');
       setTechnicianSignatureDataUrl(savedTechnicianSignature);
       setReport({ summary: '' });
+      setInternalNote('');
       setMessage(isCarTrip
-        ? 'Relatório e anexos enviados ao Drive. Finalize depois com a KM e o vídeo de devolução.'
+        ? 'Relatório e anexos enviados ao Drive. Finalize depois com a KM e as 4 fotos de devolução.'
         : 'Relatório enviado com sucesso e atendimento finalizado.');
       await load();
     } catch (err) {
@@ -368,28 +385,37 @@ export default function TechnicianMobile() {
     });
   }
 
-  async function uploadVehicleVideo(file: File | undefined, stage: 'pickup' | 'return') {
-    if (!file) return;
+  async function uploadVehiclePhotos(files: FileList | null | undefined, stage: 'pickup' | 'return') {
+    const selectedFiles = Array.from(files ?? []).filter((file) => isImageFile(file));
+    if (selectedFiles.length < VEHICLE_PHOTOS_REQUIRED) {
+      setErrorMessage(`Selecione as ${VEHICLE_PHOTOS_REQUIRED} fotos obrigatórias de ${stage === 'pickup' ? 'retirada' : 'devolução'} do veículo.`);
+      return;
+    }
     const mileageText = stage === 'pickup' ? pickupMileage : returnMileage;
     const mileage = Number(mileageText);
     if (!Number.isInteger(mileage) || mileage < 0) {
-      setErrorMessage(`Informe a quilometragem de ${stage === 'pickup' ? 'retirada' : 'devolução'} antes de enviar o vídeo.`);
+      setErrorMessage(`Informe a quilometragem de ${stage === 'pickup' ? 'retirada' : 'devolução'} antes de enviar as fotos.`);
       return;
     }
-    const type = stage === 'pickup' ? 'video-retirada-veiculo' : 'video-devolucao-veiculo';
-    const category = stage === 'pickup' ? 'car-pickup-vídeo' : 'car-return-vídeo';
+    const type = stage === 'pickup' ? 'foto-retirada-veiculo' : 'foto-devolucao-veiculo';
+    const category = stage === 'pickup' ? 'car-pickup-photo' : 'car-return-photo';
     setUploadingVehicleStage(stage);
     setMessage('');
     setErrorMessage('');
     try {
       await saveVehicleMileage(stage);
-      await uploadFileNow(file, type, buildDefaultAttachmentName(file.name, category));
+      const filesToUpload = selectedFiles.slice(0, VEHICLE_PHOTOS_REQUIRED);
+      for (let index = 0; index < filesToUpload.length; index += 1) {
+        const file = filesToUpload[index];
+        const label = VEHICLE_PHOTO_LABELS[index] ?? `foto-${index + 1}`;
+        await uploadFileNow(file, type, buildDefaultAttachmentName(`${label}-${file.name}`, category, index + 1));
+      }
       setMessage(stage === 'pickup'
-        ? 'Vídeo de retirada enviado. O relatório técnico foi liberado.'
-        : 'Vídeo de devolução enviado. Atendimento finalizado com sucesso.');
+        ? 'Fotos de retirada enviadas. O relatório técnico foi liberado.'
+        : 'Fotos de devolução enviadas. Atendimento finalizado com sucesso.');
       await load(true);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Não foi possível enviar o vídeo do veículo.');
+      setErrorMessage(err instanceof Error ? err.message : 'Não foi possível enviar as fotos do veículo.');
     } finally {
       setUploadingVehicleStage(null);
     }
@@ -413,14 +439,7 @@ export default function TechnicianMobile() {
       category,
       previewUrl
     };
-    setPendingAttachments((prev) => {
-      if (category === 'car-pickup-vídeo' || category === 'car-return-vídeo') {
-        const previous = prev.find((entry) => entry.category === category);
-        if (previous?.previewUrl) URL.revokeObjectURL(previous.previewUrl);
-        return [...prev.filter((entry) => entry.category !== category), item];
-      }
-      return [...prev, item];
-    });
+    setPendingAttachments((prev) => [...prev, item]);
   }
 
   function addAttachments(
@@ -691,7 +710,7 @@ export default function TechnicianMobile() {
                       <p className="mt-2 text-sm text-amber-50/90">Veículo ainda não informado pela logística.</p>
                     )}
                     <p className="mt-2 text-xs text-amber-100/80">
-                      Grave o vídeo da retirada antes de sair e o vídeo da devolução ao retornar com o veículo.
+                      Envie as 4 fotos da retirada antes de sair e as 4 fotos da devolução ao retornar com o veículo.
                     </p>
                   </div>
                 </div>
@@ -708,7 +727,7 @@ export default function TechnicianMobile() {
                     <p><strong>Aeroporto do voo de volta:</strong> {current.flightReturnAirport || current.flightAirport || 'Não informado'}</p>
                     <p><strong>Voo de ida:</strong> {current.flightDepartureAt ? new Date(current.flightDepartureAt).toLocaleString('pt-BR') : 'Não informado'}</p>
                     <p><strong>Voo de volta:</strong> {current.flightReturnAt ? new Date(current.flightReturnAt).toLocaleString('pt-BR') : 'Não informado'}</p>
-                    <p className="pt-1 text-xs text-sky-100/80">Viagens aéreas não exigem vídeos de retirada ou devolução de veículo.</p>
+                    <p className="pt-1 text-xs text-sky-100/80">Viagens aéreas não exigem fotos de retirada ou devolução de veículo.</p>
                   </div>
                 </div>
               </div>
@@ -764,7 +783,7 @@ export default function TechnicianMobile() {
         </Card>
         )}
 
-        {activeSection === 'DETAILS' && (!isCarTrip || Boolean(pickupVehicleVideo)) && (
+        {activeSection === 'DETAILS' && (!isCarTrip || pickupVehiclePhotosComplete) && (
         <Card className="rounded-2xl">
           <CardHeader><CardTitle className="text-base sm:text-lg">Relatório Técnico</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -781,12 +800,24 @@ export default function TechnicianMobile() {
                 </div>
               )}
             </div>
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-100">
+              Revise e edite as considerações antes de enviar. Esse texto vai para a OS e para o Drive.
+            </div>
             <Textarea
               className="min-h-36 text-base"
-              placeholder="Considerações do técnico"
+              placeholder="Considerações do técnico que aparecem para o cliente"
               value={report.summary}
               onChange={(e) => setReport({ summary: e.target.value })}
             />
+            <Textarea
+              className="min-h-24 text-base border-amber-500/30 bg-amber-500/5"
+              placeholder="Observações internas ocultas do cliente e da OS"
+              value={internalNote}
+              onChange={(e) => setInternalNote(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              O campo interno fica apenas para controle do técnico nesta tela e não é enviado para o cliente nem para a OS.
+            </p>
           </CardContent>
         </Card>
         )}
@@ -799,8 +830,17 @@ export default function TechnicianMobile() {
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
                 <p className="text-sm font-semibold text-amber-300">Controle obrigatorio do veículo</p>
                 <p className="mt-1 text-xs text-amber-100/90">
-                  Primeiro envie o vídeo da retirada. Depois o sistema libera as considerações, os demais anexos e as assinaturas.
+                  Primeiro envie as 4 fotos da retirada. Depois o sistema libera as considerações, os demais anexos e as assinaturas.
                 </p>
+                <div className="mt-3 rounded-lg border border-amber-400/20 bg-black/10 p-3 text-xs text-amber-50/90">
+                  <p className="font-semibold">Fotos obrigatórias em cada etapa:</p>
+                  <ol className="mt-2 list-decimal space-y-1 pl-4">
+                    <li>Banco traseiro mostrando também o chão.</li>
+                    <li>Banco dianteiro mostrando também o painel.</li>
+                    <li>Lateral externa do veículo.</li>
+                    <li>Odômetro mostrando a quilometragem.</li>
+                  </ol>
+                </div>
                 <div className="mt-3 grid grid-cols-1 gap-3">
                   <label className="space-y-2">
                     <span className="text-sm font-medium">Quilometragem na retirada</span>
@@ -831,30 +871,33 @@ export default function TechnicianMobile() {
                   </Button>
                   <label className="flex min-h-20 cursor-pointer items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-background/70 px-4 py-3 text-left">
                     <div>
-                      <p className="text-sm font-medium">Vídeo de retirada do veículo</p>
+                      <p className="text-sm font-medium">Fotos de retirada do veículo</p>
                       <p className="text-xs text-muted-foreground">
-                        {pickupVehicleVideo ? pickupVehicleVideo.originalName : 'Ainda não enviado'}
+                        {pickupVehiclePhotos.length >= VEHICLE_PHOTOS_REQUIRED
+                          ? `${pickupVehiclePhotos.length} foto(s) enviada(s)`
+                          : `${pickupVehiclePhotos.length}/${VEHICLE_PHOTOS_REQUIRED} fotos enviadas`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={pickupVehicleVideo ? 'default' : 'secondary'}>
-                        {pickupVehicleVideo ? 'Enviado' : uploadingVehicleStage === 'pickup' ? 'Enviando' : 'Enviar primeiro'}
+                      <Badge variant={pickupVehiclePhotosComplete ? 'default' : 'secondary'}>
+                        {pickupVehiclePhotosComplete ? 'Completo' : uploadingVehicleStage === 'pickup' ? 'Enviando' : 'Enviar fotos'}
                       </Badge>
-                      <Video className="h-5 w-5" />
+                      <Camera className="h-5 w-5" />
                     </div>
                     <Input
                       type="file"
-                      accept="video/*"
+                      accept="image/*"
                       capture="environment"
+                      multiple
                       className="hidden"
                       disabled={uploadingVehicleStage !== null}
                       onChange={(e) => {
-                        uploadVehicleVideo(e.target.files?.[0], 'pickup').catch(() => undefined);
+                        uploadVehiclePhotos(e.target.files, 'pickup').catch(() => undefined);
                         e.currentTarget.value = '';
                       }}
                     />
                   </label>
-                  {pickupVehicleVideo && currentGeneratedReport && (
+                  {pickupVehiclePhotosComplete && currentGeneratedReport && (
                   <div className="space-y-3">
                   <label className="block space-y-2">
                     <span className="text-sm font-medium">Quilometragem na devolução</span>
@@ -885,32 +928,35 @@ export default function TechnicianMobile() {
                   </Button>
                   <label className="flex min-h-20 cursor-pointer items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-background/70 px-4 py-3 text-left">
                     <div>
-                      <p className="text-sm font-medium">Vídeo de devolução do veículo</p>
+                      <p className="text-sm font-medium">Fotos de devolução do veículo</p>
                       <p className="text-xs text-muted-foreground">
-                        {returnVehicleVideo ? returnVehicleVideo.originalName : 'Enviar ao devolver o veículo'}
+                        {returnVehiclePhotos.length >= VEHICLE_PHOTOS_REQUIRED
+                          ? `${returnVehiclePhotos.length} foto(s) enviada(s)`
+                          : `${returnVehiclePhotos.length}/${VEHICLE_PHOTOS_REQUIRED} fotos enviadas`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={returnVehicleVideo ? 'default' : 'secondary'}>
-                        {returnVehicleVideo ? 'Enviado' : uploadingVehicleStage === 'return' ? 'Enviando' : 'Obrigatório ao finalizar'}
+                      <Badge variant={returnVehiclePhotosComplete ? 'default' : 'secondary'}>
+                        {returnVehiclePhotosComplete ? 'Completo' : uploadingVehicleStage === 'return' ? 'Enviando' : 'Obrigatórias ao finalizar'}
                       </Badge>
-                      <Video className="h-5 w-5" />
+                      <Camera className="h-5 w-5" />
                     </div>
                     <Input
                       type="file"
-                      accept="video/*"
+                      accept="image/*"
                       capture="environment"
+                      multiple
                       className="hidden"
                       disabled={uploadingVehicleStage !== null}
                       onChange={(e) => {
-                        uploadVehicleVideo(e.target.files?.[0], 'return').catch(() => undefined);
+                        uploadVehiclePhotos(e.target.files, 'return').catch(() => undefined);
                         e.currentTarget.value = '';
                       }}
                     />
                   </label>
                   </div>
                   )}
-                  {pickupVehicleVideo && !currentGeneratedReport && (
+                  {pickupVehiclePhotosComplete && !currentGeneratedReport && (
                     <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-100">
                       Envie primeiro o relatório técnico, os anexos e as assinaturas. Depois a devolução do veículo será liberada.
                     </div>
@@ -918,12 +964,12 @@ export default function TechnicianMobile() {
                 </div>
               </div>
             )}
-            {isCarTrip && !pickupVehicleVideo && (
+            {isCarTrip && !pickupVehiclePhotosComplete && (
               <div className="rounded-xl border border-dashed border-amber-500/40 p-4 text-center text-sm text-muted-foreground">
-                As considerações técnicas, os outros arquivos e as assinaturas serão liberados depois do envio do vídeo de retirada.
+                As considerações técnicas, os outros arquivos e as assinaturas serão liberados depois do envio das 4 fotos de retirada.
               </div>
             )}
-            {(!isCarTrip || Boolean(pickupVehicleVideo)) && (
+            {(!isCarTrip || pickupVehiclePhotosComplete) && (
             <>
             <div className="grid grid-cols-2 gap-3">
             <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
@@ -964,10 +1010,10 @@ export default function TechnicianMobile() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-medium">{item.file.name}</p>
                       <p className="text-[11px] text-muted-foreground">
-                        {item.category === 'car-pickup-vídeo'
-                          ? 'Vídeo de retirada do veículo'
-                          : item.category === 'car-return-vídeo'
-                            ? 'Vídeo de devolução do veículo'
+                        {item.category === 'car-pickup-photo'
+                          ? 'Foto de retirada do veículo'
+                          : item.category === 'car-return-photo'
+                            ? 'Foto de devolução do veículo'
                             : item.type === 'documento-tecnico'
                               ? 'Documento técnico'
                               : 'Mídia tecnica'}
@@ -998,7 +1044,7 @@ export default function TechnicianMobile() {
         )}
 
 
-        {activeSection === 'DETAILS' && (!isCarTrip || Boolean(pickupVehicleVideo)) && (
+        {activeSection === 'DETAILS' && (!isCarTrip || pickupVehiclePhotosComplete) && (
         <Card className="rounded-2xl">
           <CardHeader><CardTitle className="text-base sm:text-lg">Assinaturas</CardTitle></CardHeader>
           <CardContent className="space-y-5">
@@ -1040,7 +1086,7 @@ export default function TechnicianMobile() {
         </Card>
         )}
 
-        {activeSection === 'DETAILS' && (!isCarTrip || Boolean(pickupVehicleVideo)) && (
+        {activeSection === 'DETAILS' && (!isCarTrip || pickupVehiclePhotosComplete) && (
         currentGeneratedReport ? (
           <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center text-sm text-emerald-300">
             {isCarTrip

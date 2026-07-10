@@ -387,14 +387,20 @@ export default function TechnicianMobile() {
 
   async function uploadVehiclePhotos(files: FileList | null | undefined, stage: 'pickup' | 'return') {
     const selectedFiles = Array.from(files ?? []).filter((file) => isImageFile(file));
-    if (selectedFiles.length < VEHICLE_PHOTOS_REQUIRED) {
-      setErrorMessage(`Selecione as ${VEHICLE_PHOTOS_REQUIRED} fotos obrigatÃ³rias de ${stage === 'pickup' ? 'retirada' : 'devoluÃ§Ã£o'} do veÃ­culo.`);
+    if (selectedFiles.length === 0) {
+      setErrorMessage(`Selecione uma foto de ${stage === 'pickup' ? 'retirada' : 'devolução'} do veículo.`);
+      return;
+    }
+    const existingCount = stage === 'pickup' ? pickupVehiclePhotos.length : returnVehiclePhotos.length;
+    const remainingCount = Math.max(VEHICLE_PHOTOS_REQUIRED - existingCount, 0);
+    if (remainingCount === 0) {
+      setMessage(`As ${VEHICLE_PHOTOS_REQUIRED} fotos de ${stage === 'pickup' ? 'retirada' : 'devolução'} já foram enviadas.`);
       return;
     }
     const mileageText = stage === 'pickup' ? pickupMileage : returnMileage;
     const mileage = Number(mileageText);
     if (!Number.isInteger(mileage) || mileage < 0) {
-      setErrorMessage(`Informe a quilometragem de ${stage === 'pickup' ? 'retirada' : 'devoluÃ§Ã£o'} antes de enviar as fotos.`);
+      setErrorMessage(`Informe a quilometragem de ${stage === 'pickup' ? 'retirada' : 'devolução'} antes de enviar as fotos.`);
       return;
     }
     const type = stage === 'pickup' ? 'foto-retirada-veiculo' : 'foto-devolucao-veiculo';
@@ -404,18 +410,24 @@ export default function TechnicianMobile() {
     setErrorMessage('');
     try {
       await saveVehicleMileage(stage);
-      const filesToUpload = selectedFiles.slice(0, VEHICLE_PHOTOS_REQUIRED);
+      const filesToUpload = selectedFiles.slice(0, remainingCount);
       for (let index = 0; index < filesToUpload.length; index += 1) {
         const file = filesToUpload[index];
-        const label = VEHICLE_PHOTO_LABELS[index] ?? `foto-${index + 1}`;
-        await uploadFileNow(file, type, buildDefaultAttachmentName(`${label}-${file.name}`, category, index + 1));
+        const sequence = existingCount + index + 1;
+        const label = VEHICLE_PHOTO_LABELS[sequence - 1] ?? `foto-${sequence}`;
+        await uploadFileNow(file, type, buildDefaultAttachmentName(`${label}-${file.name}`, category, sequence));
       }
-      setMessage(stage === 'pickup'
-        ? 'Fotos de retirada enviadas. O relatÃ³rio tÃ©cnico foi liberado.'
-        : 'Fotos de devoluÃ§Ã£o enviadas. Atendimento finalizado com sucesso.');
+      const totalUploaded = existingCount + filesToUpload.length;
+      if (totalUploaded >= VEHICLE_PHOTOS_REQUIRED) {
+        setMessage(stage === 'pickup'
+          ? 'Fotos de retirada enviadas. O relatório técnico foi liberado.'
+          : 'Fotos de devolução enviadas. Atendimento finalizado com sucesso.');
+      } else {
+        setMessage(`Foto enviada. Faltam ${VEHICLE_PHOTOS_REQUIRED - totalUploaded} foto(s) de ${stage === 'pickup' ? 'retirada' : 'devolução'} do veículo.`);
+      }
       await load(true);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'NÃ£o foi possÃ­vel enviar as fotos do veÃ­culo.');
+      setErrorMessage(err instanceof Error ? err.message : 'Não foi possível enviar as fotos do veículo.');
     } finally {
       setUploadingVehicleStage(null);
     }

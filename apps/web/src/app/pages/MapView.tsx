@@ -209,6 +209,7 @@ export default function MapView() {
   const [searchError, setSearchError] = useState('');
   const [mapError, setMapError] = useState('');
   const [searchedPoint, setSearchedPoint] = useState<SearchPoint | null>(null);
+  const [resolvedCoordsById, setResolvedCoordsById] = useState<Record<string, { lat: number; lng: number }>>({});
   const [routeInfo, setRouteInfo] = useState<{ distanceText: string; durationText: string } | null>(null);
 
   const mapElementRef = useRef<HTMLDivElement | null>(null);
@@ -271,31 +272,61 @@ export default function MapView() {
     });
   }, [appointments, filterTechnician, period, referenceDate, showFinishedOnMap]);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function resolveMissingCoords() {
+      const candidates = filteredAppointments.filter(
+        (appointment) =>
+          !resolvedCoordsById[appointment.id] &&
+          (appointment.latitude == null || appointment.longitude == null) &&
+          (appointment.fullAddress || appointment.client?.address)
+      );
+      const resolvedBatch: Record<string, { lat: number; lng: number }> = {};
+
+      for (const appointment of candidates.slice(0, 500)) {
+        const query = buildMapsQuery(
+          appointment.fullAddress || appointment.client?.address || '',
+          appointment.city || appointment.client?.city,
+          appointment.client?.state,
+          appointment.client?.zipCode
+        );
+        try {
+          const geo = await api<{ ok: boolean; lat: number | null; lng: number | null }>(`/maps/geocode?q=${encodeURIComponent(query)}`);
+          if (cancelled) return;
+          if (geo.ok && geo.lat != null && geo.lng != null) {
+            resolvedBatch[appointment.id] = { lat: geo.lat as number, lng: geo.lng as number };
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (!cancelled && Object.keys(resolvedBatch).length > 0) {
+        setResolvedCoordsById((prev) => ({ ...prev, ...resolvedBatch }));
+      }
+    }
+    resolveMissingCoords();
+    return () => {
+      cancelled = true;
+    };
+  }, [filteredAppointments]);
+
   const markers = useMemo<MapMarker[]>(
     () =>
       filteredAppointments
         .filter((appointment) => {
-          const lat = appointment.latitude ?? appointment.client?.latitude ?? appointment.technician?.latitude;
-          const lng = appointment.longitude ?? appointment.client?.longitude ?? appointment.technician?.longitude;
+          const resolved = resolvedCoordsById[appointment.id];
+          const lat = resolved?.lat ?? appointment.latitude ?? appointment.client?.latitude ?? appointment.technician?.latitude;
+          const lng = resolved?.lng ?? appointment.longitude ?? appointment.client?.longitude ?? appointment.technician?.longitude;
           return lat != null && lng != null;
         })
         .map((appointment) => ({
           ...appointment,
-          lat: Number(appointment.latitude ?? appointment.client?.latitude ?? appointment.technician?.latitude),
-          lng: Number(appointment.longitude ?? appointment.client?.longitude ?? appointment.technician?.longitude)
+          lat: Number(resolvedCoordsById[appointment.id]?.lat ?? appointment.latitude ?? appointment.client?.latitude ?? appointment.technician?.latitude),
+          lng: Number(resolvedCoordsById[appointment.id]?.lng ?? appointment.longitude ?? appointment.client?.longitude ?? appointment.technician?.longitude)
         }))
         .filter((a) => Number.isFinite(a.lat) && Number.isFinite(a.lng)),
-    [filteredAppointments]
-  );
-
-  const appointmentsMissingCoordinates = useMemo(
-    () =>
-      filteredAppointments.filter((appointment) => {
-        const lat = appointment.latitude ?? appointment.client?.latitude ?? appointment.technician?.latitude;
-        const lng = appointment.longitude ?? appointment.client?.longitude ?? appointment.technician?.longitude;
-        return lat == null || lng == null;
-      }).length,
-    [filteredAppointments]
+    [filteredAppointments, resolvedCoordsById]
   );
 
   const selectedData = selectedMarker ? markers.find((marker) => marker.id === selectedMarker) : null;
@@ -337,13 +368,13 @@ export default function MapView() {
       [...filteredAppointments]
         .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
         .map((appointment) => {
-          const lat = appointment.latitude ?? appointment.client?.latitude ?? appointment.technician?.latitude;
-          const lng = appointment.longitude ?? appointment.client?.longitude ?? appointment.technician?.longitude;
+          const lat = resolvedCoordsById[appointment.id]?.lat ?? appointment.latitude ?? appointment.client?.latitude ?? appointment.technician?.latitude;
+          const lng = resolvedCoordsById[appointment.id]?.lng ?? appointment.longitude ?? appointment.client?.longitude ?? appointment.technician?.longitude;
           if (lat == null || lng == null) return { ...appointment, distanceFromBaseKm: null as number | null, estimatedMinutesFromBase: null as number | null };
           const km = haversineKm(COMPANY_BASE, { lat: Number(lat), lng: Number(lng) });
           return { ...appointment, distanceFromBaseKm: km, estimatedMinutesFromBase: Math.round(km) };
         }),
-    [filteredAppointments]
+    [filteredAppointments, resolvedCoordsById]
   );
 
   const searchContextCity = useMemo(() => {
@@ -506,6 +537,47 @@ export default function MapView() {
     if (!bounds.isEmpty()) map.fitBounds(bounds, 80);
   }, [markers, visibleSuggestions, nearbyMapSuggestions, technicianMarkerLabels]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !window.google?.maps || filteredAppointments.length === 0) return;
+
+    const geocoder = new google.maps.Geocoder();
+    const candidates = filteredAppointments
+      .filter((appointment) => !resolvedCoordsById[appointment.id])
+      .slice(0, 500);
+    let cancelled = false;
+    const resolvedBatch: Record<string, { lat: number; lng: number }> = {};
+
+    (async () => {
+      for (const appointment of candidates) {
+        if (cancelled) return;
+        const query = buildMapsQuery(
+          appointment.fullAddress || appointment.client?.address || '',
+          appointment.city || appointment.client?.city,
+          appointment.client?.state,
+          appointment.client?.zipCode
+        );
+        if (!query) continue;
+        try {
+          const result = await geocoder.geocode({ address: query });
+          const loc = result.results?.[0]?.geometry?.location;
+          if (!loc) continue;
+          resolvedBatch[appointment.id] = { lat: loc.lat(), lng: loc.lng() };
+        } catch {
+          // ignora erro individual
+        }
+      }
+
+      if (!cancelled && Object.keys(resolvedBatch).length > 0) {
+        setResolvedCoordsById((prev) => ({ ...prev, ...resolvedBatch }));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filteredAppointments, resolvedCoordsById]);
+
   async function handleSearchAddress() {
     const query = searchAddress.trim();
     if (!query) return;
@@ -627,11 +699,6 @@ export default function MapView() {
             {searchedPoint && <p className="text-xs text-zinc-400 mt-2">{searchedPoint.formattedAddress ?? searchedPoint.query}{searchedDistance ? ` • ${searchedDistance.km.toFixed(1)} km (~${searchedDistance.min} min)` : ''}</p>}
             {searchError && <p className="text-xs text-red-400 mt-2">{searchError}</p>}
             {routeInfo && <p className="text-xs text-green-400 mt-2">Rota: {routeInfo.distanceText} • {routeInfo.durationText}</p>}
-            {appointmentsMissingCoordinates > 0 && (
-              <p className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-200">
-                {appointmentsMissingCoordinates} atendimento(s) sem coordenada salva nao aparecem no mapa. Abra o agendamento e salve o endereco para calcular uma vez.
-              </p>
-            )}
           </div>
         </div>
         <Card className="bg-zinc-800/30 border-zinc-700">
@@ -713,3 +780,4 @@ export default function MapView() {
     </div>
   );
 }
+

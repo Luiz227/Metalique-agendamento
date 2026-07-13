@@ -282,3 +282,19 @@ model AuditLog {
   @@index([userId, createdAt])
   @@map("audit_logs")
 }
+
+model ApiUsageLog {
+  id           String   @id @default(cuid())
+  provider     String
+  service      String
+  action       String
+  status       String   @default("SUCCESS")
+  units        Int      @default(1)
+  metadata     Json?
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  @@index([provider, service, createdAt])
+  @@index([status, createdAt])
+  @@map("api_usage_logs")
+}

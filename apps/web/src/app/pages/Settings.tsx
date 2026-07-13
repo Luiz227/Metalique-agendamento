@@ -1,10 +1,28 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Settings as SettingsIcon, Trash2 } from 'lucide-react';
+import { Activity, AlertTriangle, RefreshCw, Settings as SettingsIcon, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { api } from '../services/api';
+
+type ApiUsageSummary = {
+  period: { from: string; to: string; days: number };
+  totals: { units: number; requests: number };
+  byProvider: Array<{ provider: string; status: string; units: number; requests: number }>;
+  byService: Array<{ provider: string; service: string; action: string; status: string; units: number; requests: number }>;
+  byStatus: Array<{ status: string; units: number; requests: number }>;
+  recent: Array<{
+    id: string;
+    provider: string;
+    service: string;
+    action: string;
+    status: string;
+    units: number;
+    errorMessage?: string | null;
+    createdAt: string;
+  }>;
+};
 
 export default function Settings() {
   const [settings, setSettings] = useState({
@@ -21,10 +39,14 @@ export default function Settings() {
   const [resetConfirmation, setResetConfirmation] = useState('');
   const [resetting, setResetting] = useState(false);
   const [resetMessage, setResetMessage] = useState('');
+  const [apiUsage, setApiUsage] = useState<ApiUsageSummary | null>(null);
+  const [apiUsageDays, setApiUsageDays] = useState(30);
+  const [apiUsageLoading, setApiUsageLoading] = useState(false);
 
   useEffect(() => {
     api<typeof settings>('/settings').then((data) => setSettings({ ...settings, ...data })).catch(() => undefined);
     api<typeof sla>('/settings/sla').then((data) => setSla(data)).catch(() => undefined);
+    loadApiUsage(30);
   }, []);
 
   async function submit(event: React.FormEvent) {
@@ -35,6 +57,18 @@ export default function Settings() {
   async function submitSla(event: React.FormEvent) {
     event.preventDefault();
     await api('/settings/sla', { method: 'PUT', body: JSON.stringify(sla) });
+  }
+
+  async function loadApiUsage(days = apiUsageDays) {
+    setApiUsageLoading(true);
+    try {
+      const data = await api<ApiUsageSummary>(`/api-usage?days=${days}`);
+      setApiUsage(data);
+    } catch {
+      setApiUsage(null);
+    } finally {
+      setApiUsageLoading(false);
+    }
   }
 
   async function resetSystemData() {
@@ -56,6 +90,16 @@ export default function Settings() {
     }
   }
 
+  function formatDateTime(value: string) {
+    return new Date(value).toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
   return (
     <div className="p-6 max-w-4xl space-y-6">
       <div className="flex items-center gap-3">
@@ -65,6 +109,96 @@ export default function Settings() {
           <p className="text-zinc-400">Parâmetros de sugestão, custos e integrações Google</p>
         </div>
       </div>
+
+      <Card className="bg-zinc-900/50 border-zinc-800">
+        <CardHeader>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <CardTitle className="flex items-center gap-2 text-white">
+              <Activity className="h-5 w-5 text-emerald-400" />
+              Consumo das APIs
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <select
+                value={apiUsageDays}
+                onChange={(event) => {
+                  const days = Number(event.target.value);
+                  setApiUsageDays(days);
+                  loadApiUsage(days);
+                }}
+                className="h-9 rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100"
+              >
+                <option value={7}>Últimos 7 dias</option>
+                <option value={30}>Últimos 30 dias</option>
+                <option value={90}>Últimos 90 dias</option>
+              </select>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={apiUsageLoading}
+                onClick={() => loadApiUsage()}
+                className="border-zinc-700"
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${apiUsageLoading ? 'animate-spin' : ''}`} />
+                Atualizar
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+              <p className="text-sm text-zinc-400">Requisições registradas</p>
+              <p className="mt-2 text-3xl font-bold text-white">{apiUsage?.totals.requests ?? 0}</p>
+            </div>
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+              <p className="text-sm text-zinc-400">Unidades consumidas</p>
+              <p className="mt-2 text-3xl font-bold text-white">{apiUsage?.totals.units ?? 0}</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-zinc-800">
+            <div className="border-b border-zinc-800 px-4 py-3 text-sm font-semibold text-zinc-200">Por serviço</div>
+            <div className="divide-y divide-zinc-800">
+              {apiUsage?.byService.length ? apiUsage.byService.slice(0, 10).map((row) => (
+                <div key={`${row.provider}-${row.service}-${row.action}-${row.status}`} className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[1fr_auto_auto] md:items-center">
+                  <div>
+                    <p className="font-semibold text-white">{row.provider} / {row.service}</p>
+                    <p className="text-zinc-400">{row.action} - {row.status}</p>
+                  </div>
+                  <span className="rounded-full bg-blue-500/10 px-3 py-1 text-blue-200">{row.requests} req.</span>
+                  <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-emerald-200">{row.units} un.</span>
+                </div>
+              )) : (
+                <div className="px-4 py-6 text-sm text-zinc-400">Nenhum consumo registrado neste período.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-zinc-800">
+            <div className="border-b border-zinc-800 px-4 py-3 text-sm font-semibold text-zinc-200">Últimas chamadas</div>
+            <div className="divide-y divide-zinc-800">
+              {apiUsage?.recent.length ? apiUsage.recent.slice(0, 8).map((row) => (
+                <div key={row.id} className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[1fr_auto] md:items-center">
+                  <div>
+                    <p className="font-semibold text-white">{row.provider} / {row.service}</p>
+                    <p className="text-zinc-400">{row.action} - {row.status}{row.errorMessage ? ` - ${row.errorMessage}` : ''}</p>
+                  </div>
+                  <span className="text-zinc-400">{formatDateTime(row.createdAt)}</span>
+                </div>
+              )) : (
+                <div className="px-4 py-6 text-sm text-zinc-400">Sem chamadas recentes.</div>
+              )}
+            </div>
+          </div>
+
+          <p className="text-xs leading-5 text-zinc-500">
+            Este painel conta chamadas registradas pelo backend, como Google Maps, Drive, OpenAI e envio de e-mails.
+            Chamadas feitas diretamente pelo navegador, como carregamento visual do mapa, ainda devem ser conferidas no Google Cloud.
+          </p>
+        </CardContent>
+      </Card>
+
       <Card className="bg-zinc-900/50 border-zinc-800">
         <CardHeader><CardTitle className="text-white">Regras Inteligentes</CardTitle></CardHeader>
         <CardContent>
@@ -88,6 +222,7 @@ export default function Settings() {
           </form>
         </CardContent>
       </Card>
+
       <Card className="bg-zinc-900/50 border-zinc-800">
         <CardHeader><CardTitle className="text-white">SLA de Confirmação</CardTitle></CardHeader>
         <CardContent>
@@ -113,6 +248,7 @@ export default function Settings() {
           </form>
         </CardContent>
       </Card>
+
       <Card className="border-red-500/40 bg-red-500/5">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-red-400">
@@ -125,7 +261,7 @@ export default function Settings() {
             Somente sua conta de administrador será mantida. Os arquivos existentes no Google Drive não serão excluídos.
           </p>
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
-            Está ação e definitiva e não pode ser desfeita.
+            Esta ação é definitiva e não pode ser desfeita.
           </div>
           <label className="block space-y-2">
             <span className="text-sm text-zinc-300">Digite <strong>REDEFINIR SISTEMA</strong> para confirmar</span>

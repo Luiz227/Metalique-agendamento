@@ -8,6 +8,7 @@ import JSZip from 'jszip';
 import { join } from 'path';
 import { Readable } from 'stream';
 import { PDFDocument, PDFPage, PDFFont, PageSizes, rgb, StandardFonts } from 'pdf-lib';
+import { ApiUsageService } from '../api-usage/api-usage.service';
 
 type ParsedServiceOrderFields = {
   osNumber?: string;
@@ -96,7 +97,10 @@ const SIGE_TEMPLATE_PATHS = {
 
 @Injectable()
 export class LegacyService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly apiUsage: ApiUsageService
+  ) {}
 
   private driveClient: ReturnType<typeof google.drive> | null = null;
 
@@ -618,6 +622,12 @@ export class LegacyService {
           }
         ]
       })
+    });
+    void this.trackApiUsage('openai', 'chat-completions', 'weekly-technician-report', response.ok ? 'SUCCESS' : 'ERROR', {
+      model,
+      technicianIds: technicianIds.join(','),
+      sourceCount: sources.length,
+      httpStatus: response.status
     });
     if (!response.ok) throw new BadRequestException('Nao foi possivel gerar o relatorio semanal com IA');
     const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
@@ -1690,6 +1700,7 @@ export class LegacyService {
         supportsAllDrives: true,
         fields: 'id'
       });
+      void this.trackApiUsage('google', 'drive', 'temporary-docx-import', 'SUCCESS', { baseFileName });
 
       temporaryGoogleDocId = created.data.id ?? null;
       if (!temporaryGoogleDocId) {
@@ -1703,6 +1714,7 @@ export class LegacyService {
         },
         { responseType: 'arraybuffer' }
       );
+      void this.trackApiUsage('google', 'drive', 'export-docx-pdf', 'SUCCESS', { baseFileName });
 
       return Buffer.from(exported.data as ArrayBuffer);
     } finally {
@@ -1712,6 +1724,7 @@ export class LegacyService {
             fileId: temporaryGoogleDocId,
             supportsAllDrives: true
           });
+          void this.trackApiUsage('google', 'drive', 'delete-temporary-doc', 'SUCCESS', { baseFileName });
         } catch {
           // Ignora limpeza do temporario para nao mascarar o erro principal.
         }
@@ -3510,9 +3523,20 @@ export class LegacyService {
     try {
       created = await createFile(shouldConvertToGoogleDoc);
     } catch (error) {
+      void this.trackApiUsage('google', 'drive', 'upload-file', 'ERROR', {
+        fileName: params.fileName,
+        mimeType: params.mimeType,
+        converted: shouldConvertToGoogleDoc
+      }, this.extractErrorMessage(error));
       if (!shouldConvertToGoogleDoc) throw error;
       created = await createFile(false);
     }
+    void this.trackApiUsage('google', 'drive', 'upload-file', 'SUCCESS', {
+      fileName: params.fileName,
+      mimeType: params.mimeType,
+      converted: shouldConvertToGoogleDoc,
+      appointmentId: params.appointmentId
+    });
 
     const fileId = created.data.id;
     if (!fileId) throw new Error('Falha ao criar arquivo no Google Drive');
@@ -3540,6 +3564,7 @@ export class LegacyService {
       fields: 'files(id,name)',
       pageSize: 1
     });
+    void this.trackApiUsage('google', 'drive', 'find-folder', 'SUCCESS', { folderName });
     const existingId = found.data.files?.[0]?.id;
     if (existingId) return existingId;
 
@@ -3552,6 +3577,7 @@ export class LegacyService {
       supportsAllDrives: true,
       fields: 'id'
     });
+    void this.trackApiUsage('google', 'drive', 'create-folder', 'SUCCESS', { folderName });
     if (!created.data.id) throw new Error(`Falha ao criar pasta no Google Drive: ${folderName}`);
     return created.data.id;
   }
@@ -3611,6 +3637,30 @@ export class LegacyService {
     return [maybeError.message, responseData, ...(maybeError.errors?.map((item) => item.message) ?? [])]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes('invalid_grant'));
+  }
+
+  private extractErrorMessage(error: unknown) {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    return 'Erro desconhecido';
+  }
+
+  private async trackApiUsage(
+    provider: string,
+    service: string,
+    action: string,
+    status: 'SUCCESS' | 'ERROR' | 'SKIPPED',
+    metadata?: Prisma.InputJsonValue,
+    errorMessage?: string
+  ) {
+    await this.apiUsage.track({
+      provider,
+      service,
+      action,
+      status,
+      metadata,
+      errorMessage
+    });
   }
 
   private sanitizeFolderName(value: string) {
@@ -3759,6 +3809,10 @@ export class LegacyService {
         })
       });
 
+      void this.trackApiUsage('openai', 'chat-completions', 'parse-service-order', response.ok ? 'SUCCESS' : 'ERROR', {
+        model,
+        httpStatus: response.status
+      });
       if (!response.ok) return {};
       const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
       const content = payload.choices?.[0]?.message?.content;

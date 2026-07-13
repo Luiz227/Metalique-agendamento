@@ -11,6 +11,7 @@ import { MapsModule } from './modules/maps/maps.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { CalendarModule } from './modules/calendar/calendar.module';
 import { LegacyModule } from './modules/legacy/legacy.module';
+import { ApiUsageModule } from './modules/api-usage/api-usage.module';
 import { PrismaModule } from './infra/prisma/prisma.module';
 import { RedisModule } from './infra/redis/redis.module';
 import { QueueModule } from './infra/queue/queue.module';
@@ -31,6 +32,7 @@ import { QueueModule } from './infra/queue/queue.module';
     MapsModule,
     UploadsModule,
     CalendarModule,
+    ApiUsageModule,
     LegacyModule
   ]
 })

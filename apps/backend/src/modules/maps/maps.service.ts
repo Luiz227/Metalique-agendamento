@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ApiUsageService } from '../api-usage/api-usage.service';
 
 type GeocodeResult = {
   ok: boolean;
@@ -36,6 +37,8 @@ type LogisticsSuggestionResult = TravelTimeResult & {
 
 @Injectable()
 export class MapsService {
+  constructor(private readonly apiUsage: ApiUsageService) {}
+
   health() {
     return { ok: true, module: 'maps' };
   }
@@ -137,12 +140,19 @@ export class MapsService {
   private async tryGoogle(query: string, key: string): Promise<GeocodeResult> {
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&region=br&components=country:BR&key=${encodeURIComponent(key)}`;
     const response = await fetch(url);
-    if (!response.ok) return { ok: false, query, lat: null, lng: null, formattedAddress: null };
+    if (!response.ok) {
+      void this.trackUsage('google', 'maps-geocoding', 'geocode', 'ERROR', { query, httpStatus: response.status });
+      return { ok: false, query, lat: null, lng: null, formattedAddress: null };
+    }
 
     const payload = (await response.json()) as {
       status?: string;
       results?: Array<{ formatted_address?: string; geometry?: { location?: { lat?: number; lng?: number } } }>;
     };
+    void this.trackUsage('google', 'maps-geocoding', 'geocode', payload.status === 'OK' ? 'SUCCESS' : 'ERROR', {
+      query,
+      apiStatus: payload.status ?? 'UNKNOWN'
+    });
     if (payload.status !== 'OK') return { ok: false, query, lat: null, lng: null, formattedAddress: null };
     const first = payload.results?.[0];
     const lat = first?.geometry?.location?.lat;
@@ -164,9 +174,13 @@ export class MapsService {
     const response = await fetch(url, {
       headers: { 'User-Agent': 'metalique-agendamento/1.0 (ops@metalique.com.br)' }
     });
-    if (!response.ok) return { ok: false, query, lat: null, lng: null, formattedAddress: null };
+    if (!response.ok) {
+      void this.trackUsage('nominatim', 'geocoding-fallback', 'geocode', 'ERROR', { query, httpStatus: response.status });
+      return { ok: false, query, lat: null, lng: null, formattedAddress: null };
+    }
 
     const rows = (await response.json()) as Array<{ lat?: string; lon?: string; display_name?: string }>;
+    void this.trackUsage('nominatim', 'geocoding-fallback', 'geocode', rows?.[0] ? 'SUCCESS' : 'ERROR', { query });
     const first = rows?.[0];
     const lat = first?.lat ? Number(first.lat) : NaN;
     const lng = first?.lon ? Number(first.lon) : NaN;
@@ -186,6 +200,11 @@ export class MapsService {
     const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=driving&region=br&key=${encodeURIComponent(key)}`;
     const response = await fetch(url);
     if (!response.ok) {
+      void this.trackUsage('google', 'maps-directions', 'driving-route', 'ERROR', {
+        origin,
+        destination,
+        httpStatus: response.status
+      });
       return {
         ok: false,
         origin,
@@ -206,6 +225,12 @@ export class MapsService {
         }>;
       }>;
     };
+
+    void this.trackUsage('google', 'maps-directions', 'driving-route', payload.status === 'OK' ? 'SUCCESS' : 'ERROR', {
+      origin,
+      destination,
+      apiStatus: payload.status ?? 'UNKNOWN'
+    });
 
     if (payload.status !== 'OK') {
       return {
@@ -282,7 +307,14 @@ export class MapsService {
       `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${encodeURIComponent(`${lat},${lng}`)}` +
       `&rankby=distance&type=airport&key=${encodeURIComponent(key)}`;
     const response = await fetch(url);
-    if (!response.ok) return null;
+    if (!response.ok) {
+      void this.trackUsage('google', 'places-nearby', 'nearest-airport', 'ERROR', {
+        lat,
+        lng,
+        httpStatus: response.status
+      });
+      return null;
+    }
 
     const payload = (await response.json()) as {
       status?: string;
@@ -294,6 +326,11 @@ export class MapsService {
       }>;
     };
 
+    void this.trackUsage('google', 'places-nearby', 'nearest-airport', payload.status === 'OK' ? 'SUCCESS' : 'ERROR', {
+      lat,
+      lng,
+      apiStatus: payload.status ?? 'UNKNOWN'
+    });
     if (payload.status !== 'OK' && payload.status !== 'ZERO_RESULTS') return null;
     const first = payload.results?.[0];
     const airportLat = first?.geometry?.location?.lat;
@@ -322,7 +359,13 @@ export class MapsService {
         `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}` +
         `&location=${encodeURIComponent(`${lat},${lng}`)}&radius=150000&type=airport&region=br&key=${encodeURIComponent(key)}`;
       const response = await fetch(url);
-      if (!response.ok) continue;
+      if (!response.ok) {
+        void this.trackUsage('google', 'places-textsearch', 'airport-search', 'ERROR', {
+          query,
+          httpStatus: response.status
+        });
+        continue;
+      }
 
       const payload = (await response.json()) as {
         status?: string;
@@ -332,6 +375,10 @@ export class MapsService {
           geometry?: { location?: { lat?: number; lng?: number } };
         }>;
       };
+      void this.trackUsage('google', 'places-textsearch', 'airport-search', payload.status === 'OK' ? 'SUCCESS' : 'ERROR', {
+        query,
+        apiStatus: payload.status ?? 'UNKNOWN'
+      });
       if (payload.status !== 'OK') continue;
 
       const first = payload.results?.[0];
@@ -472,5 +519,15 @@ export class MapsService {
     }
 
     return normalized;
+  }
+
+  private async trackUsage(
+    provider: string,
+    service: string,
+    action: string,
+    status: 'SUCCESS' | 'ERROR',
+    metadata?: Record<string, string | number | null>
+  ) {
+    await this.apiUsage.track({ provider, service, action, status, metadata });
   }
 }

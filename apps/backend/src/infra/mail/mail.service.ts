@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import nodemailer from 'nodemailer';
 import { PrismaService } from '../prisma/prisma.service';
+import { ApiUsageService } from '../../modules/api-usage/api-usage.service';
 
 type ConfirmedAppointmentEmail = {
   id: string;
@@ -26,7 +27,10 @@ type ConfirmedAppointmentEmail = {
 export class MailService {
   private readonly logger = new Logger(MailService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly apiUsage: ApiUsageService
+  ) {}
 
   async sendAppointmentConfirmed(appointment: ConfirmedAppointmentEmail) {
     const technicianEmail = this.normalizeEmail(appointment.technician?.user?.email);
@@ -157,6 +161,7 @@ export class MailService {
       const results = await Promise.allSettled(deliveryPromises);
       const delivered = results.filter((result) => result.status === 'fulfilled').length;
       const failed = results.length - delivered;
+      await this.trackEmailUsage('appointment-confirmed', delivered, failed, appointment.id);
       if (failed) this.logger.warn(`${failed} e-mail(s) do agendamento ${appointment.id} falharam; ${delivered} foram entregues.`);
       else this.logger.log(`E-mails de confirmacao do agendamento ${appointment.id} enviados separadamente para ${delivered} destinatario(s).`);
       return {
@@ -171,6 +176,7 @@ export class MailService {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      await this.trackEmailUsage('appointment-confirmed', 0, 1, appointment.id, message);
       this.logger.error(`Falha ao enviar confirmacao do agendamento ${appointment.id}: ${message}`);
       return { sent: false, reason: 'send_failed' };
     }
@@ -272,10 +278,12 @@ export class MailService {
             </body>
           </html>`
       });
+      await this.trackEmailUsage(`appointment-${options.event}`, recipients.length, 0, appointment.id);
       this.logger.log(`E-mail de ${options.event} do agendamento ${appointment.id} enviado para ${recipients.length} destinatário(s).`);
       return { sent: true, recipients: recipients.length };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      await this.trackEmailUsage(`appointment-${options.event}`, 0, 1, appointment.id, message);
       this.logger.error(`Falha ao enviar ${options.event} do agendamento ${appointment.id}: ${message}`);
       return { sent: false, reason: 'send_failed' };
     }
@@ -386,4 +394,30 @@ export class MailService {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
   }
+
+  private async trackEmailUsage(action: string, delivered: number, failed: number, appointmentId: string, errorMessage?: string) {
+    if (delivered > 0) {
+      await this.apiUsage.track({
+        provider: 'smtp',
+        service: 'email',
+        action,
+        status: 'SUCCESS',
+        units: delivered,
+        metadata: { appointmentId, delivered }
+      });
+    }
+    if (failed > 0) {
+      await this.apiUsage.track({
+        provider: 'smtp',
+        service: 'email',
+        action,
+        status: 'ERROR',
+        units: failed,
+        metadata: { appointmentId, failed },
+        errorMessage
+      });
+    }
+  }
 }
+
+

@@ -3694,25 +3694,7 @@ export class LegacyService {
     const lat = appointment.latitude ?? appointment.client?.latitude;
     const lng = appointment.longitude ?? appointment.client?.longitude;
     if (lat != null && lng != null) return { lat: Number(lat), lng: Number(lng) };
-
-    const point = await this.geocodeAddress(appointment.fullAddress || appointment.client?.address || '', appointment.city);
-    if (!point) return null;
-
-    void this.prisma.appointment.update({
-      where: { id: appointment.id },
-      data: { latitude: point.lat, longitude: point.lng }
-    }).catch(() => undefined);
-
-    return point;
-  }
-
-  private buildMapsQuery(address?: string | null, city?: string | null) {
-    const normalizedCity = String(city ?? '')
-      .replace(/\s*\/\s*/g, ', ')
-      .replace(/\s+-\s+/g, ', ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    return [String(address ?? '').trim(), normalizedCity, 'Brasil'].filter(Boolean).join(', ');
+    return null;
   }
 
   private normalizePdfText(text: string) {
@@ -4066,28 +4048,6 @@ export class LegacyService {
 
   private stripEmptyFields(fields: ParsedServiceOrderFields) {
     return Object.fromEntries(Object.entries(fields).filter(([, value]) => Boolean(value))) as ParsedServiceOrderFields;
-  }
-
-  private async geocodeAddress(address?: string | null, city?: string | null) {
-    const key = process.env.GOOGLE_MAPS_API_KEY;
-    const query = this.buildMapsQuery(address, city);
-    if (!key || !query) return null;
-
-    try {
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${encodeURIComponent(key)}`;
-      const response = await fetch(url);
-      if (!response.ok) return null;
-      const payload = (await response.json()) as {
-        status?: string;
-        results?: Array<{ geometry?: { location?: { lat?: number; lng?: number } } }>;
-      };
-      if (payload.status !== 'OK') return null;
-      const location = payload.results?.[0]?.geometry?.location;
-      if (typeof location?.lat !== 'number' || typeof location?.lng !== 'number') return null;
-      return { lat: location.lat, lng: location.lng };
-    } catch {
-      return null;
-    }
   }
 
   private haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {

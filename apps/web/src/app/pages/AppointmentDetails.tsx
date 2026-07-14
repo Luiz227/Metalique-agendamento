@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, Car, CheckCircle, Clock, FileText, Hotel, MapPin, Navigation, Route, User } from 'lucide-react';
+import { ArrowLeft, Calendar, Car, CheckCircle, Clock, FileText, Hotel, Navigation, Route, User } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -321,23 +321,6 @@ export default function AppointmentDetails() {
           );
           if (!route.ok && browserKey) {
             route = await calculateBrowserLogisticsSuggestion(browserKey, COMPANY_BASE_ADDRESS, destination) as LogisticsSuggestion;
-          } else if (
-            route.ok &&
-            route.suggestedMode === 'AIR' &&
-            !route.nearestAirport &&
-            browserKey
-          ) {
-            const browserRoute = await calculateBrowserLogisticsSuggestion(
-              browserKey,
-              COMPANY_BASE_ADDRESS,
-              destination
-            ) as LogisticsSuggestion;
-            if (browserRoute.nearestAirport) {
-              route = {
-                ...route,
-                nearestAirport: browserRoute.nearestAirport
-              };
-            }
           }
         } catch (backendErr) {
           if (!browserKey) throw backendErr;
@@ -348,34 +331,15 @@ export default function AppointmentDetails() {
           setTravelEstimate({ distanceText: route.distanceText, durationText: route.durationText });
           if (editing) {
             setForm((prev) => {
-              const airportLabel =
-                route.nearestAirport?.name && route.nearestAirport?.formattedAddress
-                  ? `${route.nearestAirport.name} - ${route.nearestAirport.formattedAddress}`
-                  : route.nearestAirport?.name || route.nearestAirport?.formattedAddress || '';
               const nextTransportMode = route.suggestedMode ?? prev.transportMode;
-              const nextFlightAirport = nextTransportMode === 'AIR'
-                ? airportLabel || prev.flightAirport
-                : '';
-              const nextOutboundAirport = nextTransportMode === 'AIR'
-                ? airportLabel || prev.flightOutboundAirport
-                : '';
-              const nextReturnAirport = nextTransportMode === 'AIR'
-                ? airportLabel || prev.flightReturnAirport
-                : '';
               if (
-                prev.transportMode === nextTransportMode &&
-                prev.flightAirport === nextFlightAirport &&
-                prev.flightOutboundAirport === nextOutboundAirport &&
-                prev.flightReturnAirport === nextReturnAirport
+                prev.transportMode === nextTransportMode
               ) {
                 return prev;
               }
               return {
                 ...prev,
-                transportMode: nextTransportMode,
-                flightAirport: nextFlightAirport,
-                flightOutboundAirport: nextOutboundAirport,
-                flightReturnAirport: nextReturnAirport
+                transportMode: nextTransportMode
               };
             });
           }
@@ -412,20 +376,14 @@ export default function AppointmentDetails() {
     editing ? form.clientState : appointment?.client?.state,
     editing ? form.clientZipCode : appointment?.client?.zipCode
   );
-  const nearestAirportLabel = logisticsSuggestion?.nearestAirport
-    ? [
-        logisticsSuggestion.nearestAirport.name,
-        logisticsSuggestion.nearestAirport.formattedAddress,
-        logisticsSuggestion.nearestAirport.distanceText ? `${logisticsSuggestion.nearestAirport.distanceText} do cliente` : ''
-      ]
-        .filter(Boolean)
-        .join(' - ')
-    : '';
   const shouldShowLogisticsStatus = logisticsDestination.length >= 6;
-  const airportDestination = logisticsSuggestion?.suggestedMode === 'AIR'
-    ? [logisticsSuggestion.nearestAirport?.name, logisticsSuggestion.nearestAirport?.formattedAddress].filter(Boolean).join(', ')
-    : '';
-  const effectiveRouteDestination = airportDestination || logisticsDestination;
+  const manualAirportDestination = editing
+    ? form.flightOutboundAirport || form.flightAirport
+    : appointment?.flightOutboundAirport || appointment?.flightAirport || '';
+  const effectiveRouteDestination =
+    logisticsSuggestion?.suggestedMode === 'AIR' && manualAirportDestination
+      ? manualAirportDestination
+      : logisticsDestination;
   const routeExternalUrl = effectiveRouteDestination
     ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(COMPANY_BASE_ADDRESS)}&destination=${encodeURIComponent(effectiveRouteDestination)}&travelmode=driving`
     : '';
@@ -961,33 +919,8 @@ export default function AppointmentDetails() {
                 <p className="text-xs text-muted-foreground">Dados do voo</p>
                 {editing ? (
                   <>
-                    <div className="space-y-1">
-                      <p className="text-[11px] text-muted-foreground">Aeroporto mais próximo do cliente</p>
-                      <div className="space-y-2 rounded-md border bg-muted/20 p-3">
-                        <Input
-                          value={
-                            travelLoading
-                              ? 'Calculando aeroporto mais próximo...'
-                              : nearestAirportLabel || 'Aeroporto não localizado automaticamente'
-                          }
-                          readOnly
-                        />
-                        {nearestAirportLabel && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="w-full"
-                            onClick={() => setForm((prev) => ({
-                              ...prev,
-                              flightAirport: nearestAirportLabel,
-                              flightOutboundAirport: nearestAirportLabel,
-                              flightReturnAirport: nearestAirportLabel
-                            }))}
-                          >
-                            Usar aeroporto sugerido na viagem
-                          </Button>
-                        )}
-                      </div>
+                    <div className="rounded-md border border-blue-500/20 bg-blue-500/10 p-3 text-xs text-blue-100">
+                      Viagem aérea sugerida pelo tempo de carro. Informe manualmente os aeroportos/terminais do voo para evitar buscas extras na API.
                     </div>
                     <div className="space-y-1">
                       <p className="text-[11px] text-muted-foreground">Aeroporto/terminal do voo de ida</p>
@@ -1018,7 +951,7 @@ export default function AppointmentDetails() {
                   </>
                 ) : (
                   <div className="space-y-1 text-sm">
-                    <p>Aeroporto mais próximo do cliente: {nearestAirportLabel || appointment.flightAirport || 'Não informado'}</p>
+                    <p>Aeroporto informado: {appointment.flightAirport || 'Não informado'}</p>
                     <p>Voo de ida: {appointment.flightOutboundAirport || appointment.flightAirport || 'Não informado'}</p>
                     <p>Voo de volta: {appointment.flightReturnAirport || appointment.flightAirport || 'Não informado'}</p>
                     <p className="text-muted-foreground">Ida: {safeLocaleDateTime(appointment.flightDepartureAt)}</p>
@@ -1092,17 +1025,6 @@ export default function AppointmentDetails() {
                           {logisticsSuggestion.suggestedReason && (
                             <p className="mt-1 text-xs text-muted-foreground">{logisticsSuggestion.suggestedReason}</p>
                           )}
-                          {logisticsSuggestion.nearestAirport && (
-                            <div className="mt-2 text-xs text-muted-foreground">
-                              <p>Aeroporto mais próximo: {logisticsSuggestion.nearestAirport.name || 'Não identificado'}</p>
-                              {logisticsSuggestion.nearestAirport.formattedAddress && (
-                                <p>{logisticsSuggestion.nearestAirport.formattedAddress}</p>
-                              )}
-                              {logisticsSuggestion.nearestAirport.distanceText && (
-                                <p>Distancia do cliente até o aeroporto: {logisticsSuggestion.nearestAirport.distanceText}</p>
-                              )}
-                            </div>
-                          )}
                         </>
                       )}
                       {!travelLoading && !logisticsSuggestion?.suggestedMode && logisticsError && (
@@ -1113,23 +1035,8 @@ export default function AppointmentDetails() {
                       )}
                     </div>
                   )}
-                  {logisticsSuggestion?.suggestedMode === 'AIR' && logisticsSuggestion?.nearestAirport && (
-                    <div className="rounded-md border border-cyan-500/20 bg-cyan-500/10 p-3">
-                      <div className="flex items-center gap-2 text-xs text-cyan-100">
-                        <MapPin className="h-4 w-4" />
-                        Aeroporto sugerido para está viagem
-                      </div>
-                      <p className="mt-1 text-sm font-semibold text-white">{logisticsSuggestion.nearestAirport.name || 'Não identificado'}</p>
-                      {logisticsSuggestion.nearestAirport.formattedAddress && (
-                        <p className="mt-1 text-xs text-cyan-50/90">{logisticsSuggestion.nearestAirport.formattedAddress}</p>
-                      )}
-                      {logisticsSuggestion.nearestAirport.distanceText && (
-                        <p className="mt-1 text-xs text-cyan-100/80">Distancia do cliente até o aeroporto: {logisticsSuggestion.nearestAirport.distanceText}</p>
-                      )}
-                    </div>
-                  )}
-                  {(travelEstimate || logisticsSuggestion?.nearestAirport) && (
-                    <div className={`grid gap-2 ${logisticsSuggestion?.nearestAirport ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+                  {travelEstimate && (
+                    <div className="grid gap-2 sm:grid-cols-2">
                       <div className="rounded-md border bg-muted/30 p-3">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Clock className="h-4 w-4" />
@@ -1140,29 +1047,17 @@ export default function AppointmentDetails() {
                       <div className="rounded-md border bg-muted/30 p-3">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Route className="h-4 w-4" />
-                          Distancia da Metalique
+                          Distância da Metalique
                         </div>
                         <p className="mt-1 text-sm font-semibold">{travelEstimate?.distanceText ?? 'Não calculado'}</p>
                       </div>
-                      {logisticsSuggestion?.nearestAirport && (
-                        <div className="rounded-md border bg-muted/30 p-3">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <MapPin className="h-4 w-4" />
-                            Aeroporto sugerido
-                          </div>
-                          <p className="mt-1 text-sm font-semibold">{logisticsSuggestion.nearestAirport.name || 'Não identificado'}</p>
-                          {logisticsSuggestion.nearestAirport.distanceText && (
-                            <p className="mt-1 text-xs text-muted-foreground">{logisticsSuggestion.nearestAirport.distanceText} do cliente</p>
-                          )}
-                        </div>
-                      )}
                     </div>
                   )}
                   {routeExternalUrl && (
                     <a href={routeExternalUrl} target="_blank" rel="noreferrer">
                       <Button type="button" variant="outline" className="w-full">
                         <Navigation className="mr-2 h-4 w-4" />
-                        {logisticsSuggestion?.suggestedMode === 'AIR' ? 'Abrir rota até o aeroporto' : 'Abrir rota no Google Maps'}
+                        {logisticsSuggestion?.suggestedMode === 'AIR' && manualAirportDestination ? 'Abrir rota até o aeroporto informado' : 'Abrir rota no Google Maps'}
                       </Button>
                     </a>
                   )}

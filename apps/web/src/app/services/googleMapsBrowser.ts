@@ -18,16 +18,6 @@ declare global {
   }
 }
 
-function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
-  const radius = 6371;
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-  const lat1 = (a.lat * Math.PI) / 180;
-  const lat2 = (b.lat * Math.PI) / 180;
-  const x = Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
-  return 2 * radius * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-}
-
 export function loadGoogleMapsBrowser(apiKey: string): Promise<void> {
   return new Promise((resolve, reject) => {
     if (window.google?.maps) {
@@ -53,15 +43,6 @@ export function loadGoogleMapsBrowser(apiKey: string): Promise<void> {
   });
 }
 
-function geocode(geocoder: google.maps.Geocoder, address: string) {
-  return geocoder.geocode({ address, region: 'BR' });
-}
-
-function extractAddressComponent(result: google.maps.GeocoderResult | undefined, wantedTypes: string[]) {
-  const component = result?.address_components?.find((item) => wantedTypes.some((type) => item.types.includes(type)));
-  return component?.long_name ?? null;
-}
-
 export async function calculateBrowserLogisticsSuggestion(
   apiKey: string,
   origin: string,
@@ -74,7 +55,6 @@ export async function calculateBrowserLogisticsSuggestion(
   }
 
   const directions = new google.maps.DirectionsService();
-  const geocoder = new google.maps.Geocoder();
 
   const response = await directions.route({
     origin,
@@ -102,41 +82,6 @@ export async function calculateBrowserLogisticsSuggestion(
   }
 
   const mustFly = durationSeconds > 10 * 60 * 60;
-  let nearestAirport: BrowserLogisticsSuggestion['nearestAirport'] = null;
-
-  if (mustFly) {
-    try {
-      const [clientGeo] = await geocode(geocoder, destination);
-      const clientLocation = clientGeo.results?.[0]?.geometry?.location;
-      const clientResult = clientGeo.results?.[0];
-      const resolvedCity =
-        extractAddressComponent(clientResult, ['administrative_area_level_2']) ||
-        extractAddressComponent(clientResult, ['locality']) ||
-        extractAddressComponent(clientResult, ['administrative_area_level_1']);
-      const resolvedState = extractAddressComponent(clientResult, ['administrative_area_level_1']);
-      const resolvedCountry = extractAddressComponent(clientResult, ['country']) || 'Brasil';
-      const airportSearchBase = [resolvedCity, resolvedState, resolvedCountry].filter(Boolean).join(', ');
-      const airportSearchQuery = airportSearchBase ? `Aeroporto, ${airportSearchBase}` : `Aeroporto, ${destination}`;
-      const [airportGeo] = await geocode(geocoder, airportSearchQuery);
-      const airportResult = airportGeo.results?.[0];
-      const airportLocation = airportResult?.geometry?.location;
-
-      if (clientLocation && airportLocation) {
-        const km = haversineKm(
-          { lat: clientLocation.lat(), lng: clientLocation.lng() },
-          { lat: airportLocation.lat(), lng: airportLocation.lng() }
-        );
-
-        nearestAirport = {
-          name: airportResult?.address_components?.[0]?.long_name ?? airportResult?.formatted_address?.split(',')[0] ?? 'Aeroporto sugerido',
-          formattedAddress: airportResult?.formatted_address ?? null,
-          distanceText: `${km.toFixed(1)} km`
-        };
-      }
-    } catch {
-      nearestAirport = null;
-    }
-  }
 
   return {
     ok: true,
@@ -145,8 +90,8 @@ export async function calculateBrowserLogisticsSuggestion(
     durationSeconds,
     suggestedMode: mustFly ? 'AIR' : 'CAR',
     suggestedReason: mustFly
-      ? 'Tempo estimado de carro acima de 10 horas. Recomendo viagem aerea.'
+      ? 'Tempo estimado de carro acima de 10 horas. Recomendo viagem aérea.'
       : 'Tempo estimado de carro abaixo de 10 horas. Recomendo viagem de carro.',
-    nearestAirport
+    nearestAirport: null
   };
 }

@@ -86,30 +86,16 @@ export class MapsService {
       if (googleRoute.ok) return googleRoute;
     }
 
-    const from = await this.geocode(origin);
-    const to = await this.geocode(destination);
-    if (!from.ok || !to.ok || from.lat == null || from.lng == null || to.lat == null || to.lng == null) {
-      return {
-        ok: false,
-        origin,
-        destination,
-        distanceMeters: null,
-        distanceText: null,
-        durationSeconds: null,
-        durationText: null
-      };
-    }
-
-    const meters = this.haversineKm(from.lat, from.lng, to.lat, to.lng) * 1000;
-    const minutes = Math.max(1, Math.round((meters / 1000) * 1.4));
+    // Do not estimate route time by straight-line distance. The frontend can
+    // still fall back to the browser Google Maps SDK for an actual road route.
     return {
-      ok: true,
+      ok: false,
       origin,
       destination,
-      distanceMeters: Math.round(meters),
-      distanceText: `${(meters / 1000).toFixed(1)} km`,
-      durationSeconds: minutes * 60,
-      durationText: `${minutes} min`
+      distanceMeters: null,
+      distanceText: null,
+      durationSeconds: null,
+      durationText: null
     };
   }
 

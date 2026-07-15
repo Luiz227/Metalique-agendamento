@@ -253,6 +253,7 @@ export default function TechnicianMobile() {
     !savingReport &&
     !missingVehiclePickupPhotos &&
     !currentGeneratedReport;
+  const canWriteInternalNote = Boolean(clientSignatureDataUrl);
   const activeTrips = useMemo(
     () => appointments.filter((item) => !wasFinishedByTechnician(item)),
     [appointments]
@@ -309,12 +310,20 @@ export default function TechnicianMobile() {
     setMessage('');
     setErrorMessage('');
     try {
+      const submittedTechnicianSignature = technicianSignatureDataUrl;
+      if (submittedTechnicianSignature && submittedTechnicianSignature !== savedTechnicianSignature) {
+        const saved = await api<{ signatureDataUrl: string }>('/technician/profile/signature', {
+          method: 'PUT',
+          body: JSON.stringify({ signatureDataUrl: submittedTechnicianSignature })
+        });
+        setSavedTechnicianSignature(saved.signatureDataUrl || submittedTechnicianSignature);
+      }
       await api(`/technician/appointments/${current.id}/reports`, {
         method: 'POST',
         body: JSON.stringify({
           ...report,
           clientSignatureDataUrl,
-          technicianSignatureDataUrl,
+          technicianSignatureDataUrl: submittedTechnicianSignature,
           finishedAt: new Date().toISOString()
         })
       });
@@ -333,7 +342,7 @@ export default function TechnicianMobile() {
       });
       setPendingAttachments([]);
       clearSignature('client');
-      setTechnicianSignatureDataUrl(savedTechnicianSignature);
+      setTechnicianSignatureDataUrl(submittedTechnicianSignature);
       setReport({ summary: '' });
       setInternalNote('');
       setMessage(isCarTrip
@@ -383,6 +392,24 @@ export default function TechnicianMobile() {
       method: 'POST',
       body: JSON.stringify({ stage, mileage })
     });
+  }
+
+  async function saveTechnicianSignatureToProfile() {
+    if (!technicianSignatureDataUrl) {
+      setErrorMessage('Desenhe a assinatura do tecnico antes de salvar.');
+      return;
+    }
+    setErrorMessage('');
+    try {
+      const saved = await api<{ signatureDataUrl: string }>('/technician/profile/signature', {
+        method: 'PUT',
+        body: JSON.stringify({ signatureDataUrl: technicianSignatureDataUrl })
+      });
+      setSavedTechnicianSignature(saved.signatureDataUrl || technicianSignatureDataUrl);
+      setMessage('Assinatura do tecnico salva para os proximos atendimentos.');
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Nao foi possivel salvar a assinatura do tecnico.');
+    }
   }
 
   async function uploadVehiclePhotos(files: FileList | null | undefined, stage: 'pickup' | 'return') {
@@ -821,15 +848,24 @@ export default function TechnicianMobile() {
               value={report.summary}
               onChange={(e) => setReport({ summary: e.target.value })}
             />
-            <Textarea
-              className="min-h-24 text-base border-amber-500/30 bg-amber-500/5"
-              placeholder="Observaées internas ocultas do cliente e da OS"
-              value={internalNote}
-              onChange={(e) => setInternalNote(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              O campo interno fica apenas para controle do técnico nesta tela e não é enviado para o cliente nem para a OS.
-            </p>
+            {canWriteInternalNote ? (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+                <p className="mb-2 text-xs font-semibold text-amber-200">Campo oculto do cliente</p>
+                <Textarea
+                  className="min-h-24 text-base"
+                  placeholder="Observacoes internas que o cliente nao precisa ver"
+                  value={internalNote}
+                  onChange={(e) => setInternalNote(e.target.value)}
+                />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Esse campo aparece somente depois da assinatura do cliente e nao entra na OS.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed p-3 text-xs text-muted-foreground">
+                O campo interno sera liberado depois que a assinatura do cliente for coletada.
+              </div>
+            )}
           </CardContent>
         </Card>
         )}
@@ -1074,6 +1110,14 @@ export default function TechnicianMobile() {
               <Button type="button" variant="outline" className="w-full" onClick={() => clearSignature('technician')}>
                 Limpar assinatura do técnico
               </Button>
+              <Button type="button" variant="secondary" className="w-full" onClick={saveTechnicianSignatureToProfile}>
+                Salvar assinatura do tecnico para proximos atendimentos
+              </Button>
+              {savedTechnicianSignature && (
+                <p className="text-center text-xs text-muted-foreground">
+                  Assinatura salva carregada automaticamente.
+                </p>
+              )}
             </div>
             <div className="space-y-3">
               <p className="text-sm font-medium">Assinatura do cliente</p>

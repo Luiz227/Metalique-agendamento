@@ -2972,6 +2972,7 @@ export class LegacyService {
     const mimeType = file?.mimetype ?? 'application/octet-stream';
     const size = file?.size ?? 0;
     const kind = this.normalizeAttachmentKind(type, mimeType);
+    let finalizedAfterVehicleReturn = false;
     if (appointment.transportMode === 'CAR' && kind === ATTACHMENT_KIND.VEHICLE_RETURN_VIDEO) {
       const hasTechnicalReport = appointment.attachments.some(
         (attachment) => attachment.kind === ATTACHMENT_KIND.TECHNICAL_REPORT
@@ -3009,6 +3010,7 @@ export class LegacyService {
         uploadResult = await this.uploadToDrive({
           appointmentId,
           clientName: appointment.client.name,
+          clientDocument: appointment.client.cnpj,
           osNumber: appointment.osNumber || appointment.id,
           technicianName: appointment.technician?.name || 'Sem tecnico',
           fileName: originalName,
@@ -3093,13 +3095,15 @@ export class LegacyService {
           data: { status: AppointmentStatus.COMPLETED }
         })
       ]);
+      finalizedAfterVehicleReturn = true;
     }
     return {
       ok: true,
       type: type ?? 'midia-tecnica',
       kind,
       fileId: uploadResult.fileId,
-      folder: uploadResult.folderPath
+      folder: uploadResult.folderPath,
+      finalized: finalizedAfterVehicleReturn
     };
   }
 
@@ -3470,6 +3474,7 @@ export class LegacyService {
   private async uploadToDrive(params: {
     appointmentId: string;
     clientName: string;
+    clientDocument?: string | null;
     osNumber: string;
     technicianName: string;
     fileName: string;
@@ -3483,6 +3488,7 @@ export class LegacyService {
     params: {
       appointmentId: string;
       clientName: string;
+      clientDocument?: string | null;
       osNumber: string;
       technicianName: string;
       fileName: string;
@@ -3495,7 +3501,11 @@ export class LegacyService {
     if (!rootFolderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID nao configurado');
     if (!params.buffer || !params.buffer.length) throw new Error('Arquivo invalido para upload');
 
-    const safeClient = this.sanitizeFolderName(params.clientName || 'Cliente');
+    const clientDocument = String(params.clientDocument || '').trim();
+    const clientFolderName = clientDocument
+      ? `${clientDocument} - ${params.clientName || 'Cliente'}`
+      : params.clientName || 'Cliente';
+    const safeClient = this.sanitizeFolderName(clientFolderName);
     const safeOs = this.sanitizeFolderName('OS ' + (params.osNumber || params.appointmentId) + ' - ' + params.technicianName);
     const clientFolderId = await this.findOrCreateFolder(drive, safeClient, rootFolderId);
     const osFolderId = await this.findOrCreateFolder(drive, safeOs, clientFolderId);

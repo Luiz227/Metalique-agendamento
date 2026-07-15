@@ -713,6 +713,7 @@ export class LegacyService {
   ) {
     const summary = report?.summary?.trim();
     const internalNote = report?.internalNote?.trim();
+    const serviceOrderSummary = [summary, internalNote].filter(Boolean).join('\n\n');
 
     const vehicleControl = await this.prisma.appointment.findUnique({
       where: { id },
@@ -770,7 +771,7 @@ export class LegacyService {
           officialTemplate.buffer,
           officialTemplate.kind,
           {
-            summary,
+            summary: serviceOrderSummary || summary,
             finishedAt: report?.finishedAt,
             clientSignatureDataUrl: report?.clientSignatureDataUrl,
             technicianSignatureDataUrl: report?.technicianSignatureDataUrl
@@ -783,7 +784,7 @@ export class LegacyService {
         );
       } else {
         reportPdf = await this.buildGeneratedServiceOrderPdf(appointment, {
-          summary,
+          summary: serviceOrderSummary || summary,
           finishedAt: report?.finishedAt,
           clientSignatureDataUrl: report?.clientSignatureDataUrl,
           technicianSignatureDataUrl: report?.technicianSignatureDataUrl

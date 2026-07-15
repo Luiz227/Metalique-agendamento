@@ -146,6 +146,7 @@ export default function TechnicianMobile() {
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [clientSignatureDataUrl, setClientSignatureDataUrl] = useState('');
   const [technicianSignatureDataUrl, setTechnicianSignatureDataUrl] = useState('');
+  const [routeOptionsOpen, setRouteOptionsOpen] = useState(false);
   const [activeTripsView, setActiveTripsView] = useState<'ACTIVE' | 'FINISHED'>('ACTIVE');
   const [activeSection, setActiveSection] = useState<'LIST' | 'DETAILS' | 'CALENDAR'>('LIST');
   const [monthCursor, setMonthCursor] = useState(() => new Date());
@@ -240,6 +241,10 @@ export default function TechnicianMobile() {
   const currentClientName = current?.client?.name ?? 'Cliente';
   const currentClientPhone = current?.client?.phone ?? '';
   const currentAddress = current?.fullAddress ?? 'Endereço não informado';
+  const routeDestination = encodeURIComponent(currentAddress);
+  const googleMapsRouteUrl = `https://www.google.com/maps/dir/?api=1&destination=${routeDestination}`;
+  const wazeRouteUrl = `https://waze.com/ul?q=${routeDestination}&navigate=yes`;
+  const appleMapsRouteUrl = `https://maps.apple.com/?daddr=${routeDestination}`;
   const isCarTrip = current?.transportMode === 'CAR';
   const pickupVehiclePhotos = (current?.attachments ?? []).filter(isPickupVehicleEvidence);
   const returnVehiclePhotos = (current?.attachments ?? []).filter(isReturnVehicleEvidence);
@@ -773,12 +778,35 @@ export default function TechnicianMobile() {
             )}
 
             <div className="space-y-2">
-              <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(currentAddress)}`} target="_blank" rel="noreferrer">
-                <Button className="h-12 w-full text-base bg-[#c8142f] hover:bg-[#a81027]">
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  className="h-12 w-full text-base bg-[#c8142f] hover:bg-[#a81027]"
+                  onClick={() => setRouteOptionsOpen((value) => !value)}
+                >
                   <Navigation className="mr-2 h-5 w-5" />
                   Abrir rota
                 </Button>
-              </a>
+                {routeOptionsOpen && (
+                  <div className="grid grid-cols-1 gap-2 rounded-2xl border bg-card p-3 shadow-lg sm:grid-cols-3">
+                    <a href={googleMapsRouteUrl} target="_blank" rel="noreferrer">
+                      <Button type="button" variant="outline" className="w-full justify-start">
+                        Google Maps
+                      </Button>
+                    </a>
+                    <a href={wazeRouteUrl} target="_blank" rel="noreferrer">
+                      <Button type="button" variant="outline" className="w-full justify-start">
+                        Waze
+                      </Button>
+                    </a>
+                    <a href={appleMapsRouteUrl} target="_blank" rel="noreferrer">
+                      <Button type="button" variant="outline" className="w-full justify-start">
+                        Apple Maps
+                      </Button>
+                    </a>
+                  </div>
+                )}
+              </div>
               <Button className="h-12 w-full text-base bg-green-600 hover:bg-green-700" onClick={() => updateStatus('TRAVELING')}>
                 <Play className="mr-2 h-5 w-5" />
                 Iniciar deslocamento
@@ -850,10 +878,10 @@ export default function TechnicianMobile() {
             />
             {canWriteInternalNote ? (
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
-                <p className="mb-2 text-xs font-semibold text-amber-200">Observacoes internas</p>
+                <p className="mb-2 text-xs font-semibold text-amber-200">Observações internas</p>
                 <Textarea
                   className="min-h-24 text-base"
-                  placeholder="Anotacoes internas do tecnico"
+                  placeholder="Anotações internas do técnico"
                   value={internalNote}
                   onChange={(e) => setInternalNote(e.target.value)}
                 />

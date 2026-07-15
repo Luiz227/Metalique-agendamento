@@ -850,22 +850,15 @@ export default function TechnicianMobile() {
             />
             {canWriteInternalNote ? (
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
-                <p className="mb-2 text-xs font-semibold text-amber-200">Campo oculto do cliente</p>
+                <p className="mb-2 text-xs font-semibold text-amber-200">Observacoes internas</p>
                 <Textarea
                   className="min-h-24 text-base"
-                  placeholder="Observacoes internas que o cliente nao precisa ver"
+                  placeholder="Anotacoes internas do tecnico"
                   value={internalNote}
                   onChange={(e) => setInternalNote(e.target.value)}
                 />
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Esse campo aparece somente depois da assinatura do cliente e nao entra na OS.
-                </p>
               </div>
-            ) : (
-              <div className="rounded-xl border border-dashed p-3 text-xs text-muted-foreground">
-                O campo interno sera liberado depois que a assinatura do cliente for coletada.
-              </div>
-            )}
+            ) : null}
           </CardContent>
         </Card>
         )}

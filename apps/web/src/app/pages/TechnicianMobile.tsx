@@ -236,7 +236,14 @@ export default function TechnicianMobile() {
   }, [pendingAttachments]);
 
   const current = useMemo(() => appointments.find((item) => item.id === selectedId) ?? appointments[0], [appointments, selectedId]);
-  const currentGeneratedReport = (current?.attachments ?? []).find((attachment) => attachment.kind === 'TECHNICAL_REPORT');
+  const currentGeneratedReport = (current?.attachments ?? []).find(
+    (attachment) =>
+      attachment.kind === 'TECHNICAL_REPORT' ||
+      attachment.originalName.toLowerCase().startsWith('ordem-servico-preenchida-')
+  );
+  const technicalReportSubmitted = Boolean(currentGeneratedReport) || Boolean(
+    current?.statusLogs?.some((log) => log.status === 'TECHNICAL_REPORT_SUBMITTED')
+  );
   const upcoming = appointments.filter((item) => item.id !== current?.id && !wasFinishedByTechnician(item));
   const currentClientName = current?.client?.name ?? 'Cliente';
   const currentClientPhone = current?.client?.phone ?? '';
@@ -257,7 +264,7 @@ export default function TechnicianMobile() {
     Boolean(technicianSignatureDataUrl) &&
     !savingReport &&
     !missingVehiclePickupPhotos &&
-    !currentGeneratedReport;
+    !technicalReportSubmitted;
   const canWriteInternalNote = Boolean(clientSignatureDataUrl);
   const activeTrips = useMemo(
     () => appointments.filter((item) => !wasFinishedByTechnician(item)),
@@ -965,7 +972,7 @@ export default function TechnicianMobile() {
                       }}
                     />
                   </label>
-                  {pickupVehiclePhotosComplete && currentGeneratedReport && (
+                  {pickupVehiclePhotosComplete && technicalReportSubmitted && (
                   <div className="space-y-3">
                   <label className="block space-y-2">
                     <span className="text-sm font-medium">Quilometragem na devolução</span>
@@ -1023,7 +1030,7 @@ export default function TechnicianMobile() {
                   </label>
                   </div>
                   )}
-                  {pickupVehiclePhotosComplete && !currentGeneratedReport && (
+                  {pickupVehiclePhotosComplete && !technicalReportSubmitted && (
                     <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-100">
                       Envie primeiro o relatório técnico, os anexos e as assinaturas. Depois a devolução do veículo será liberada.
                     </div>
@@ -1167,7 +1174,7 @@ export default function TechnicianMobile() {
         )}
 
         {activeSection === 'DETAILS' && (!isCarTrip || pickupVehiclePhotosComplete) && (
-        currentGeneratedReport ? (
+        technicalReportSubmitted ? (
           <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center text-sm text-emerald-300">
             {isCarTrip
               ? 'Relatório técnico enviado ao Drive. O atendimento permanece aberto até a devolução do veículo.'

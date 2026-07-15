@@ -2963,7 +2963,8 @@ export class LegacyService {
       include: {
         client: true,
         technician: true,
-        attachments: { select: { kind: true, originalName: true } }
+        attachments: { select: { kind: true, originalName: true } },
+        statusLogs: { select: { status: true } }
       }
     });
     if (!appointment) throw new NotFoundException('Agendamento não encontrado');
@@ -2975,8 +2976,10 @@ export class LegacyService {
     let finalizedAfterVehicleReturn = false;
     if (appointment.transportMode === 'CAR' && kind === ATTACHMENT_KIND.VEHICLE_RETURN_VIDEO) {
       const hasTechnicalReport = appointment.attachments.some(
-        (attachment) => attachment.kind === ATTACHMENT_KIND.TECHNICAL_REPORT
-      );
+        (attachment) =>
+          attachment.kind === ATTACHMENT_KIND.TECHNICAL_REPORT ||
+          attachment.originalName.toLowerCase().startsWith('ordem-servico-preenchida-')
+      ) || appointment.statusLogs.some((log) => log.status === 'TECHNICAL_REPORT_SUBMITTED');
       if (!hasTechnicalReport) {
         throw new BadRequestException('Envie o relatorio tecnico e as assinaturas antes das fotos de devolucao.');
       }
@@ -3366,7 +3369,7 @@ export class LegacyService {
   private normalizeAttachmentKind(type: string | undefined, mimeType: string) {
     const normalized = String(type ?? '').trim().toLowerCase();
     if (normalized === 'service-order-template') return ATTACHMENT_KIND.SERVICE_ORDER_TEMPLATE;
-    if (normalized === 'relato-tecnico') return ATTACHMENT_KIND.TECHNICAL_REPORT;
+    if (normalized === 'relato-tecnico' || normalized === 'technical_report') return ATTACHMENT_KIND.TECHNICAL_REPORT;
     if (normalized === 'assinatura-cliente') return ATTACHMENT_KIND.CLIENT_SIGNATURE;
     if (normalized === 'assinatura-tecnico') return ATTACHMENT_KIND.TECHNICIAN_SIGNATURE;
     if (normalized === 'midia-tecnica') return ATTACHMENT_KIND.TECHNICAL_MEDIA;

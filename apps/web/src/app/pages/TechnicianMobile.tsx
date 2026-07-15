@@ -35,7 +35,7 @@ async function compressImageForUpload(file: File) {
       img.src = imageUrl;
     });
 
-    const cleanName = file.name.replace(/\.[^.]+$/, '') || 'foto-tecnica';
+    const cleanName = file.name.replace(/\.[^.]+$/, '') || 'foto-técnica';
     const attempts = [
       { maxSize: 1600, quality: 0.72 },
       { maxSize: 1280, quality: 0.62 },
@@ -388,19 +388,19 @@ export default function TechnicianMobile() {
   async function uploadVehiclePhotos(files: FileList | null | undefined, stage: 'pickup' | 'return') {
     const selectedFiles = Array.from(files ?? []).filter((file) => isImageFile(file));
     if (selectedFiles.length === 0) {
-      setErrorMessage(`Selecione uma foto de ${stage === 'pickup' ? 'retirada' : 'devolu��o'} do ve�culo.`);
+      setErrorMessage(`Selecione uma foto de ${stage === 'pickup' ? 'retirada' : 'devolução'} do veículo.`);
       return;
     }
     const existingCount = stage === 'pickup' ? pickupVehiclePhotos.length : returnVehiclePhotos.length;
     const remainingCount = Math.max(VEHICLE_PHOTOS_REQUIRED - existingCount, 0);
     if (remainingCount === 0) {
-      setMessage(`As ${VEHICLE_PHOTOS_REQUIRED} fotos de ${stage === 'pickup' ? 'retirada' : 'devolu��o'} j� foram enviadas.`);
+      setMessage(`As ${VEHICLE_PHOTOS_REQUIRED} fotos de ${stage === 'pickup' ? 'retirada' : 'devolução'} já foram enviadas.`);
       return;
     }
     const mileageText = stage === 'pickup' ? pickupMileage : returnMileage;
     const mileage = Number(mileageText);
     if (!Number.isInteger(mileage) || mileage < 0) {
-      setErrorMessage(`Informe a quilometragem de ${stage === 'pickup' ? 'retirada' : 'devolu��o'} antes de enviar as fotos.`);
+      setErrorMessage(`Informe a quilometragem de ${stage === 'pickup' ? 'retirada' : 'devolução'} antes de enviar as fotos.`);
       return;
     }
     const type = stage === 'pickup' ? 'foto-retirada-veiculo' : 'foto-devolucao-veiculo';
@@ -420,14 +420,14 @@ export default function TechnicianMobile() {
       const totalUploaded = existingCount + filesToUpload.length;
       if (totalUploaded >= VEHICLE_PHOTOS_REQUIRED) {
         setMessage(stage === 'pickup'
-          ? 'Fotos de retirada enviadas. O relat�rio t�cnico foi liberado.'
-          : 'Fotos de devolu��o enviadas. Atendimento finalizado com sucesso.');
+          ? 'Fotos de retirada enviadas. O relatório técnico foi liberado.'
+          : 'Fotos de devolução enviadas. Atendimento finalizado com sucesso.');
       } else {
-        setMessage(`Foto enviada. Faltam ${VEHICLE_PHOTOS_REQUIRED - totalUploaded} foto(s) de ${stage === 'pickup' ? 'retirada' : 'devolu��o'} do ve�culo.`);
+        setMessage(`Foto enviada. Faltam ${VEHICLE_PHOTOS_REQUIRED - totalUploaded} foto(s) de ${stage === 'pickup' ? 'retirada' : 'devolução'} do veículo.`);
       }
       await load(true);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'N�o foi poss�vel enviar as fotos do ve�culo.');
+      setErrorMessage(err instanceof Error ? err.message : 'Não foi possível enviar as fotos do veículo.');
     } finally {
       setUploadingVehicleStage(null);
     }
@@ -596,7 +596,7 @@ export default function TechnicianMobile() {
       <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
         <div className="rounded-2xl bg-gradient-to-r from-[#c8142f] to-[#e3273e] px-4 py-5 sm:px-6">
           <h1 className="text-xl font-bold text-white sm:text-2xl">Olá, {user?.name ?? current.technician?.name ?? 'Técnico'}</h1>
-          <p className="mt-1 text-sm text-red-100 sm:text-base">Você tem {appointments.length} atendimento(s) vinculado(s)</p>
+          <p className="mt-1 text-sm text-red-100 sm:text-base">Você tem {activeTrips.length} atendimento(s) ativo(s)</p>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
@@ -688,7 +688,7 @@ export default function TechnicianMobile() {
 
             {current.serviceType && (
               <div className="rounded-xl border bg-card p-4">
-                <p className="text-xs text-muted-foreground">Nome do serviço</p>
+                <p className="text-xs text-muted-foreground">Tipo de serviço</p>
                 <p className="mt-1 text-sm sm:text-base break-words">{current.serviceType}</p>
               </div>
             )}
@@ -702,7 +702,7 @@ export default function TechnicianMobile() {
 
             {current.notes && (
               <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
-                <p className="text-xs text-blue-700 dark:text-blue-200">Ponto de atencao</p>
+                <p className="text-xs text-blue-700 dark:text-blue-200">Ponto de atenção</p>
                 <p className="mt-1 text-sm text-blue-800 dark:text-blue-100 break-words">{current.notes}</p>
               </div>
             )}
@@ -734,7 +734,7 @@ export default function TechnicianMobile() {
                 <div className="flex items-start gap-3">
                   <Plane className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />
                   <div className="min-w-0 space-y-1 text-sm text-sky-50/90">
-                    <p className="font-semibold text-sky-100">Informações da viagem aérea</p>
+                    <p className="font-semibold text-sky-100">Informaées da viagem aérea</p>
                     <p><strong>Aeroporto do voo de ida:</strong> {current.flightOutboundAirport || current.flightAirport || 'Não informado'}</p>
                     <p><strong>Aeroporto do voo de volta:</strong> {current.flightReturnAirport || current.flightAirport || 'Não informado'}</p>
                     <p><strong>Voo de ida:</strong> {current.flightDepartureAt ? new Date(current.flightDepartureAt).toLocaleString('pt-BR') : 'Não informado'}</p>
@@ -823,7 +823,7 @@ export default function TechnicianMobile() {
             />
             <Textarea
               className="min-h-24 text-base border-amber-500/30 bg-amber-500/5"
-              placeholder="Observações internas ocultas do cliente e da OS"
+              placeholder="Observaées internas ocultas do cliente e da OS"
               value={internalNote}
               onChange={(e) => setInternalNote(e.target.value)}
             />
@@ -840,7 +840,7 @@ export default function TechnicianMobile() {
           <CardContent className="space-y-3">
             {isCarTrip && (
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
-                <p className="text-sm font-semibold text-amber-300">Controle obrigatorio do veículo</p>
+                <p className="text-sm font-semibold text-amber-300">Controle obrigatório do veículo</p>
                 <p className="mt-1 text-xs text-amber-100/90">
                   Primeiro envie as 4 fotos da retirada. Depois o sistema libera as considerações, os demais anexos e as assinaturas.
                 </p>
@@ -900,7 +900,6 @@ export default function TechnicianMobile() {
                       type="file"
                       accept="image/*"
                       capture="environment"
-                      multiple
                       className="hidden"
                       disabled={uploadingVehicleStage !== null}
                       onChange={(e) => {
@@ -957,7 +956,6 @@ export default function TechnicianMobile() {
                       type="file"
                       accept="image/*"
                       capture="environment"
-                      multiple
                       className="hidden"
                       disabled={uploadingVehicleStage !== null}
                       onChange={(e) => {
@@ -1028,7 +1026,7 @@ export default function TechnicianMobile() {
                             ? 'Foto de devolução do veículo'
                             : item.type === 'documento-tecnico'
                               ? 'Documento técnico'
-                              : 'Mídia tecnica'}
+                              : 'Mídia técnica'}
                       </p>
                       <p className="text-[11px] text-muted-foreground">{Math.max(1, Math.round(item.file.size / 1024))} KB</p>
                     </div>

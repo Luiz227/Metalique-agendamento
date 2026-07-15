@@ -1103,8 +1103,13 @@ export default function TechnicianMobile() {
               <Button type="button" variant="outline" className="w-full" onClick={() => clearSignature('technician')}>
                 Limpar assinatura do técnico
               </Button>
-              <Button type="button" variant="secondary" className="w-full" onClick={saveTechnicianSignatureToProfile}>
-                Salvar assinatura do tecnico para proximos atendimentos
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-11 w-full whitespace-normal px-3 py-2 text-center text-sm leading-tight"
+                onClick={saveTechnicianSignatureToProfile}
+              >
+                Salvar assinatura do tecnico
               </Button>
               {savedTechnicianSignature && (
                 <p className="text-center text-xs text-muted-foreground">

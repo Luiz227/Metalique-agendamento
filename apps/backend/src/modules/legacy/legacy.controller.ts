@@ -167,6 +167,7 @@ export class LegacyController {
       diagnosis?: string;
       solution?: string;
       pendingItems?: string;
+      internalNote?: string;
       finishedAt?: string;
       clientSignatureDataUrl?: string;
       technicianSignatureDataUrl?: string;

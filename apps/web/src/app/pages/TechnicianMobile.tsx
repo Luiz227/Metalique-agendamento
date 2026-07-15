@@ -334,6 +334,7 @@ export default function TechnicianMobile() {
         method: 'POST',
         body: JSON.stringify({
           ...report,
+          internalNote: internalNote.trim() || undefined,
           clientSignatureDataUrl,
           technicianSignatureDataUrl: submittedTechnicianSignature,
           finishedAt: new Date().toISOString()
@@ -884,8 +885,8 @@ export default function TechnicianMobile() {
               onChange={(e) => setReport({ summary: e.target.value })}
             />
             {canWriteInternalNote ? (
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
-                <p className="mb-2 text-xs font-semibold text-amber-200">Observações internas</p>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">Anotações internas</p>
                 <Textarea
                   className="min-h-24 text-base"
                   placeholder="Anotações internas do técnico"

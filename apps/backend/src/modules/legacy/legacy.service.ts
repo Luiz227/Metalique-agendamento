@@ -706,11 +706,13 @@ export class LegacyService {
     report?: {
       summary?: string;
       finishedAt?: string;
+      internalNote?: string;
       clientSignatureDataUrl?: string;
       technicianSignatureDataUrl?: string;
     }
   ) {
     const summary = report?.summary?.trim();
+    const internalNote = report?.internalNote?.trim();
 
     const vehicleControl = await this.prisma.appointment.findUnique({
       where: { id },
@@ -739,6 +741,15 @@ export class LegacyService {
         observation: summary ?? 'Relatorio tecnico enviado'
       }
     });
+    if (internalNote) {
+      await this.prisma.statusLog.create({
+        data: {
+          appointmentId: id,
+          status: 'TECHNICAL_INTERNAL_NOTE',
+          observation: internalNote
+        }
+      });
+    }
     if (vehicleControl.transportMode !== 'CAR') {
       await this.prisma.appointment.update({ where: { id }, data: { status: AppointmentStatus.COMPLETED } });
     }

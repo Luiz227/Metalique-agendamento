@@ -110,13 +110,51 @@ function buildDefaultAttachmentName(
 }
 
 const VEHICLE_PHOTOS_REQUIRED = 4;
-const MAX_VIDEO_ATTACHMENT_SIZE = 25 * 1024 * 1024;
+const MAX_VIDEO_ATTACHMENT_SIZE = 100 * 1024 * 1024;
+const MAX_VIDEO_ATTACHMENT_SIZE_MB = Math.round(MAX_VIDEO_ATTACHMENT_SIZE / 1024 / 1024);
+const UPLOAD_RETRY_DELAYS_MS = [0, 1500, 3500, 7000];
 const VEHICLE_PHOTO_LABELS = [
   'banco-traseiro-chao',
   'banco-dianteiro-painel',
   'lateral-externa',
   'odometro-quilometragem'
 ];
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shouldRetryUploadStatus(status: number) {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+async function fetchUploadWithRetry(url: string, buildData: () => FormData) {
+  let lastError: unknown = null;
+  let lastResponse: Response | null = null;
+
+  for (let attempt = 0; attempt < UPLOAD_RETRY_DELAYS_MS.length; attempt += 1) {
+    const delay = UPLOAD_RETRY_DELAYS_MS[attempt];
+    if (delay > 0) await wait(delay);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body: buildData()
+      });
+
+      if (response.ok) return response;
+      lastResponse = response;
+      if (!shouldRetryUploadStatus(response.status)) return response;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastResponse) return lastResponse;
+  const message = lastError instanceof Error && lastError.message ? lastError.message : 'Falha de rede';
+  throw new Error(`${message}. Verifique a internet e tente enviar novamente.`);
+}
 
 function isPickupVehicleEvidence(attachment: { kind: string; originalName: string }) {
   return attachment.kind === 'VEHICLE_PICKUP_VIDEO' || attachment.originalName.toLowerCase().startsWith('retirada-veiculo-');
@@ -417,6 +455,7 @@ export default function TechnicianMobile() {
       try {
         await uploadFileNow(attachment.file, attachment.type, attachment.displayName);
         if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+        if (pendingAttachments.length > 1) await wait(500);
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err || 'Falha ao enviar arquivo');
         failedAttachments.push(attachment);
@@ -436,33 +475,17 @@ export default function TechnicianMobile() {
   async function uploadFileNow(file: File | undefined, type: string, displayName?: string) {
     if (!current || !file) return;
     if (file.type.startsWith('video/') && file.size > MAX_VIDEO_ATTACHMENT_SIZE) {
-      throw new Error('Video muito grande. Grave um video menor ou envie o arquivo com ate 25 MB.');
+      throw new Error(`Video muito grande. Grave um video menor ou envie o arquivo com ate ${MAX_VIDEO_ATTACHMENT_SIZE_MB} MB.`);
     }
     const uploadFile = await compressImageForUpload(file);
-    const data = new FormData();
-    data.append('file', uploadFile, normalizeAttachmentName(displayName || uploadFile.name, uploadFile.name));
-    data.append('type', type);
+    const buildData = () => {
+      const data = new FormData();
+      data.append('file', uploadFile, normalizeAttachmentName(displayName || uploadFile.name, uploadFile.name));
+      data.append('type', type);
+      return data;
+    };
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
-    let response: Response;
-    try {
-      response = await fetch(`${apiBase}/attachments/appointments/${current.id}`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${getToken()}` },
-        body: data
-      });
-    } catch (error) {
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-      try {
-        response = await fetch(`${apiBase}/attachments/appointments/${current.id}`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${getToken()}` },
-          body: data
-        });
-      } catch {
-        const message = error instanceof Error && error.message ? error.message : 'Falha de rede';
-        throw new Error(`${message}. Verifique a internet e tente enviar novamente. Se for video, grave menor ou use fotos.`);
-      }
-    }
+    const response = await fetchUploadWithRetry(`${apiBase}/attachments/appointments/${current.id}`, buildData);
     if (!response.ok) {
       const raw = await response.text().catch(() => '');
       let payload: { message?: string } | null = null;
@@ -564,7 +587,7 @@ export default function TechnicianMobile() {
     setMessage('');
     setErrorMessage('');
     if (file.type.startsWith('video/') && file.size > MAX_VIDEO_ATTACHMENT_SIZE) {
-      setErrorMessage('Video muito grande. Grave um video menor ou envie o arquivo com ate 25 MB.');
+      setErrorMessage(`Video muito grande. Grave um video menor ou envie o arquivo com ate ${MAX_VIDEO_ATTACHMENT_SIZE_MB} MB.`);
       return;
     }
     const isImage = isImageFile(file);

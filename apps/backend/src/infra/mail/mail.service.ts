@@ -19,6 +19,8 @@ type ConfirmedAppointmentEmail = {
   flightReturnAirport: string | null;
   flightDepartureAt: Date | null;
   flightReturnAt: Date | null;
+  vendorName?: string | null;
+  vendorEmail?: string | null;
   client: { name: string; email: string | null };
   technician: { name: string; user: { email: string } | null } | null;
 };
@@ -35,10 +37,11 @@ export class MailService {
   async sendAppointmentConfirmed(appointment: ConfirmedAppointmentEmail) {
     const technicianEmail = this.normalizeEmail(appointment.technician?.user?.email);
     const clientEmail = this.normalizeEmail(appointment.client.email);
-    const reservedEmails = new Set([technicianEmail, clientEmail].filter(Boolean));
+    const vendorEmail = this.normalizeEmail(appointment.vendorEmail);
+    const reservedEmails = new Set([technicianEmail, clientEmail, vendorEmail].filter(Boolean));
     const configuredRecipients = (await this.resolveConfiguredRecipients())
       .filter((email) => !reservedEmails.has(email));
-    const recipientCount = Number(Boolean(technicianEmail)) + Number(Boolean(clientEmail)) + configuredRecipients.length;
+    const recipientCount = Number(Boolean(technicianEmail)) + Number(Boolean(clientEmail)) + Number(Boolean(vendorEmail)) + configuredRecipients.length;
     if (!recipientCount) {
       this.logger.warn(`E-mail de confirmacao nao enviado para ${appointment.id}: nenhum destinatario configurado.`);
       return { sent: false, reason: 'no_recipients' };
@@ -151,6 +154,13 @@ export class MailService {
         html: this.renderClientConfirmation(appointment, technicianName)
       }));
 
+      if (vendorEmail) deliveryPromises.push(transporter.sendMail({
+        from: process.env.SMTP_FROM?.trim() || user,
+        to: vendorEmail,
+        subject: `Visita tecnica agendada para seu cliente - ${appointment.client.name}`,
+        html: this.renderVendorConfirmation(appointment, technicianName)
+      }));
+
       deliveryPromises.push(...configuredRecipients.map((recipient) => transporter.sendMail({
         from: process.env.SMTP_FROM?.trim() || user,
         to: recipient,
@@ -171,6 +181,7 @@ export class MailService {
         deliveries: {
           technician: Boolean(technicianEmail),
           client: Boolean(clientEmail),
+          vendor: Boolean(vendorEmail),
           additional: configuredRecipients.length
         }
       };
@@ -347,6 +358,25 @@ export class MailService {
         <tr><td style="padding:7px 0;color:#52525b">Endereco:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.fullAddress)}</td></tr>
       `,
       footer: 'Acompanhe o andamento e eventuais pendencias diretamente no Agenda Metalique.'
+    });
+  }
+
+  private renderVendorConfirmation(appointment: ConfirmedAppointmentEmail, technicianName: string) {
+    const vendorName = appointment.vendorName?.trim() || 'vendedor';
+    return this.renderConfirmationShell({
+      title: 'Visita tecnica agendada',
+      subtitle: 'Seu cliente ja esta com atendimento confirmado',
+      greeting: `Ola, ${this.escapeHtml(vendorName)}.`,
+      message: 'A visita tecnica do seu cliente foi agendada pela equipe Metalique. Seguem abaixo os principais dados para acompanhamento comercial.',
+      rows: `
+        <tr><td style="padding:7px 0;color:#52525b;width:150px">Cliente:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.client.name)}</td></tr>
+        <tr><td style="padding:7px 0;color:#52525b">Data:</td><td style="padding:7px 0;font-weight:600">${this.formatDate(appointment.date)}</td></tr>
+        <tr><td style="padding:7px 0;color:#52525b">Servico:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.serviceType)}</td></tr>
+        <tr><td style="padding:7px 0;color:#52525b">Tecnico:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(technicianName)}</td></tr>
+        <tr><td style="padding:7px 0;color:#52525b">Cidade:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.city)}</td></tr>
+        <tr><td style="padding:7px 0;color:#52525b">Endereco:</td><td style="padding:7px 0;font-weight:600">${this.escapeHtml(appointment.fullAddress)}</td></tr>
+      `,
+      footer: 'Este e-mail e apenas um aviso automatico. O acompanhamento operacional segue pelo Agenda Metalique.'
     });
   }
 

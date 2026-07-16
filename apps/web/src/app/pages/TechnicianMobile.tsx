@@ -344,19 +344,7 @@ export default function TechnicianMobile() {
       });
       setLocallySubmittedReportIds((prev) => new Set(prev).add(current.id));
 
-      for (const attachment of pendingAttachments) {
-        try {
-          await uploadFileNow(attachment.file, attachment.type, attachment.displayName);
-        } catch (err) {
-          const reason = err instanceof Error ? err.message : String(err || 'Falha ao enviar arquivo');
-          throw new Error(`Falha ao enviar ${attachment.file.name}: ${reason}`);
-        }
-      }
-
-      pendingAttachments.forEach((item) => {
-        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-      });
-      setPendingAttachments([]);
+      await uploadPendingAttachmentsBatch();
       clearSignature('client');
       setTechnicianSignatureDataUrl(submittedTechnicianSignature);
       setReport({ summary: '' });
@@ -379,25 +367,42 @@ export default function TechnicianMobile() {
     setMessage('');
     setErrorMessage('');
     try {
-      for (const attachment of pendingAttachments) {
-        try {
-          await uploadFileNow(attachment.file, attachment.type, attachment.displayName);
-        } catch (err) {
-          const reason = err instanceof Error ? err.message : String(err || 'Falha ao enviar arquivo');
-          throw new Error(`Falha ao enviar ${attachment.file.name}: ${reason}`);
-        }
-      }
-
-      pendingAttachments.forEach((item) => {
-        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-      });
-      setPendingAttachments([]);
+      await uploadPendingAttachmentsBatch();
       setMessage('Arquivos enviados ao Drive com sucesso.');
       await load(true);
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : String(err || 'Erro ao enviar anexos'));
     } finally {
       setSavingReport(false);
+    }
+  }
+
+  async function uploadPendingAttachmentsBatch() {
+    if (pendingAttachments.length === 0) {
+      setPendingAttachments([]);
+      return;
+    }
+
+    const failedAttachments: PendingAttachment[] = [];
+    const failedMessages: string[] = [];
+
+    for (const attachment of pendingAttachments) {
+      try {
+        await uploadFileNow(attachment.file, attachment.type, attachment.displayName);
+        if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err || 'Falha ao enviar arquivo');
+        failedAttachments.push(attachment);
+        failedMessages.push(`${attachment.file.name}: ${reason}`);
+      }
+    }
+
+    setPendingAttachments(failedAttachments);
+
+    if (failedMessages.length > 0) {
+      const sentCount = pendingAttachments.length - failedAttachments.length;
+      const sentPrefix = sentCount > 0 ? `${sentCount} arquivo(s) enviado(s). ` : '';
+      throw new Error(`${sentPrefix}Falha em ${failedAttachments.length} arquivo(s): ${failedMessages.join(' | ')}`);
     }
   }
 

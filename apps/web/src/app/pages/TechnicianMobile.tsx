@@ -145,6 +145,7 @@ export default function TechnicianMobile() {
   const [pickupMileage, setPickupMileage] = useState('');
   const [returnMileage, setReturnMileage] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const [locallySubmittedReportIds, setLocallySubmittedReportIds] = useState<Set<string>>(() => new Set());
   const [clientSignatureDataUrl, setClientSignatureDataUrl] = useState('');
   const [technicianSignatureDataUrl, setTechnicianSignatureDataUrl] = useState('');
   const [routeOptionsOpen, setRouteOptionsOpen] = useState(false);
@@ -242,7 +243,7 @@ export default function TechnicianMobile() {
       attachment.kind === 'TECHNICAL_REPORT' ||
       attachment.originalName.toLowerCase().startsWith('ordem-servico-preenchida-')
   );
-  const technicalReportSubmitted = Boolean(currentGeneratedReport) || Boolean(
+  const technicalReportSubmitted = Boolean(current?.id && locallySubmittedReportIds.has(current.id)) || Boolean(currentGeneratedReport) || Boolean(
     current?.statusLogs?.some((log) => log.status === 'TECHNICAL_REPORT_SUBMITTED')
   );
   const upcoming = appointments.filter((item) => item.id !== current?.id && !wasFinishedByTechnician(item));
@@ -341,6 +342,7 @@ export default function TechnicianMobile() {
           finishedAt: new Date().toISOString()
         })
       });
+      setLocallySubmittedReportIds((prev) => new Set(prev).add(current.id));
 
       for (const attachment of pendingAttachments) {
         try {
@@ -366,6 +368,34 @@ export default function TechnicianMobile() {
     } catch (err) {
       setMessage('');
       setErrorMessage(err instanceof Error ? err.message : String(err || 'Erro ao enviar relatório/anexos'));
+    } finally {
+      setSavingReport(false);
+    }
+  }
+
+  async function uploadPendingAttachmentsOnly() {
+    if (!current || pendingAttachments.length === 0) return;
+    setSavingReport(true);
+    setMessage('');
+    setErrorMessage('');
+    try {
+      for (const attachment of pendingAttachments) {
+        try {
+          await uploadFileNow(attachment.file, attachment.type, attachment.displayName);
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : String(err || 'Falha ao enviar arquivo');
+          throw new Error(`Falha ao enviar ${attachment.file.name}: ${reason}`);
+        }
+      }
+
+      pendingAttachments.forEach((item) => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
+      setPendingAttachments([]);
+      setMessage('Arquivos enviados ao Drive com sucesso.');
+      await load(true);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : String(err || 'Erro ao enviar anexos'));
     } finally {
       setSavingReport(false);
     }
@@ -1200,10 +1230,21 @@ export default function TechnicianMobile() {
 
         {activeSection === 'DETAILS' && (!isCarTrip || pickupVehiclePhotosComplete) && (
         technicalReportSubmitted ? (
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center text-sm text-emerald-300">
-            {isCarTrip
-              ? 'Relatório técnico enviado ao Drive. O atendimento permanece aberto até a devolução do veículo.'
-              : 'Relatório técnico enviado ao Drive e atendimento finalizado.'}
+          <div className="space-y-3">
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center text-sm text-emerald-300">
+              {isCarTrip
+                ? 'Relatório técnico enviado ao Drive. O atendimento permanece aberto até a devolução do veículo.'
+                : 'Relatório técnico enviado ao Drive e atendimento finalizado.'}
+            </div>
+            {pendingAttachments.length > 0 && (
+              <Button
+                className="h-12 w-full rounded-xl bg-[#c8142f] hover:bg-[#a81027]"
+                disabled={savingReport}
+                onClick={uploadPendingAttachmentsOnly}
+              >
+                {savingReport ? 'Enviando arquivos...' : `Enviar somente ${pendingAttachments.length} anexo(s) pendente(s)`}
+              </Button>
+            )}
           </div>
         ) : (
           <Button className="h-12 w-full rounded-xl bg-[#c8142f] hover:bg-[#a81027]" disabled={!canSendReport} onClick={saveReport}>

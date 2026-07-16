@@ -84,6 +84,21 @@ async function showBrowserNotification(title: string, options?: NotificationOpti
   }
 }
 
+function readStoredIds(key: string) {
+  if (!key) return new Set<string>();
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || '[]');
+    return new Set<string>(Array.isArray(value) ? value.filter((item) => typeof item === 'string') : []);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function writeStoredIds(key: string, ids: Iterable<string>) {
+  if (!key) return;
+  localStorage.setItem(key, JSON.stringify(Array.from(ids).slice(-300)));
+}
+
 function buildDefaultAttachmentName(
   fileName: string,
   category: PendingAttachment['category'],
@@ -153,6 +168,7 @@ export default function TechnicianMobile() {
   const [activeSection, setActiveSection] = useState<'LIST' | 'DETAILS' | 'CALENDAR'>('LIST');
   const [monthCursor, setMonthCursor] = useState(() => new Date());
   const knownIdsRef = useRef<Set<string>>(new Set());
+  const notificationBaselineLoadedRef = useRef(false);
   const clientSignatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const technicianSignatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingSignatureRef = useRef<'client' | 'technician' | null>(null);
@@ -163,12 +179,23 @@ export default function TechnicianMobile() {
     try {
       const rows = await api<Appointment[]>('/technician/appointments');
       const nextIds = new Set(rows.map((item) => item.id));
-      const newItems = rows.filter((item) => !knownIdsRef.current.has(item.id));
-      if (newItems.length > 0 && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      const notificationKey = user?.id ? `sp-technician-confirmed-alerted-${user.id}` : '';
+      const alertedIds = readStoredIds(notificationKey);
+      const hasStoredBaseline = Boolean(notificationKey && localStorage.getItem(notificationKey));
+      const newItems = rows.filter((item) => !knownIdsRef.current.has(item.id) && !alertedIds.has(item.id));
+
+      if (!notificationBaselineLoadedRef.current && !hasStoredBaseline) {
+        nextIds.forEach((id) => alertedIds.add(id));
+        writeStoredIds(notificationKey, alertedIds);
+      } else if (newItems.length > 0 && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        const appointment = newItems[0];
         await showBrowserNotification('Novo agendamento confirmado', {
-          body: `${newItems[0].client?.name ?? 'Cliente'} - ${newItems[0].city}`
+          body: `${appointment.client?.name ?? 'Cliente'} - ${appointment.city}`
         });
+        newItems.forEach((item) => alertedIds.add(item.id));
+        writeStoredIds(notificationKey, alertedIds);
       }
+      notificationBaselineLoadedRef.current = true;
       knownIdsRef.current = nextIds;
       setAppointments(rows);
       setSelectedId((current) => (rows.some((item) => item.id === current) ? current : rows[0]?.id || ''));

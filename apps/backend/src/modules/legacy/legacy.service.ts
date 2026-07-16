@@ -3030,6 +3030,7 @@ export class LegacyService {
           technicianName: appointment.technician?.name || 'Sem tecnico',
           fileName: originalName,
           mimeType,
+          attachmentKind: kind,
           buffer: file?.buffer
         });
       } catch (error) {
@@ -3494,6 +3495,7 @@ export class LegacyService {
     technicianName: string;
     fileName: string;
     mimeType: string;
+    attachmentKind?: string;
     buffer?: Buffer;
   }) {
     return this.uploadToDriveWithClient(params);
@@ -3508,6 +3510,7 @@ export class LegacyService {
       technicianName: string;
       fileName: string;
       mimeType: string;
+      attachmentKind?: string;
       buffer?: Buffer;
     }
   ) {
@@ -3524,6 +3527,13 @@ export class LegacyService {
     const safeOs = this.sanitizeFolderName('OS ' + (params.osNumber || params.appointmentId) + ' - ' + params.technicianName);
     const clientFolderId = await this.findOrCreateFolder(drive, safeClient, rootFolderId);
     const osFolderId = await this.findOrCreateFolder(drive, safeOs, clientFolderId);
+    const vehiclePhotosFolderName = this.sanitizeFolderName('Fotos do veiculo');
+    const targetFolderId = this.isVehicleDriveEvidenceKind(params.attachmentKind)
+      ? await this.findOrCreateFolder(drive, vehiclePhotosFolderName, osFolderId)
+      : osFolderId;
+    const targetFolderPath = this.isVehicleDriveEvidenceKind(params.attachmentKind)
+      ? `${safeClient}/${safeOs}/${vehiclePhotosFolderName}`
+      : `${safeClient}/${safeOs}`;
 
     const shouldConvertToGoogleDoc = params.mimeType === 'text/html';
     const driveFileName = shouldConvertToGoogleDoc
@@ -3533,7 +3543,7 @@ export class LegacyService {
       drive.files.create({
         requestBody: {
           name: convertToGoogleDoc ? driveFileName : params.fileName,
-          parents: [osFolderId],
+          parents: [targetFolderId],
           ...(convertToGoogleDoc ? { mimeType: 'application/vnd.google-apps.document' } : {})
         },
         media: {
@@ -3568,9 +3578,13 @@ export class LegacyService {
 
     return {
       fileId,
-      folderPath: `${safeClient}/${safeOs}`,
+      folderPath: targetFolderPath,
       publicUrl: created.data.webViewLink || created.data.webContentLink || null
     };
+  }
+
+  private isVehicleDriveEvidenceKind(kind?: string | null) {
+    return kind === ATTACHMENT_KIND.VEHICLE_PICKUP_VIDEO || kind === ATTACHMENT_KIND.VEHICLE_RETURN_VIDEO;
   }
 
   private async findOrCreateFolder(drive: ReturnType<typeof google.drive>, folderName: string, parentId: string) {

@@ -95,6 +95,7 @@ function buildDefaultAttachmentName(
 }
 
 const VEHICLE_PHOTOS_REQUIRED = 4;
+const MAX_VIDEO_ATTACHMENT_SIZE = 25 * 1024 * 1024;
 const VEHICLE_PHOTO_LABELS = [
   'banco-traseiro-chao',
   'banco-dianteiro-painel',
@@ -363,6 +364,7 @@ export default function TechnicianMobile() {
         : 'Relatório enviado com sucesso e atendimento finalizado.');
       await load();
     } catch (err) {
+      setMessage('');
       setErrorMessage(err instanceof Error ? err.message : String(err || 'Erro ao enviar relatório/anexos'));
     } finally {
       setSavingReport(false);
@@ -371,16 +373,34 @@ export default function TechnicianMobile() {
 
   async function uploadFileNow(file: File | undefined, type: string, displayName?: string) {
     if (!current || !file) return;
+    if (file.type.startsWith('video/') && file.size > MAX_VIDEO_ATTACHMENT_SIZE) {
+      throw new Error('Video muito grande. Grave um video menor ou envie o arquivo com ate 25 MB.');
+    }
     const uploadFile = await compressImageForUpload(file);
     const data = new FormData();
     data.append('file', uploadFile, normalizeAttachmentName(displayName || uploadFile.name, uploadFile.name));
     data.append('type', type);
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
-    const response = await fetch(`${apiBase}/attachments/appointments/${current.id}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${getToken()}` },
-      body: data
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${apiBase}/attachments/appointments/${current.id}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body: data
+      });
+    } catch (error) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      try {
+        response = await fetch(`${apiBase}/attachments/appointments/${current.id}`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${getToken()}` },
+          body: data
+        });
+      } catch {
+        const message = error instanceof Error && error.message ? error.message : 'Falha de rede';
+        throw new Error(`${message}. Verifique a internet e tente enviar novamente. Se for video, grave menor ou use fotos.`);
+      }
+    }
     if (!response.ok) {
       const raw = await response.text().catch(() => '');
       let payload: { message?: string } | null = null;
@@ -481,6 +501,10 @@ export default function TechnicianMobile() {
     if (!file) return;
     setMessage('');
     setErrorMessage('');
+    if (file.type.startsWith('video/') && file.size > MAX_VIDEO_ATTACHMENT_SIZE) {
+      setErrorMessage('Video muito grande. Grave um video menor ou envie o arquivo com ate 25 MB.');
+      return;
+    }
     const isImage = isImageFile(file);
     const previewUrl = isImage ? URL.createObjectURL(file) : undefined;
     const item: PendingAttachment = {

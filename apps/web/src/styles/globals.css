@@ -27,3 +27,43 @@ html:not(.dark) .border-zinc-700,
 html:not(.dark) .border-zinc-600 {
   border-color: var(--color-border) !important;
 }
+
+html:not(.dark) input,
+html:not(.dark) textarea,
+html:not(.dark) select,
+html:not(.dark) [data-slot="select-trigger"],
+html:not(.dark) [data-slot="command-input"] {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #111827 !important;
+}
+
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
+html:not(.dark) input:disabled,
+html:not(.dark) textarea:disabled,
+html:not(.dark) select:disabled,
+html:not(.dark) [data-slot="select-trigger"][data-disabled] {
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+  opacity: 1 !important;
+}
+
+html:not(.dark) [data-slot="select-content"] {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #111827 !important;
+}
+
+html:not(.dark) [data-slot="select-item"] {
+  color: #111827 !important;
+}
+
+html:not(.dark) [data-slot="select-item"]:focus {
+  background-color: #e0f2fe !important;
+  color: #0f172a !important;
+}

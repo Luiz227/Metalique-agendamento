@@ -108,6 +108,13 @@ function routeLabel(distanceKm: number, durationMinutes: number) {
 }
 
 
+function isFinishedAppointment(appointment: Appointment) {
+  return (
+    appointment.status === 'COMPLETED' ||
+    appointment.status === 'CRITICAL' ||
+    appointment.statusLogs?.some((log) => log.status === 'COMPLETED_SUCCESS' || log.status === 'COMPLETED_PARTIAL')
+  );
+}
 function loadGoogleMapsScript(apiKey: string): Promise<void> {
   return new Promise((resolve, reject) => {
     if ((window as unknown as { google?: unknown }).google) return resolve();
@@ -264,7 +271,7 @@ export default function MapView() {
       end.setHours(23, 59, 59, 999);
     }
     return appointments.filter((appointment) => {
-      if (!showFinishedOnMap && appointment.status === 'CRITICAL') return false;
+      if (!showFinishedOnMap && isFinishedAppointment(appointment)) return false;
       const date = new Date(appointment.date);
       if (date < start || date > end) return false;
       if (filterTechnician !== 'all' && appointment.technician?.name !== filterTechnician) return false;

@@ -3,9 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Calendar,
   Users,
-  TrendingUp,
   CheckCircle2,
-  DollarSign,
   MapPin,
   Sparkles
 } from 'lucide-react';
@@ -33,6 +31,7 @@ type DashboardData = {
   todayCount: number;
   weekCount: number;
   critical: number;
+  finishedVisits: number;
   awaitingValidation: number;
   techniciansInField: number;
   techniciansAvailable: number;
@@ -49,7 +48,7 @@ type DashboardData = {
   alerts: Array<{ type: string; message: string; severity: 'high' | 'medium' | 'low' }>;
   charts: {
     appointmentsByWeekday: Array<{ label: string; total: number }>;
-    status: Array<{ label: 'CRITICAL' | 'WAITING' | 'READY'; total: number }>;
+    status: Array<{ label: 'CRITICAL' | 'COMPLETED' | 'WAITING' | 'READY'; total: number }>;
     technicianUsage: Array<{ label: string; total: number }>;
   };
 };
@@ -57,25 +56,22 @@ type DashboardData = {
 const statusLabels: Record<string, string> = {
   READY: 'Pronto',
   WAITING: 'Aguardando',
+  COMPLETED: 'Visita finalizada',
   CRITICAL: 'Visita finalizada'
 };
 
 const statusColors: Record<string, string> = {
   READY: '#10b981',
   WAITING: '#f59e0b',
+  COMPLETED: '#3b82f6',
   CRITICAL: '#3b82f6'
 };
-
-const money = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-  maximumFractionDigits: 0
-});
 
 const emptyDashboard: DashboardData = {
   todayCount: 0,
   weekCount: 0,
   critical: 0,
+  finishedVisits: 0,
   awaitingValidation: 0,
   techniciansInField: 0,
   techniciansAvailable: 0,
@@ -95,7 +91,7 @@ const emptyDashboard: DashboardData = {
     status: [
       { label: 'READY', total: 0 },
       { label: 'WAITING', total: 0 },
-      { label: 'CRITICAL', total: 0 }
+      { label: 'COMPLETED', total: 0 }
     ],
     technicianUsage: []
   }
@@ -146,10 +142,7 @@ export default function Dashboard() {
       { label: 'Agendamentos Hoje', value: dashboard.todayCount, icon: Calendar, color: 'text-blue-400', bg: 'bg-blue-500/10' },
       { label: 'Agendamentos Semana', value: dashboard.weekCount, icon: Calendar, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
       { label: 'Técnicos em Campo', value: dashboard.techniciansInField, icon: Users, color: 'text-green-400', bg: 'bg-green-500/10' },
-      { label: 'Visitas Finalizadas', value: dashboard.critical, icon: CheckCircle2, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-      { label: 'Gastos Previstos', value: money.format(dashboard.weekPlanned), icon: DollarSign, color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
-      { label: 'Gastos Reais', value: money.format(dashboard.weekReal), icon: TrendingUp, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-      { label: 'Economia Gerada', value: money.format(dashboard.estimatedSavings), icon: TrendingUp, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+      { label: 'Visitas Finalizadas', value: dashboard.finishedVisits ?? dashboard.critical, icon: CheckCircle2, color: 'text-blue-400', bg: 'bg-blue-500/10' },
       { label: 'Sugestões Abertas', value: dashboard.openSuggestions, icon: Sparkles, color: 'text-violet-400', bg: 'bg-violet-500/10' }
     ],
     [dashboard]
@@ -176,7 +169,7 @@ export default function Dashboard() {
         </Card>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {quickStats.map((stat) => {
           const Icon = stat.icon;
           return (
@@ -381,6 +374,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
-
-

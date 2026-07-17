@@ -25,16 +25,29 @@ export class DashboardService {
     endWeek.setDate(startWeek.getDate() + 6);
     endWeek.setHours(23, 59, 59, 999);
 
-    const [todayCount, weekCount, critical, waiting, ready, technicians, appointments, suggestions] = await Promise.all([
-      this.prisma.appointment.count({ where: { date: { gte: startToday, lte: endToday } } }),
-      this.prisma.appointment.count({ where: { date: { gte: startWeek, lte: endWeek } } }),
-      this.prisma.appointment.count({ where: { status: AppointmentStatus.CRITICAL } }),
+    const activeStatusFilter = { not: AppointmentStatus.COMPLETED };
+    const [todayCount, weekCount, finishedVisits, waiting, ready, technicians, appointments, finishedAppointments, suggestions] = await Promise.all([
+      this.prisma.appointment.count({ where: { date: { gte: startToday, lte: endToday }, status: activeStatusFilter } }),
+      this.prisma.appointment.count({ where: { date: { gte: startWeek, lte: endWeek }, status: activeStatusFilter } }),
+      this.prisma.appointment.count({ where: { status: AppointmentStatus.COMPLETED } }),
       this.prisma.appointment.count({ where: { status: AppointmentStatus.WAITING } }),
       this.prisma.appointment.count({ where: { status: AppointmentStatus.READY } }),
       this.prisma.technician.findMany({ where: { active: true }, select: { id: true, name: true } }),
       this.prisma.appointment.findMany({
-        where: { date: { gte: startWeek, lte: endWeek } },
+        where: { date: { gte: startWeek, lte: endWeek }, status: activeStatusFilter },
         select: { date: true, technician: { select: { name: true } } }
+      }),
+      this.prisma.appointment.findMany({
+        where: { status: AppointmentStatus.COMPLETED },
+        orderBy: { updatedAt: 'desc' },
+        take: 6,
+        select: {
+          id: true,
+          date: true,
+          city: true,
+          client: { select: { name: true } },
+          technician: { select: { name: true } }
+        }
       }),
       this.prisma.routeSuggestion.count({ where: { status: 'OPEN' } })
     ]);
@@ -53,7 +66,8 @@ export class DashboardService {
     return {
       todayCount,
       weekCount,
-      critical,
+      critical: finishedVisits,
+      finishedVisits,
       awaitingValidation: waiting,
       techniciansInField: technicianUsage.filter((t) => t.total > 0).length,
       techniciansAvailable: technicians.length,
@@ -67,11 +81,15 @@ export class DashboardService {
       weekDifference: 0,
       monthPlanned: 0,
       monthReal: 0,
-      alerts: critical > 0 ? [{ type: 'finished', message: `${critical} visita(s) finalizada(s).`, severity: 'low' }] : [],
+      alerts: finishedAppointments.map((appointment) => ({
+        type: 'finished',
+        message: `${appointment.client?.name ?? 'Cliente'} finalizada por ${appointment.technician?.name ?? 'sem tecnico'} em ${new Intl.DateTimeFormat('pt-BR').format(new Date(appointment.date))}${appointment.city ? ` - ${appointment.city}` : ''}.`,
+        severity: 'low' as const
+      })),
       charts: {
         appointmentsByWeekday,
         status: [
-          { label: 'CRITICAL', total: critical },
+          { label: 'COMPLETED', total: finishedVisits },
           { label: 'WAITING', total: waiting },
           { label: 'READY', total: ready }
         ],

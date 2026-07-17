@@ -90,7 +90,7 @@ export type Appointment = {
   date: string;
   startTime: string;
   endTime: string;
-  status: 'CRITICAL' | 'WAITING' | 'READY';
+  status: 'CRITICAL' | 'WAITING' | 'READY' | 'COMPLETED';
   needsHotel: boolean;
   needsTransport: boolean;
   daysOut?: number;
@@ -179,13 +179,13 @@ export function formatTime(value: string) {
 }
 
 export function statusLabel(status: Appointment['status']) {
-  return status === 'READY' ? 'Pronto' : status === 'CRITICAL' ? 'Visita finalizada' : 'Aguardando';
+  return status === 'READY' ? 'Pronto' : status === 'COMPLETED' || status === 'CRITICAL' ? 'Visita finalizada' : 'Aguardando';
 }
 
 export function statusTone(status: Appointment['status']) {
   return status === 'READY'
     ? { color: 'bg-green-500', text: 'text-green-400', border: 'border-green-500' }
-    : status === 'CRITICAL'
+    : status === 'COMPLETED' || status === 'CRITICAL'
       ? { color: 'bg-blue-500', text: 'text-blue-400', border: 'border-blue-500' }
       : { color: 'bg-yellow-500', text: 'text-yellow-400', border: 'border-yellow-500' };
 }

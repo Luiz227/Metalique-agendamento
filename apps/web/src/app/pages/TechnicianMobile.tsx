@@ -30,6 +30,44 @@ type PendingAttachment = {
   previewUrl?: string;
 };
 
+type TechnicianDraft = {
+  summary: string;
+  internalNote: string;
+  clientSignatureDataUrl: string;
+  technicianSignatureDataUrl: string;
+};
+
+const TECHNICIAN_DRAFT_KEY_PREFIX = 'agenda-metalique-technician-draft:';
+
+function technicianDraftKey(appointmentId: string) {
+  return `${TECHNICIAN_DRAFT_KEY_PREFIX}${appointmentId}`;
+}
+
+function readTechnicianDraft(appointmentId: string): TechnicianDraft | null {
+  try {
+    const raw = localStorage.getItem(technicianDraftKey(appointmentId));
+    return raw ? (JSON.parse(raw) as TechnicianDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeTechnicianDraft(appointmentId: string, draft: TechnicianDraft) {
+  try {
+    localStorage.setItem(technicianDraftKey(appointmentId), JSON.stringify(draft));
+  } catch {
+    // If localStorage is unavailable, the final offline queue still protects the send action.
+  }
+}
+
+function clearTechnicianDraft(appointmentId: string) {
+  try {
+    localStorage.removeItem(technicianDraftKey(appointmentId));
+  } catch {
+    // Nothing to clean if localStorage is unavailable.
+  }
+}
+
 function isImageFile(file: File) {
   return file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name);
 }
@@ -251,6 +289,7 @@ export default function TechnicianMobile() {
   const clientSignatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const technicianSignatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingSignatureRef = useRef<'client' | 'technician' | null>(null);
+  const draftLoadedForAppointmentRef = useRef('');
 
   async function load(silent = false) {
     if (!silent) setLoadingAppointments(true);
@@ -312,18 +351,10 @@ export default function TechnicianMobile() {
   }, []);
 
   useEffect(() => {
-    if (activeSection !== 'DETAILS' || !savedTechnicianSignature) return;
-    const canvas = technicianSignatureCanvasRef.current;
-    const context = canvas?.getContext('2d');
-    if (!canvas || !context) return;
-    const image = new Image();
-    image.onload = () => {
-      context.fillStyle = '#ffffff';
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    };
-    image.src = savedTechnicianSignature;
-  }, [activeSection, selectedId, savedTechnicianSignature]);
+    if (activeSection !== 'DETAILS') return;
+    drawSignatureDataUrl('client', clientSignatureDataUrl);
+    drawSignatureDataUrl('technician', technicianSignatureDataUrl || savedTechnicianSignature);
+  }, [activeSection, selectedId, clientSignatureDataUrl, technicianSignatureDataUrl, savedTechnicianSignature]);
 
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
@@ -354,6 +385,27 @@ export default function TechnicianMobile() {
   }, [pendingAttachments]);
 
   const current = useMemo(() => appointments.find((item) => item.id === selectedId) ?? appointments[0], [appointments, selectedId]);
+
+  useEffect(() => {
+    if (!current?.id) return;
+    const draft = readTechnicianDraft(current.id);
+    draftLoadedForAppointmentRef.current = current.id;
+    setReport({ summary: draft?.summary ?? '' });
+    setInternalNote(draft?.internalNote ?? '');
+    setClientSignatureDataUrl(draft?.clientSignatureDataUrl ?? '');
+    setTechnicianSignatureDataUrl(draft?.technicianSignatureDataUrl || savedTechnicianSignature || '');
+  }, [current?.id]);
+
+  useEffect(() => {
+    if (!current?.id || draftLoadedForAppointmentRef.current !== current.id) return;
+    writeTechnicianDraft(current.id, {
+      summary: report.summary,
+      internalNote,
+      clientSignatureDataUrl,
+      technicianSignatureDataUrl
+    });
+  }, [current?.id, report.summary, internalNote, clientSignatureDataUrl, technicianSignatureDataUrl]);
+
   const currentGeneratedReport = (current?.attachments ?? []).find(
     (attachment) =>
       attachment.kind === 'TECHNICAL_REPORT' ||
@@ -511,6 +563,7 @@ export default function TechnicianMobile() {
           }
           await uploadQueuedAttachments(item.appointmentId, item.attachments ?? []);
           await deleteOfflineUpload(item.id);
+          if (item.mode === 'report') clearTechnicianDraft(item.appointmentId);
           sentCount += 1;
         } catch (err) {
           if (!isNetworkLikeError(err)) {
@@ -577,6 +630,8 @@ export default function TechnicianMobile() {
       setTechnicianSignatureDataUrl(submittedTechnicianSignature);
       setReport({ summary: '' });
       setInternalNote('');
+      clearTechnicianDraft(current.id);
+      draftLoadedForAppointmentRef.current = '';
       setMessage(isCarTrip
         ? 'Relatório e anexos enviados ao Drive. Finalize depois com a KM e as 4 fotos de devolução.'
         : 'Relatório enviado com sucesso e atendimento finalizado.');
@@ -824,6 +879,19 @@ export default function TechnicianMobile() {
       return;
     }
     setTechnicianSignatureDataUrl(value);
+  }
+
+  function drawSignatureDataUrl(target: 'client' | 'technician', value: string) {
+    const canvas = getSignatureCanvas(target);
+    const context = canvas?.getContext('2d');
+    if (!canvas || !context || !value) return;
+    const image = new Image();
+    image.onload = () => {
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    };
+    image.src = value;
   }
 
   function drawSignature(event: PointerEvent<HTMLCanvasElement>, target: 'client' | 'technician') {

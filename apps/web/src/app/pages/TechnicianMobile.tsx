@@ -7,6 +7,17 @@ import { Separator } from '../components/ui/separator';
 import { Textarea } from '../components/ui/textarea';
 import { Input } from '../components/ui/input';
 import { ApiError, api, clearSession, connectRealtime, getToken, getUser, resolveApiAssetUrl } from '../services/api';
+import {
+  countOfflineUploads,
+  createOfflineUploadId,
+  deleteOfflineUpload,
+  enqueueOfflineUpload,
+  listOfflineUploads,
+  type OfflineQueuedAttachment,
+  type OfflineReportPayload,
+  type OfflineUploadItem,
+  type OfflineUploadMode
+} from '../services/offlineUploadQueue';
 import type { Appointment } from '../services/types';
 import { formatDate, formatTime, statusLabel, statusTone } from '../services/types';
 
@@ -182,6 +193,33 @@ function wasFinishedByTechnician(appointment: Appointment) {
   return (appointment.statusLogs ?? []).some((log) => log.status === 'COMPLETED_SUCCESS' || log.status === 'COMPLETED_PARTIAL');
 }
 
+function isNetworkLikeError(error: unknown) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return true;
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /failed to fetch|network|internet|falha de rede|verifique a internet|load failed/i.test(message);
+}
+
+function serializeAttachmentForQueue(attachment: PendingAttachment): OfflineQueuedAttachment {
+  return {
+    id: attachment.id,
+    fileName: attachment.file.name,
+    fileType: attachment.file.type || 'application/octet-stream',
+    fileSize: attachment.file.size,
+    lastModified: attachment.file.lastModified || Date.now(),
+    displayName: attachment.displayName,
+    attachmentType: attachment.type,
+    category: attachment.category,
+    blob: attachment.file
+  };
+}
+
+function fileFromQueuedAttachment(attachment: OfflineQueuedAttachment) {
+  return new File([attachment.blob], attachment.fileName, {
+    type: attachment.fileType || 'application/octet-stream',
+    lastModified: attachment.lastModified || Date.now()
+  });
+}
+
 export default function TechnicianMobile() {
   const user = getUser();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -193,6 +231,9 @@ export default function TechnicianMobile() {
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [savingReport, setSavingReport] = useState(false);
+  const [offlineQueueCount, setOfflineQueueCount] = useState(0);
+  const [offlineSyncing, setOfflineSyncing] = useState(false);
+  const [offlineMessage, setOfflineMessage] = useState('');
   const [savedTechnicianSignature, setSavedTechnicianSignature] = useState('');
   const [uploadingVehicleStage, setUploadingVehicleStage] = useState<'pickup' | 'return' | null>(null);
   const [pickupMileage, setPickupMileage] = useState('');
@@ -251,6 +292,7 @@ export default function TechnicianMobile() {
 
   useEffect(() => {
     load().catch(() => undefined);
+    refreshOfflineQueueCount().catch(() => undefined);
     api<{ signatureDataUrl: string | null }>('/technician/profile')
       .then((profile) => {
         const signature = profile.signatureDataUrl || '';
@@ -258,6 +300,15 @@ export default function TechnicianMobile() {
         setTechnicianSignatureDataUrl(signature);
       })
       .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      syncOfflineUploads().catch(() => undefined);
+    };
+    window.addEventListener('online', handleOnline);
+    if (navigator.onLine) syncOfflineUploads().catch(() => undefined);
+    return () => window.removeEventListener('online', handleOnline);
   }, []);
 
   useEffect(() => {
@@ -379,6 +430,114 @@ export default function TechnicianMobile() {
     await load();
   }
 
+  async function refreshOfflineQueueCount() {
+    try {
+      setOfflineQueueCount(await countOfflineUploads());
+    } catch {
+      setOfflineQueueCount(0);
+    }
+  }
+
+  function buildReportPayload(): OfflineReportPayload {
+    return {
+      ...report,
+      internalNote: internalNote.trim() || undefined,
+      clientSignatureDataUrl,
+      technicianSignatureDataUrl,
+      finishedAt: new Date().toISOString()
+    };
+  }
+
+  function buildOfflineItem(
+    mode: OfflineUploadMode,
+    appointment: Appointment,
+    payload: OfflineReportPayload | undefined,
+    attachments: PendingAttachment[]
+  ): OfflineUploadItem {
+    return {
+      id: createOfflineUploadId(mode, appointment.id),
+      mode,
+      appointmentId: appointment.id,
+      appointmentLabel: appointment.client?.name ?? appointment.city ?? 'Atendimento',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      attempts: 0,
+      reportPayload: payload,
+      attachments: attachments.map(serializeAttachmentForQueue)
+    };
+  }
+
+  async function saveCurrentUploadOffline(mode: OfflineUploadMode, payload?: OfflineReportPayload, attachments = pendingAttachments) {
+    if (!current) return;
+    await enqueueOfflineUpload(buildOfflineItem(mode, current, payload, attachments));
+    attachments.forEach((item) => {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    });
+    setPendingAttachments((prev) => prev.filter((item) => !attachments.some((queued) => queued.id === item.id)));
+    await refreshOfflineQueueCount();
+  }
+
+  async function submitReportPayload(appointmentId: string, payload: OfflineReportPayload) {
+    await api(`/technician/appointments/${appointmentId}/reports`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async function uploadQueuedAttachments(appointmentId: string, attachments: OfflineQueuedAttachment[]) {
+    for (const attachment of attachments) {
+      await uploadFileNow(
+        fileFromQueuedAttachment(attachment),
+        attachment.attachmentType,
+        attachment.displayName,
+        appointmentId
+      );
+      if (attachments.length > 1) await wait(500);
+    }
+  }
+
+  async function syncOfflineUploads(showSuccessMessage = false) {
+    if (offlineSyncing) return;
+    setOfflineSyncing(true);
+    setOfflineMessage('');
+    try {
+      const queuedItems = await listOfflineUploads();
+      let sentCount = 0;
+
+      for (const item of queuedItems) {
+        try {
+          if (item.mode === 'report' && item.reportPayload) {
+            await submitReportPayload(item.appointmentId, item.reportPayload);
+          }
+          await uploadQueuedAttachments(item.appointmentId, item.attachments ?? []);
+          await deleteOfflineUpload(item.id);
+          sentCount += 1;
+        } catch (err) {
+          if (!isNetworkLikeError(err)) {
+            await enqueueOfflineUpload({
+              ...item,
+              attempts: item.attempts + 1,
+              updatedAt: new Date().toISOString()
+            });
+          }
+          break;
+        }
+      }
+
+      await refreshOfflineQueueCount();
+      if (sentCount > 0) {
+        setOfflineMessage(`${sentCount} envio(s) offline sincronizado(s) com sucesso.`);
+        await load(true);
+      } else if (showSuccessMessage) {
+        setOfflineMessage('Nenhum envio pendente para sincronizar.');
+      }
+    } catch (err) {
+      setOfflineMessage(err instanceof Error ? err.message : 'Nao foi possivel sincronizar a fila offline.');
+    } finally {
+      setOfflineSyncing(false);
+    }
+  }
+
   async function saveReport() {
     if (!current) return;
     if (isCarTrip && !pickupVehiclePhotosComplete) {
@@ -388,8 +547,10 @@ export default function TechnicianMobile() {
     setSavingReport(true);
     setMessage('');
     setErrorMessage('');
+    let reportSubmittedNow = false;
     try {
       const submittedTechnicianSignature = technicianSignatureDataUrl;
+      const payload = buildReportPayload();
       if (submittedTechnicianSignature && submittedTechnicianSignature !== savedTechnicianSignature) {
         const saved = await api<{ signatureDataUrl: string }>('/technician/profile/signature', {
           method: 'PUT',
@@ -397,19 +558,21 @@ export default function TechnicianMobile() {
         });
         setSavedTechnicianSignature(saved.signatureDataUrl || submittedTechnicianSignature);
       }
-      await api(`/technician/appointments/${current.id}/reports`, {
-        method: 'POST',
-        body: JSON.stringify({
-          ...report,
-          internalNote: internalNote.trim() || undefined,
-          clientSignatureDataUrl,
-          technicianSignatureDataUrl: submittedTechnicianSignature,
-          finishedAt: new Date().toISOString()
-        })
-      });
+      await submitReportPayload(current.id, payload);
+      reportSubmittedNow = true;
       setLocallySubmittedReportIds((prev) => new Set(prev).add(current.id));
 
-      await uploadPendingAttachmentsBatch();
+      try {
+        await uploadPendingAttachmentsBatch();
+      } catch (err) {
+        if (isNetworkLikeError(err) && pendingAttachments.length > 0) {
+          await saveCurrentUploadOffline('attachments', undefined, pendingAttachments);
+          setMessage('Relatorio enviado ao Drive. Anexos salvos no aparelho e serao enviados quando a internet voltar.');
+          await load(true);
+          return;
+        }
+        throw err;
+      }
       clearSignature('client');
       setTechnicianSignatureDataUrl(submittedTechnicianSignature);
       setReport({ summary: '' });
@@ -419,6 +582,18 @@ export default function TechnicianMobile() {
         : 'Relatório enviado com sucesso e atendimento finalizado.');
       await load();
     } catch (err) {
+      if (!reportSubmittedNow && isNetworkLikeError(err)) {
+        try {
+          await saveCurrentUploadOffline('report', buildReportPayload(), pendingAttachments);
+          setMessage('Sem internet agora. Relatorio, assinaturas e anexos foram salvos no aparelho e serao enviados automaticamente.');
+          setErrorMessage('');
+          return;
+        } catch (queueErr) {
+          setMessage('');
+          setErrorMessage(queueErr instanceof Error ? queueErr.message : 'Nao foi possivel salvar o envio offline.');
+          return;
+        }
+      }
       setMessage('');
       setErrorMessage(err instanceof Error ? err.message : String(err || 'Erro ao enviar relatório/anexos'));
     } finally {
@@ -436,6 +611,17 @@ export default function TechnicianMobile() {
       setMessage('Arquivos enviados ao Drive com sucesso.');
       await load(true);
     } catch (err) {
+      if (isNetworkLikeError(err) && pendingAttachments.length > 0) {
+        try {
+          await saveCurrentUploadOffline('attachments', undefined, pendingAttachments);
+          setMessage('Anexos salvos no aparelho. Eles serao enviados automaticamente quando a internet voltar.');
+          setErrorMessage('');
+          return;
+        } catch (queueErr) {
+          setErrorMessage(queueErr instanceof Error ? queueErr.message : 'Nao foi possivel salvar os anexos offline.');
+          return;
+        }
+      }
       setErrorMessage(err instanceof Error ? err.message : String(err || 'Erro ao enviar anexos'));
     } finally {
       setSavingReport(false);
@@ -472,8 +658,8 @@ export default function TechnicianMobile() {
     }
   }
 
-  async function uploadFileNow(file: File | undefined, type: string, displayName?: string) {
-    if (!current || !file) return;
+  async function uploadFileNow(file: File | undefined, type: string, displayName?: string, appointmentId = current?.id) {
+    if (!appointmentId || !file) return;
     if (file.type.startsWith('video/') && file.size > MAX_VIDEO_ATTACHMENT_SIZE) {
       throw new Error(`Video muito grande. Grave um video menor ou envie o arquivo com ate ${MAX_VIDEO_ATTACHMENT_SIZE_MB} MB.`);
     }
@@ -485,7 +671,7 @@ export default function TechnicianMobile() {
       return data;
     };
     const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
-    const response = await fetchUploadWithRetry(`${apiBase}/attachments/appointments/${current.id}`, buildData);
+    const response = await fetchUploadWithRetry(`${apiBase}/attachments/appointments/${appointmentId}`, buildData);
     if (!response.ok) {
       const raw = await response.text().catch(() => '');
       let payload: { message?: string } | null = null;
@@ -748,6 +934,30 @@ export default function TechnicianMobile() {
           <p className="mt-1 text-sm text-red-100 sm:text-base">Você tem {activeTrips.length} atendimento(s) ativo(s)</p>
         </div>
 
+        {(offlineQueueCount > 0 || offlineMessage) && (
+          <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold text-amber-300">Fila offline</p>
+                <p className="mt-1 text-muted-foreground">
+                  {offlineQueueCount > 0
+                    ? `${offlineQueueCount} envio(s) salvo(s) no aparelho aguardando internet.`
+                    : offlineMessage}
+                </p>
+                {offlineQueueCount > 0 && offlineMessage && <p className="mt-1 text-muted-foreground">{offlineMessage}</p>}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0"
+                disabled={offlineSyncing}
+                onClick={() => syncOfflineUploads(true)}
+              >
+                {offlineSyncing ? 'Sincronizando...' : 'Sincronizar agora'}
+              </Button>
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-2">
           <button
             type="button"

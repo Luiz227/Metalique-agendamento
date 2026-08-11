@@ -1,5 +1,11 @@
-const CACHE_NAME = "agenda-metalique-v4";
-const APP_SHELL = ["/", "/login", "/manifest.webmanifest", "/images/logo-metalique-256.png", "/favicon.ico"];
+const CACHE_NAME = "agenda-metalique-v5";
+const APP_SHELL = [
+  "/",
+  "/login",
+  "/manifest.webmanifest",
+  "/images/logo-metalique-192.png",
+  "/images/logo-metalique-256.png"
+];
 
 function isNavigationRequest(request) {
   return request.mode === "navigate" || request.headers.get("accept")?.includes("text/html");

@@ -28,8 +28,8 @@ export class AppointmentsService {
     const where: Prisma.AppointmentWhereInput = {};
     if (from || to) {
       where.date = {};
-      if (from) where.date.gte = new Date(from);
       if (to) where.date.lte = new Date(to);
+      if (from && !to) where.date.gte = new Date(from);
     }
 
     const rows = await this.prisma.appointment.findMany({
@@ -44,8 +44,17 @@ export class AppointmentsService {
       orderBy: { date: 'desc' }
     });
 
-    const checklistById = await this.getChecklistOverrides(rows.map((row) => row.id));
-    return rows.map((row) => this.toApiAppointment(row, checklistById.get(row.id)));
+    const visibleRows = from && to
+      ? rows.filter((row) => {
+          const lastDay = new Date(row.date);
+          lastDay.setDate(lastDay.getDate() + Math.max(1, row.daysOut) - 1);
+          lastDay.setHours(23, 59, 59, 999);
+          return lastDay >= new Date(from);
+        })
+      : rows;
+
+    const checklistById = await this.getChecklistOverrides(visibleRows.map((row) => row.id));
+    return visibleRows.map((row) => this.toApiAppointment(row, checklistById.get(row.id)));
   }
 
   async findById(id: string) {
@@ -499,9 +508,10 @@ export class AppointmentsService {
     };
   }
 
-  private toFrontendStatus(status: AppointmentStatus): 'WAITING' | 'READY' | 'CRITICAL' {
+  private toFrontendStatus(status: AppointmentStatus): 'WAITING' | 'READY' | 'CRITICAL' | 'COMPLETED' {
     if (status === AppointmentStatus.READY) return 'READY';
     if (status === AppointmentStatus.CRITICAL) return 'CRITICAL';
+    if (status === AppointmentStatus.COMPLETED) return 'COMPLETED';
     return 'WAITING';
   }
 

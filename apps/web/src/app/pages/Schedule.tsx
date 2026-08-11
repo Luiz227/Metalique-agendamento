@@ -33,12 +33,17 @@ function weekStartMonday(baseDate: Date) {
   return monday;
 }
 
-function dayRange(date: Date) {
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(date);
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
+function appointmentCoversDate(appointment: Appointment, date: Date) {
+  const target = new Date(date);
+  target.setHours(0, 0, 0, 0);
+
+  const firstDay = new Date(appointment.date);
+  firstDay.setHours(0, 0, 0, 0);
+
+  const lastDay = new Date(firstDay);
+  lastDay.setDate(lastDay.getDate() + Math.max(1, appointment.daysOut ?? 1) - 1);
+
+  return target >= firstDay && target <= lastDay;
 }
 
 export default function Schedule() {
@@ -80,15 +85,13 @@ export default function Schedule() {
     return Array.from({ length: 7 }, (_, index) => {
       const date = new Date(monday);
       date.setDate(monday.getDate() + index);
-      const { start, end } = dayRange(date);
 
       return {
         day: weekDays[date.getDay()],
         date: date.getDate(),
         fullDate: date,
         appointments: apiAppointments.filter((appointment) => {
-          const appointmentDate = new Date(appointment.date);
-          return appointmentDate >= start && appointmentDate <= end;
+          return appointmentCoversDate(appointment, date);
         }).length
       };
     });
@@ -97,13 +100,8 @@ export default function Schedule() {
   const selectedWeekDate = currentWeek[selectedDay]?.fullDate ?? currentWeek[0]?.fullDate ?? new Date();
 
   function appointmentsForDate(date: Date) {
-    const { start, end } = dayRange(date);
-
     return apiAppointments
-      .filter((appointment) => {
-        const appointmentDate = new Date(appointment.date);
-        return appointmentDate >= start && appointmentDate <= end;
-      })
+      .filter((appointment) => appointmentCoversDate(appointment, date))
       .map((appointment) => ({
         id: appointment.id,
         time: formatTime(appointment.startTime),
@@ -113,6 +111,7 @@ export default function Schedule() {
         city: appointment.city,
         status: appointment.status === 'READY' ? 'ready' : appointment.status === 'CRITICAL' ? 'critical' : 'waiting',
         duration: Math.max(1, Math.round((new Date(appointment.endTime).getTime() - new Date(appointment.startTime).getTime()) / 3600000)),
+        daysOut: Math.max(1, appointment.daysOut ?? 1),
         label: statusLabel(appointment.status)
       }));
   }
@@ -153,9 +152,8 @@ export default function Schedule() {
       const isCurrentMonth = dayNum > 0 && dayNum <= lastDate;
       const date = isCurrentMonth ? new Date(year, month, dayNum) : null;
       const dayAppointments = isCurrentMonth
-        ? apiAppointments.filter((appointment) => {
-            const aptDate = new Date(appointment.date);
-            return aptDate.getFullYear() === year && aptDate.getMonth() === month && aptDate.getDate() === dayNum;
+          ? apiAppointments.filter((appointment) => {
+            return date ? appointmentCoversDate(appointment, date) : false;
           })
         : [];
       const appointmentCount = dayAppointments.length;
@@ -240,6 +238,7 @@ export default function Schedule() {
                         <Clock className="h-4 w-4 text-zinc-400" />
                         <span className="text-sm font-medium text-white">{apt.time}</span>
                         <span className="text-xs text-zinc-500">{apt.duration}h</span>
+                        {apt.daysOut > 1 && <span className="text-xs text-blue-300">{apt.daysOut} dias em campo</span>}
                       </div>
                       <div className="w-1 self-stretch rounded-full" style={{ backgroundColor: apt.technicianColor }} />
                       <div className="flex-1 min-w-0">
@@ -298,6 +297,9 @@ export default function Schedule() {
                               >
                                 <span className="font-semibold">{appointment.technician?.name ?? 'Sem técnico'}</span>
                                 <span className="text-white/85"> / {shortCompanyName(appointment.client?.name ?? 'Cliente')}</span>
+                                {(appointment.daysOut ?? 1) > 1 && (
+                                  <span className="mt-0.5 block text-[10px] text-white/75">{appointment.daysOut} dias em campo</span>
+                                )}
                               </div>
                             ))}
                             {appointmentCount > 3 && (
@@ -331,6 +333,7 @@ export default function Schedule() {
                         <Clock className="h-4 w-4 text-zinc-400" />
                         <span className="text-sm font-medium text-white">{apt.time}</span>
                         <span className="text-xs text-zinc-500">{apt.duration}h</span>
+                        {apt.daysOut > 1 && <span className="text-xs text-blue-300">{apt.daysOut} dias em campo</span>}
                       </div>
                       <div className="w-1 self-stretch rounded-full" style={{ backgroundColor: apt.technicianColor }} />
                       <div className="flex-1 min-w-0">

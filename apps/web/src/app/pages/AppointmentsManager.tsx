@@ -27,6 +27,8 @@ const checklistLabels: Record<string, string> = {
 };
 
 function missingItems(appointment: Appointment): string[] {
+  if (appointment.status === 'COMPLETED' || appointment.status === 'CRITICAL') return [];
+
   const list: string[] = [];
   const checklist = appointment.schedulingChecklist;
   if (!appointment.city?.trim() || appointment.city === 'A definir') list.push('Cidade');
@@ -89,7 +91,7 @@ export default function AppointmentsManager() {
     () =>
       items
         .map((item) => ({ item, missing: missingItems(item) }))
-        .filter((row) => row.item.status !== 'CRITICAL')
+        .filter((row) => row.item.status !== 'CRITICAL' && row.item.status !== 'COMPLETED')
         .filter((row) => row.item.status !== 'READY' || row.missing.length > 0)
         .sort((a, b) => new Date(b.item.date).getTime() - new Date(a.item.date).getTime()),
     [items]
@@ -98,7 +100,7 @@ export default function AppointmentsManager() {
   const finished = useMemo(
     () =>
       items
-        .filter((item) => item.status === 'CRITICAL')
+        .filter((item) => item.status === 'CRITICAL' || item.status === 'COMPLETED')
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
     [items]
   );

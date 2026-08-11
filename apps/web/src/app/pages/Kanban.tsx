@@ -36,6 +36,8 @@ const checklistLabels: Record<string, string> = {
 };
 
 function missingItems(appointment: Appointment): string[] {
+  if (appointment.status === 'COMPLETED' || appointment.status === 'CRITICAL') return [];
+
   const list: string[] = [];
   const checklist = appointment.schedulingChecklist;
   if (!appointment.city?.trim()) list.push('Cidade');
@@ -56,7 +58,7 @@ function wasFinishedByTechnician(appointment: Appointment) {
 
 function columnOf(appointment: Appointment): KanbanColumn['key'] {
   if (appointment.status === 'READY') return 'ready';
-  if (appointment.status === 'CRITICAL' || wasFinishedByTechnician(appointment)) return 'critical';
+  if (appointment.status === 'CRITICAL' || appointment.status === 'COMPLETED' || wasFinishedByTechnician(appointment)) return 'critical';
 
   const checklist = appointment.schedulingChecklist;
   const hasCoreDataMissing =

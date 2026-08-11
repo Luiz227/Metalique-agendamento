@@ -3193,7 +3193,14 @@ export class LegacyService {
       date: row.date.toISOString(),
       startTime: row.startTime.toISOString(),
       endTime: row.endTime.toISOString(),
-      status: row.status === AppointmentStatus.READY ? 'READY' : row.status === AppointmentStatus.CRITICAL ? 'CRITICAL' : 'WAITING',
+      status:
+        row.status === AppointmentStatus.READY
+          ? 'READY'
+          : row.status === AppointmentStatus.CRITICAL
+            ? 'CRITICAL'
+            : row.status === AppointmentStatus.COMPLETED
+              ? 'COMPLETED'
+              : 'WAITING',
       notes: row.notes,
       osNumber: row.osNumber,
       daysOut: row.daysOut,

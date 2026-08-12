@@ -462,62 +462,10 @@ export class LegacyService {
 
   async technicianAppointments(identity: { userId: string | null; email: string | null; name: string | null } | null) {
     if (!identity) return [];
-
-    const linkedUser = identity.userId
-      ? await this.prisma.user.findUnique({ where: { id: identity.userId } })
-      : identity.email
-        ? await this.prisma.user.findUnique({
-            where: { email: identity.email }
-          })
-        : null;
-
-    const candidateName = linkedUser?.name?.trim() || identity.name?.trim() || '';
-    const firstName = candidateName.split(/\s+/).filter(Boolean)[0] ?? '';
-    const technicianSearch: Prisma.TechnicianWhereInput[] = [];
-    if (linkedUser) technicianSearch.push({ userId: linkedUser.id });
-    if (candidateName) technicianSearch.push({ name: { equals: candidateName, mode: 'insensitive' } });
-    if (firstName && firstName.length >= 3) technicianSearch.push({ name: { startsWith: firstName, mode: 'insensitive' } });
-
-    let technicians = technicianSearch.length
-      ? await this.prisma.technician.findMany({
-          where: {
-            OR: technicianSearch
-          },
-          orderBy: { createdAt: 'asc' }
-        })
-      : [];
-
-    let primaryTechnician = technicians.find((item) => linkedUser && item.userId === linkedUser.id) ?? technicians[0] ?? null;
-
-    if (!primaryTechnician && linkedUser?.role === UserRole.TECHNICIAN) {
-      primaryTechnician = await this.prisma.technician.create({
-        data: {
-          userId: linkedUser.id,
-          name: linkedUser.name,
-          baseCity: 'Nao informado',
-          baseAddress: 'Nao informado',
-          specialties: [],
-          active: linkedUser.active,
-          color: '#2563eb'
-        }
-      });
-      technicians = [primaryTechnician];
-    }
-
-    if (linkedUser && primaryTechnician && !primaryTechnician.userId) {
-      primaryTechnician = await this.prisma.technician.update({
-        where: { id: primaryTechnician.id },
-        data: { userId: linkedUser.id, active: linkedUser.active, name: linkedUser.name }
-      });
-      technicians = technicians.map((item) => (item.id === primaryTechnician!.id ? primaryTechnician! : item));
-    }
-
-    if (!primaryTechnician) return [];
-
-    const technicianIds = Array.from(new Set(technicians.map((item) => item.id)));
+    const technician = await this.resolveTechnicianForIdentity(identity);
     const rows = await this.prisma.appointment.findMany({
       where: {
-        technicianId: { in: technicianIds },
+        technicianId: technician.id,
         status: { in: [AppointmentStatus.READY, AppointmentStatus.CRITICAL, AppointmentStatus.WAITING, AppointmentStatus.COMPLETED] }
       },
       include: { client: true, technician: true, vehicle: true, attachments: true, statusLogs: { orderBy: { createdAt: 'desc' } } },
@@ -531,24 +479,7 @@ export class LegacyService {
 
   async technicianWeeklyReport(identity: { userId: string | null; email: string | null; name: string | null } | null) {
     if (!identity) throw new BadRequestException('Tecnico nao identificado');
-
-    const linkedUser = identity.userId
-      ? await this.prisma.user.findUnique({ where: { id: identity.userId } })
-      : identity.email
-        ? await this.prisma.user.findUnique({ where: { email: identity.email } })
-        : null;
-    const candidateName = linkedUser?.name?.trim() || identity.name?.trim() || '';
-    const firstName = candidateName.split(/\s+/).filter(Boolean)[0] ?? '';
-    const technicianSearch: Prisma.TechnicianWhereInput[] = [];
-    if (linkedUser) technicianSearch.push({ userId: linkedUser.id });
-    if (candidateName) technicianSearch.push({ name: { equals: candidateName, mode: 'insensitive' } });
-    if (firstName.length >= 3) technicianSearch.push({ name: { startsWith: firstName, mode: 'insensitive' } });
-
-    const technicians = technicianSearch.length
-      ? await this.prisma.technician.findMany({ where: { OR: technicianSearch } })
-      : [];
-    const technicianIds = Array.from(new Set(technicians.map((item) => item.id)));
-    if (!technicianIds.length) throw new NotFoundException('Cadastro do tecnico nao encontrado');
+    const technician = await this.resolveTechnicianForIdentity(identity);
 
     const now = new Date();
     const mondayShift = now.getDay() === 0 ? -6 : 1 - now.getDay();
@@ -560,7 +491,7 @@ export class LegacyService {
 
     const logs = await this.prisma.statusLog.findMany({
       where: {
-        appointment: { technicianId: { in: technicianIds } },
+        appointment: { technicianId: technician.id },
         status: { in: ['COMPLETED_SUCCESS', 'COMPLETED_PARTIAL'] },
         createdAt: { gte: start, lt: end }
       },
@@ -614,7 +545,7 @@ export class LegacyService {
           {
             role: 'user',
             content: [
-              `Crie o relatorio semanal do tecnico ${candidateName || technicians[0]?.name || 'Tecnico'}.`,
+              `Crie o relatorio semanal do tecnico ${technician.name}.`,
               'Organize em: Resumo da semana; Atendimentos realizados; Principais atividades; Pendencias e pontos de atencao; Conclusao.',
               'Se nao houver pendencias descritas, informe que nenhuma pendencia foi registrada nos relatos.',
               `Relatos da semana: ${JSON.stringify(sources)}`
@@ -625,7 +556,7 @@ export class LegacyService {
     });
     void this.trackApiUsage('openai', 'chat-completions', 'weekly-technician-report', response.ok ? 'SUCCESS' : 'ERROR', {
       model,
-      technicianIds: technicianIds.join(','),
+      technicianId: technician.id,
       sourceCount: sources.length,
       httpStatus: response.status
     });
@@ -682,18 +613,57 @@ export class LegacyService {
       : identity.email
         ? await this.prisma.user.findUnique({ where: { email: identity.email } })
         : null;
-    const candidateName = linkedUser?.name?.trim() || identity.name?.trim() || '';
-    const technician = await this.prisma.technician.findFirst({
-      where: {
-        OR: [
-          ...(linkedUser ? [{ userId: linkedUser.id }] : []),
-          ...(candidateName ? [{ name: { equals: candidateName, mode: Prisma.QueryMode.insensitive } }] : [])
-        ]
-      },
-      orderBy: { createdAt: 'asc' }
+    if (linkedUser) {
+      const linkedTechnician = await this.prisma.technician.findUnique({ where: { userId: linkedUser.id } });
+      if (linkedTechnician) return linkedTechnician;
+      if (linkedUser.role !== UserRole.TECHNICIAN) {
+        throw new NotFoundException('Cadastro do tecnico nao encontrado');
+      }
+
+      // Vincula cadastros legados apenas quando o nome completo identifica um unico tecnico.
+      const legacyMatches = await this.prisma.technician.findMany({
+        where: {
+          userId: null,
+          name: { equals: linkedUser.name.trim(), mode: 'insensitive' }
+        },
+        orderBy: { createdAt: 'asc' },
+        take: 2
+      });
+      if (legacyMatches.length === 1) {
+        return this.prisma.technician.update({
+          where: { id: legacyMatches[0].id },
+          data: {
+            userId: linkedUser.id,
+            name: linkedUser.name,
+            active: linkedUser.active
+          }
+        });
+      }
+
+      return this.prisma.technician.create({
+        data: {
+          userId: linkedUser.id,
+          name: linkedUser.name,
+          baseCity: 'Nao informado',
+          baseAddress: 'Nao informado',
+          specialties: [],
+          active: linkedUser.active,
+          color: '#2563eb'
+        }
+      });
+    }
+
+    const candidateName = identity.name?.trim() || '';
+    if (!candidateName) throw new NotFoundException('Cadastro do tecnico nao encontrado');
+    const exactMatches = await this.prisma.technician.findMany({
+      where: { name: { equals: candidateName, mode: 'insensitive' } },
+      orderBy: { createdAt: 'asc' },
+      take: 2
     });
-    if (!technician) throw new NotFoundException('Cadastro do tecnico nao encontrado');
-    return technician;
+    if (exactMatches.length !== 1) {
+      throw new NotFoundException('Cadastro do tecnico nao identificado de forma unica');
+    }
+    return exactMatches[0];
   }
 
   async technicianSetStatus(id: string, status: string, observation?: string) {

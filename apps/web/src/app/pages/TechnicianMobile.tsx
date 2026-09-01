@@ -1,5 +1,26 @@
 import { type PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, Camera, Car, Clock, FileText, MapPin, Navigation, Phone, Plane, Play, RefreshCw, Video } from 'lucide-react';
+import {
+  BriefcaseBusiness,
+  Calendar,
+  CalendarDays,
+  Camera,
+  Car,
+  CheckCircle2,
+  ChevronRight,
+  Circle,
+  Clock,
+  Cloud,
+  CloudOff,
+  FileText,
+  ListChecks,
+  MapPin,
+  Navigation,
+  Phone,
+  Plane,
+  Play,
+  RefreshCw,
+  Video
+} from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -463,6 +484,19 @@ export default function TechnicianMobile() {
   const pickupVehiclePhotosComplete = !isCarTrip || pickupVehiclePhotos.length >= VEHICLE_PHOTOS_REQUIRED;
   const returnVehiclePhotosComplete = !isCarTrip || returnVehiclePhotos.length >= VEHICLE_PHOTOS_REQUIRED;
   const missingVehiclePickupPhotos = isCarTrip && !pickupVehiclePhotosComplete;
+  const workflowSteps = isCarTrip
+    ? [
+        { label: 'Retirada', complete: pickupVehiclePhotosComplete },
+        { label: 'Relatório', complete: technicalReportSubmitted },
+        { label: 'Devolução', complete: returnVehiclePhotosComplete }
+      ]
+    : [
+        { label: 'Dados', complete: Boolean(report.summary) },
+        { label: 'Assinaturas', complete: Boolean(technicianSignatureDataUrl) && (Boolean(clientSignatureDataUrl) || clientSignatureRefused) },
+        { label: 'Concluído', complete: technicalReportSubmitted }
+      ];
+  const workflowCompleted = workflowSteps.filter((step) => step.complete).length;
+  const workflowProgress = Math.round((workflowCompleted / workflowSteps.length) * 100);
   const canSendReport =
     Boolean(report.summary) &&
     (Boolean(clientSignatureDataUrl) || clientSignatureRefused) &&
@@ -1040,7 +1074,7 @@ export default function TechnicianMobile() {
           ) : appointmentsError ? (
             <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-5">
               <p className="font-semibold text-red-500">Falha ao carregar atendimentos</p>
-              <p className="mt-2 text-sm text-red-300">{appointmentsError}</p>
+              <p className="mt-2 text-sm text-red-700 dark:text-red-300">{appointmentsError}</p>
               <Button className="mt-4 w-full" onClick={() => load()}>
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Tentar novamente
@@ -1066,18 +1100,44 @@ export default function TechnicianMobile() {
   const tone = statusTone(current.status);
 
   return (
-    <div className="min-h-screen bg-background px-3 py-4 sm:px-4 sm:py-6">
-      <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
-        <div className="rounded-2xl bg-gradient-to-r from-[#c8142f] to-[#e3273e] px-4 py-5 sm:px-6">
-          <h1 className="text-xl font-bold text-white sm:text-2xl">Olá, {user?.name ?? current.technician?.name ?? 'Técnico'}</h1>
-          <p className="mt-1 text-sm text-red-100 sm:text-base">Você tem {activeTrips.length} atendimento(s) ativo(s)</p>
-        </div>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(200,20,47,0.08),transparent_32%),linear-gradient(to_bottom,var(--background),var(--background))] px-3 pb-28 pt-3 sm:px-5 sm:pb-10 sm:pt-5">
+      <div className="mx-auto w-full max-w-3xl space-y-4 sm:space-y-5">
+        <header className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[#111318] px-5 py-5 text-white shadow-[0_18px_50px_rgba(0,0,0,0.24)] sm:px-7 sm:py-6">
+          <div className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-[#c8142f]/30 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 left-1/3 h-40 w-40 rounded-full bg-blue-500/15 blur-3xl" />
+          <div className="relative flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/50">Agenda Metalique</p>
+              <h1 className="mt-2 truncate text-2xl font-bold tracking-tight sm:text-3xl">
+                Olá, {(user?.name ?? current.technician?.name ?? 'Técnico').split(' ')[0]}
+              </h1>
+              <p className="mt-1 text-sm text-white/60">
+                {new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}
+              </p>
+            </div>
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-lg font-bold shadow-inner backdrop-blur">
+              {(user?.name ?? current.technician?.name ?? 'T').trim().charAt(0).toUpperCase()}
+            </div>
+          </div>
+          <div className="relative mt-5 grid grid-cols-[1fr_auto] items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 backdrop-blur">
+            <div>
+              <p className="text-xs text-white/55">Sua operação hoje</p>
+              <p className="mt-0.5 text-sm font-semibold">
+                {activeTrips.length === 0 ? 'Nenhum atendimento ativo' : `${activeTrips.length} atendimento(s) em andamento`}
+              </p>
+            </div>
+            <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${offlineQueueCount > 0 ? 'bg-amber-400/15 text-amber-200' : 'bg-emerald-400/15 text-emerald-200'}`}>
+              {offlineQueueCount > 0 ? <CloudOff className="h-3.5 w-3.5" /> : <Cloud className="h-3.5 w-3.5" />}
+              {offlineQueueCount > 0 ? `${offlineQueueCount} pendente(s)` : 'Sincronizado'}
+            </div>
+          </div>
+        </header>
 
         {(offlineQueueCount > 0 || offlineMessage) && (
           <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="font-semibold text-amber-300">Fila offline</p>
+                <p className="font-semibold text-amber-700 dark:text-amber-300">Fila offline</p>
                 <p className="mt-1 text-muted-foreground">
                   {offlineQueueCount > 0
                     ? `${offlineQueueCount} envio(s) salvo(s) no aparelho aguardando internet.`
@@ -1097,35 +1157,13 @@ export default function TechnicianMobile() {
             </div>
           </div>
         )}
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            type="button"
-            onClick={() => setActiveSection('LIST')}
-            className={`rounded-xl border p-3 text-center text-sm ${activeSection === 'LIST' ? 'border-[#c8142f] bg-[#c8142f]/10' : 'border-border bg-card'}`}
-          >
-            Atendimentos
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSection('DETAILS')}
-            className={`rounded-xl border p-3 text-center text-sm ${activeSection === 'DETAILS' ? 'border-blue-500 bg-blue-500/10' : 'border-border bg-card'}`}
-          >
-            Detalhes
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveSection('CALENDAR')}
-            className={`rounded-xl border p-3 text-center text-sm ${activeSection === 'CALENDAR' ? 'border-green-500 bg-green-500/10' : 'border-border bg-card'}`}
-          >
-            Calendário
-          </button>
-        </div>
-
+        {activeSection === 'LIST' && (
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
             onClick={() => setActiveTripsView('ACTIVE')}
-            className={`rounded-xl border p-3 text-left ${activeTripsView === 'ACTIVE' ? 'border-[#c8142f] bg-[#c8142f]/10' : 'border-border bg-card'}`}
+            className={`rounded-2xl border p-4 text-left shadow-sm transition-all active:scale-[0.98] ${activeTripsView === 'ACTIVE' ? 'border-[#c8142f]/50 bg-[#c8142f]/10 ring-1 ring-[#c8142f]/20' : 'border-border/70 bg-card'}`}
           >
             <p className="text-xs text-muted-foreground sm:text-sm">Atendimentos ativos</p>
             <p className="text-xl font-bold sm:text-2xl">{activeTrips.length}</p>
@@ -1133,20 +1171,20 @@ export default function TechnicianMobile() {
           <button
             type="button"
             onClick={() => setActiveTripsView('FINISHED')}
-            className={`rounded-xl border p-3 text-left ${activeTripsView === 'FINISHED' ? 'border-green-500 bg-green-500/10' : 'border-border bg-card'}`}
+            className={`rounded-2xl border p-4 text-left shadow-sm transition-all active:scale-[0.98] ${activeTripsView === 'FINISHED' ? 'border-emerald-500/50 bg-emerald-500/10 ring-1 ring-emerald-500/20' : 'border-border/70 bg-card'}`}
           >
             <p className="text-xs text-muted-foreground sm:text-sm">Viagens finalizadas</p>
             <p className="text-xl font-bold sm:text-2xl">{finishedTrips.length}</p>
           </button>
         </div>
 
-        <Card className="rounded-2xl">
-          <CardHeader>
+        <Card className="gap-4 rounded-[24px] border-border/70 shadow-sm">
+          <CardHeader className="px-4 pt-5 sm:px-6">
             <CardTitle className="text-base sm:text-lg">
               {activeTripsView === 'ACTIVE' ? 'Atendimentos ativos' : 'Viagens finalizadas'}
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-2 px-3 pb-3 sm:px-4 sm:pb-4">
             {visibleTrips.length === 0 && (
               <p className="text-sm text-muted-foreground">
                 {activeTripsView === 'ACTIVE' ? 'Nenhum atendimento ativo encontrado.' : 'Nenhuma viagem finalizada.'}
@@ -1155,30 +1193,62 @@ export default function TechnicianMobile() {
             {[...visibleTrips]
               .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
               .map((apt) => (
-                <button key={apt.id} onClick={() => { setSelectedId(apt.id); setActiveSection('DETAILS'); }} className="w-full rounded-xl border bg-card p-3 text-left">
-                  <p className="text-sm font-semibold sm:text-base">{apt.client?.name ?? 'Cliente'}</p>
-                  <p className="mt-1 text-xs text-muted-foreground sm:text-sm break-words">{apt.city} - {formatDate(apt.date)} as {formatTime(apt.startTime)}</p>
+                <button key={apt.id} onClick={() => { setSelectedId(apt.id); setActiveSection('DETAILS'); }} className="group flex w-full items-center gap-3 rounded-2xl border border-transparent bg-muted/45 p-3.5 text-left transition-all hover:border-border hover:bg-muted active:scale-[0.99]">
+                  <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-background shadow-sm">
+                    <span className="text-[10px] font-semibold uppercase text-[#c8142f]">{new Date(apt.date).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}</span>
+                    <span className="text-base font-bold leading-none">{new Date(apt.date).getDate()}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold sm:text-base">{apt.client?.name ?? 'Cliente'}</p>
+                    <p className="mt-1 truncate text-xs text-muted-foreground sm:text-sm">{apt.city} · {formatTime(apt.startTime)}</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                 </button>
               ))}
           </CardContent>
         </Card>
+        </div>
+        )}
 
         {activeSection === 'DETAILS' && (
-        <Card className="rounded-2xl">
-          <CardHeader>
+        <div className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-300">
+        <div className="rounded-[24px] border border-border/70 bg-card p-4 shadow-sm sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Progresso do atendimento</p>
+              <p className="mt-1 text-sm font-semibold">{workflowCompleted} de {workflowSteps.length} etapas concluídas</p>
+            </div>
+            <span className="text-2xl font-bold tracking-tight text-[#c8142f]">{workflowProgress}%</span>
+          </div>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-gradient-to-r from-[#c8142f] to-[#ef4159] transition-all duration-500" style={{ width: `${workflowProgress}%` }} />
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {workflowSteps.map((step) => (
+              <div key={step.label} className="flex min-w-0 items-center gap-1.5">
+                {step.complete ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground/50" />}
+                <span className={`truncate text-[11px] ${step.complete ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>{step.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <Card className="gap-4 rounded-[24px] border-border/70 shadow-sm">
+          <CardHeader className="px-5 pt-5 sm:px-6 sm:pt-6">
             <div className="flex items-center justify-between gap-2">
-              <CardTitle className="text-base sm:text-lg">Próximo Atendimento</CardTitle>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Atendimento selecionado</p>
+                <CardTitle className="mt-1 text-lg sm:text-xl">{currentClientName}</CardTitle>
+              </div>
               <Badge className={tone.color}>{statusLabel(current.status)}</Badge>
             </div>
           </CardHeader>
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-5 px-5 sm:px-6">
             <div>
-              <h3 className="text-lg font-bold sm:text-xl break-words">{currentClientName}</h3>
-              <div className="mt-3 space-y-2 text-sm">
-                <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="h-4 w-4 shrink-0" /><span>{formatDate(current.date)}</span></div>
-                <div className="flex items-center gap-2 text-muted-foreground"><Clock className="h-4 w-4 shrink-0" /><span>{formatTime(current.startTime)} até {formatTime(current.endTime)}</span></div>
-                <div className="flex items-start gap-2 text-muted-foreground"><MapPin className="mt-0.5 h-4 w-4 shrink-0" /><span className="break-words">{currentAddress}</span></div>
-                {currentClientPhone && <div className="flex items-center gap-2 text-muted-foreground"><Phone className="h-4 w-4 shrink-0" /><span>{currentClientPhone}</span></div>}
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded-2xl bg-muted/55 p-3"><Calendar className="mb-2 h-4 w-4 text-[#c8142f]" /><span className="font-medium">{formatDate(current.date)}</span></div>
+                <div className="rounded-2xl bg-muted/55 p-3"><Clock className="mb-2 h-4 w-4 text-blue-500" /><span className="font-medium">{formatTime(current.startTime)} às {formatTime(current.endTime)}</span></div>
+                <div className="col-span-2 flex items-start gap-2 rounded-2xl bg-muted/55 p-3 text-muted-foreground"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" /><span className="break-words">{currentAddress}</span></div>
+                {currentClientPhone && <a href={`tel:${currentClientPhone}`} className="col-span-2 flex items-center gap-2 rounded-2xl bg-muted/55 p-3 text-muted-foreground"><Phone className="h-4 w-4 shrink-0 text-blue-500" /><span>{currentClientPhone}</span></a>}
               </div>
             </div>
 
@@ -1208,18 +1278,18 @@ export default function TechnicianMobile() {
             {isCarTrip && (
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
                 <div className="flex items-start gap-3">
-                  <Car className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
+                  <Car className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-300" />
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-amber-100">Veículo da viagem</p>
+                    <p className="text-sm font-semibold text-amber-800 dark:text-amber-100">Veículo da viagem</p>
                     {current.vehicle ? (
-                      <div className="mt-2 space-y-1 text-sm text-amber-50/90">
+                      <div className="mt-2 space-y-1 text-sm text-amber-900/90 dark:text-amber-50/90">
                         <p className="font-medium">{current.vehicle.name} - {current.vehicle.plate}</p>
                         <p>Ano: {current.vehicle.year ?? 'Não informado'} | KM: {new Intl.NumberFormat('pt-BR').format(current.vehicle.mileage ?? 0)}</p>
                       </div>
                     ) : (
-                      <p className="mt-2 text-sm text-amber-50/90">Veículo ainda não informado pela logística.</p>
+                      <p className="mt-2 text-sm text-amber-900/90 dark:text-amber-50/90">Veículo ainda não informado pela logística.</p>
                     )}
-                    <p className="mt-2 text-xs text-amber-100/80">
+                    <p className="mt-2 text-xs text-amber-800/80 dark:text-amber-100/80">
                       Envie as 4 fotos da retirada antes de sair e as 4 fotos da devolução ao retornar com o veículo.
                     </p>
                   </div>
@@ -1230,31 +1300,34 @@ export default function TechnicianMobile() {
             {current.transportMode === 'AIR' && (
               <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-4">
                 <div className="flex items-start gap-3">
-                  <Plane className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />
-                  <div className="min-w-0 space-y-1 text-sm text-sky-50/90">
-                    <p className="font-semibold text-sky-100">Informaées da viagem aérea</p>
+                  <Plane className="mt-0.5 h-5 w-5 shrink-0 text-sky-700 dark:text-sky-300" />
+                  <div className="min-w-0 space-y-1 text-sm text-sky-900/90 dark:text-sky-50/90">
+                    <p className="font-semibold text-sky-800 dark:text-sky-100">Informações da viagem aérea</p>
                     <p><strong>Aeroporto do voo de ida:</strong> {current.flightOutboundAirport || current.flightAirport || 'Não informado'}</p>
                     <p><strong>Aeroporto do voo de volta:</strong> {current.flightReturnAirport || current.flightAirport || 'Não informado'}</p>
                     <p><strong>Voo de ida:</strong> {current.flightDepartureAt ? new Date(current.flightDepartureAt).toLocaleString('pt-BR') : 'Não informado'}</p>
                     <p><strong>Voo de volta:</strong> {current.flightReturnAt ? new Date(current.flightReturnAt).toLocaleString('pt-BR') : 'Não informado'}</p>
-                    <p className="pt-1 text-xs text-sky-100/80">Viagens aéreas não exigem fotos de retirada ou devolução de veículo.</p>
+                    <p className="pt-1 text-xs text-sky-800/80 dark:text-sky-100/80">Viagens aéreas não exigem fotos de retirada ou devolução de veículo.</p>
                   </div>
                 </div>
               </div>
             )}
 
-            <div className="space-y-2">
-              <div className="space-y-2">
-                <Button
-                  type="button"
-                  className="h-12 w-full text-base bg-[#c8142f] hover:bg-[#a81027]"
-                  onClick={() => setRouteOptionsOpen((value) => !value)}
-                >
-                  <Navigation className="mr-2 h-5 w-5" />
-                  Abrir rota
-                </Button>
-                {routeOptionsOpen && (
-                  <div className="grid grid-cols-1 gap-2 rounded-2xl border bg-card p-3 shadow-lg sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                className="h-12 w-full rounded-xl bg-[#c8142f] text-sm hover:bg-[#a81027]"
+                onClick={() => setRouteOptionsOpen((value) => !value)}
+              >
+                <Navigation className="mr-2 h-5 w-5" />
+                Abrir rota
+              </Button>
+              <Button className="h-12 w-full rounded-xl bg-emerald-600 text-sm hover:bg-emerald-700" onClick={() => updateStatus('TRAVELING')}>
+                <Play className="mr-2 h-5 w-5" />
+                Iniciar deslocamento
+              </Button>
+              {routeOptionsOpen && (
+                  <div className="col-span-2 grid grid-cols-1 gap-2 rounded-2xl border bg-card p-3 shadow-lg sm:grid-cols-3">
                     <a href={googleMapsRouteUrl} target="_blank" rel="noreferrer">
                       <Button type="button" variant="outline" className="w-full justify-start">
                         Google Maps
@@ -1271,19 +1344,15 @@ export default function TechnicianMobile() {
                       </Button>
                     </a>
                   </div>
-                )}
-              </div>
-              <Button className="h-12 w-full text-base bg-green-600 hover:bg-green-700" onClick={() => updateStatus('TRAVELING')}>
-                <Play className="mr-2 h-5 w-5" />
-                Iniciar deslocamento
-              </Button>
+              )}
             </div>
           </CardContent>
         </Card>
+        </div>
         )}
 
         {activeSection === 'CALENDAR' && (
-        <Card className="rounded-2xl">
+        <Card className="gap-4 rounded-[24px] border-border/70 shadow-sm animate-in fade-in slide-in-from-left-2 duration-300">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-base sm:text-lg">Calendário do técnico</CardTitle>
@@ -1317,8 +1386,8 @@ export default function TechnicianMobile() {
         )}
 
         {activeSection === 'DETAILS' && (!isCarTrip || pickupVehiclePhotosComplete) && (
-        <Card className="rounded-2xl">
-          <CardHeader><CardTitle className="text-base sm:text-lg">Relatório Técnico</CardTitle></CardHeader>
+        <Card className="gap-4 rounded-[24px] border-border/70 shadow-sm">
+          <CardHeader className="px-5 pt-5 sm:px-6"><CardTitle className="flex items-center gap-2 text-base sm:text-lg"><ListChecks className="h-5 w-5 text-blue-500" />Relatório Técnico</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
               <p className="text-xs font-medium text-blue-700 dark:text-blue-200">OS oficial do atendimento</p>
@@ -1333,7 +1402,7 @@ export default function TechnicianMobile() {
                 </div>
               )}
             </div>
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-100">
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-800 dark:text-emerald-100">
               Revise e edite as considerações antes de enviar. Esse texto vai para a OS e para o Drive.
             </div>
             <Textarea
@@ -1358,16 +1427,16 @@ export default function TechnicianMobile() {
         )}
 
         {activeSection === 'DETAILS' && (
-        <Card className="rounded-2xl">
-          <CardHeader><CardTitle className="text-base sm:text-lg">Fotos, Vídeos e Documentos</CardTitle></CardHeader>
+        <Card className="gap-4 rounded-[24px] border-border/70 shadow-sm">
+          <CardHeader className="px-5 pt-5 sm:px-6"><CardTitle className="flex items-center gap-2 text-base sm:text-lg"><Camera className="h-5 w-5 text-[#c8142f]" />Fotos, Vídeos e Documentos</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {isCarTrip && (
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
-                <p className="text-sm font-semibold text-amber-300">Controle obrigatório do veículo</p>
-                <p className="mt-1 text-xs text-amber-100/90">
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Controle obrigatório do veículo</p>
+                <p className="mt-1 text-xs text-amber-900/90 dark:text-amber-100/90">
                   Primeiro envie as 4 fotos da retirada. Depois o sistema libera as considerações, os demais anexos e as assinaturas.
                 </p>
-                <div className="mt-3 rounded-lg border border-amber-400/20 bg-black/10 p-3 text-xs text-amber-50/90">
+                <div className="mt-3 rounded-lg border border-amber-400/20 bg-black/5 p-3 text-xs text-amber-900/90 dark:bg-black/10 dark:text-amber-50/90">
                   <p className="font-semibold">Fotos obrigatórias em cada etapa:</p>
                   <ol className="mt-2 list-decimal space-y-1 pl-4">
                     <li>Banco traseiro mostrando também o chão.</li>
@@ -1490,7 +1559,7 @@ export default function TechnicianMobile() {
                   </div>
                   )}
                   {pickupVehiclePhotosComplete && !technicalReportSubmitted && (
-                    <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-100">
+                    <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-800 dark:text-blue-100">
                       Envie primeiro o relatório técnico, os anexos e as assinaturas. Depois a devolução do veículo será liberada.
                     </div>
                   )}
@@ -1505,22 +1574,22 @@ export default function TechnicianMobile() {
             {(!isCarTrip || pickupVehiclePhotosComplete) && (
             <>
             <div className="grid grid-cols-2 gap-3">
-            <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
+            <label className="flex h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-border/70 bg-muted/35 text-foreground transition-all hover:border-[#c8142f]/40 hover:bg-[#c8142f]/5 active:scale-[0.98]">
               <Camera className="h-5 w-5" />
               <span className="text-xs">Câmera</span>
               <Input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addAttachment(e.target.files?.[0], 'midia-tecnica'); e.currentTarget.value = ''; }} />
             </label>
-            <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
+            <label className="flex h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-border/70 bg-muted/35 text-foreground transition-all hover:border-[#c8142f]/40 hover:bg-[#c8142f]/5 active:scale-[0.98]">
               <Video className="h-5 w-5" />
               <span className="text-xs">Vídeo</span>
               <Input type="file" accept="video/*" capture="environment" className="hidden" onChange={(e) => { addAttachment(e.target.files?.[0], 'midia-tecnica'); e.currentTarget.value = ''; }} />
             </label>
-            <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
+            <label className="flex h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-border/70 bg-muted/35 text-foreground transition-all hover:border-[#c8142f]/40 hover:bg-[#c8142f]/5 active:scale-[0.98]">
               <Camera className="h-5 w-5" />
               <span className="text-xs">Galeria</span>
               <Input type="file" multiple accept="image/*,video/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.mp4,.mov,.webm" className="hidden" onChange={(e) => { addAttachments(e.target.files, 'midia-tecnica'); e.currentTarget.value = ''; }} />
             </label>
-            <label className="flex h-20 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border text-foreground">
+            <label className="flex h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-border/70 bg-muted/35 text-foreground transition-all hover:border-[#c8142f]/40 hover:bg-[#c8142f]/5 active:scale-[0.98]">
               <FileText className="h-5 w-5" />
               <span className="text-xs">Documento</span>
               <Input type="file" multiple accept=".doc,.docx,.xls,.xlsx,.txt,image/*,video/*" className="hidden" onChange={(e) => { addAttachments(e.target.files, 'documento-tecnico'); e.currentTarget.value = ''; }} />
@@ -1578,8 +1647,8 @@ export default function TechnicianMobile() {
 
 
         {activeSection === 'DETAILS' && (!isCarTrip || pickupVehiclePhotosComplete) && (
-        <Card className="rounded-2xl">
-          <CardHeader><CardTitle className="text-base sm:text-lg">Assinaturas</CardTitle></CardHeader>
+        <Card className="gap-4 rounded-[24px] border-border/70 shadow-sm">
+          <CardHeader className="px-5 pt-5 sm:px-6"><CardTitle className="flex items-center gap-2 text-base sm:text-lg"><FileText className="h-5 w-5 text-emerald-500" />Assinaturas</CardTitle></CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-3">
               <p className="text-sm font-medium">Assinatura do técnico</p>
@@ -1652,7 +1721,7 @@ export default function TechnicianMobile() {
         {activeSection === 'DETAILS' && (!isCarTrip || pickupVehiclePhotosComplete) && (
         technicalReportSubmitted ? (
           <div className="space-y-3">
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center text-sm text-emerald-300">
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center text-sm text-emerald-700 dark:text-emerald-300">
               {isCarTrip
                 ? 'Relatório técnico enviado ao Drive. O atendimento permanece aberto até a devolução do veículo.'
                 : 'Relatório técnico enviado ao Drive e atendimento finalizado.'}
@@ -1678,7 +1747,7 @@ export default function TechnicianMobile() {
         {errorMessage && <p className="text-center text-sm text-red-600 dark:text-red-400">{errorMessage}</p>}
 
         {activeSection === 'DETAILS' && (
-        <Card className="rounded-2xl">
+        <Card className="gap-4 rounded-[24px] border-border/70 shadow-sm">
           <CardHeader><CardTitle className="text-base sm:text-lg">Próximos Atendimentos</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {upcoming.length === 0 && <p className="text-sm text-muted-foreground">Sem próximos atendimentos.</p>}
@@ -1697,6 +1766,27 @@ export default function TechnicianMobile() {
         </Card>
         )}
 
+        <nav className="fixed bottom-3 left-1/2 z-50 grid w-[calc(100%-24px)] max-w-md -translate-x-1/2 grid-cols-3 gap-1 rounded-[22px] border border-white/10 bg-[#111318]/95 p-1.5 text-white shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:bottom-5">
+          {([
+            { section: 'LIST' as const, label: 'Agenda', icon: BriefcaseBusiness },
+            { section: 'DETAILS' as const, label: 'Atendimento', icon: ListChecks },
+            { section: 'CALENDAR' as const, label: 'Calendário', icon: CalendarDays }
+          ]).map((item) => {
+            const Icon = item.icon;
+            const selected = activeSection === item.section;
+            return (
+              <button
+                key={item.section}
+                type="button"
+                onClick={() => setActiveSection(item.section)}
+                className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[16px] text-[11px] font-medium transition-all ${selected ? 'bg-[#c8142f] text-white shadow-lg shadow-[#c8142f]/20' : 'text-white/55 hover:bg-white/5 hover:text-white'}`}
+              >
+                <Icon className="h-5 w-5" />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
       </div>
     </div>
   );

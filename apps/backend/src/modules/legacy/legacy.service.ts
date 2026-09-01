@@ -677,6 +677,7 @@ export class LegacyService {
       summary?: string;
       finishedAt?: string;
       internalNote?: string;
+      clientSignatureRefused?: boolean;
       clientSignatureDataUrl?: string;
       technicianSignatureDataUrl?: string;
     }
@@ -718,6 +719,15 @@ export class LegacyService {
           appointmentId: id,
           status: 'TECHNICAL_INTERNAL_NOTE',
           observation: internalNote
+        }
+      });
+    }
+    if (report?.clientSignatureRefused) {
+      await this.prisma.statusLog.create({
+        data: {
+          appointmentId: id,
+          status: 'CLIENT_SIGNATURE_REFUSED',
+          observation: 'Cliente recusou-se a assinar a ordem de serviço'
         }
       });
     }

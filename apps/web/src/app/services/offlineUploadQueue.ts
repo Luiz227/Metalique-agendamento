@@ -15,6 +15,7 @@ export type OfflineQueuedAttachment = {
 export type OfflineReportPayload = {
   summary: string;
   internalNote?: string;
+  clientSignatureRefused?: boolean;
   clientSignatureDataUrl?: string;
   technicianSignatureDataUrl?: string;
   finishedAt?: string;

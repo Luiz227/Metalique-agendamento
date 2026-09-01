@@ -168,6 +168,7 @@ export class LegacyController {
       solution?: string;
       pendingItems?: string;
       internalNote?: string;
+      clientSignatureRefused?: boolean;
       finishedAt?: string;
       clientSignatureDataUrl?: string;
       technicianSignatureDataUrl?: string;

@@ -33,6 +33,7 @@ type PendingAttachment = {
 type TechnicianDraft = {
   summary: string;
   internalNote: string;
+  clientSignatureRefused: boolean;
   clientSignatureDataUrl: string;
   technicianSignatureDataUrl: string;
 };
@@ -66,6 +67,22 @@ function clearTechnicianDraft(appointmentId: string) {
   } catch {
     // Nothing to clean if localStorage is unavailable.
   }
+}
+
+function buildClientSignatureRefusalImage() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 900;
+  canvas.height = 220;
+  const context = canvas.getContext('2d');
+  if (!context) return '';
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = '#991b1b';
+  context.font = 'bold 38px sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillText('CLIENTE RECUSOU-SE A ASSINAR', canvas.width / 2, canvas.height / 2);
+  return canvas.toDataURL('image/png');
 }
 
 function isImageFile(file: File) {
@@ -294,6 +311,7 @@ export default function TechnicianMobile() {
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [locallySubmittedReportIds, setLocallySubmittedReportIds] = useState<Set<string>>(() => new Set());
   const [clientSignatureDataUrl, setClientSignatureDataUrl] = useState('');
+  const [clientSignatureRefused, setClientSignatureRefused] = useState(false);
   const [technicianSignatureDataUrl, setTechnicianSignatureDataUrl] = useState('');
   const [routeOptionsOpen, setRouteOptionsOpen] = useState(false);
   const [activeTripsView, setActiveTripsView] = useState<'ACTIVE' | 'FINISHED'>('ACTIVE');
@@ -407,6 +425,7 @@ export default function TechnicianMobile() {
     draftLoadedForAppointmentRef.current = current.id;
     setReport({ summary: draft?.summary ?? '' });
     setInternalNote(draft?.internalNote ?? '');
+    setClientSignatureRefused(draft?.clientSignatureRefused ?? false);
     setClientSignatureDataUrl(draft?.clientSignatureDataUrl ?? '');
     setTechnicianSignatureDataUrl(draft?.technicianSignatureDataUrl || savedTechnicianSignature || '');
   }, [current?.id]);
@@ -416,10 +435,11 @@ export default function TechnicianMobile() {
     writeTechnicianDraft(current.id, {
       summary: report.summary,
       internalNote,
+      clientSignatureRefused,
       clientSignatureDataUrl,
       technicianSignatureDataUrl
     });
-  }, [current?.id, report.summary, internalNote, clientSignatureDataUrl, technicianSignatureDataUrl]);
+  }, [current?.id, report.summary, internalNote, clientSignatureRefused, clientSignatureDataUrl, technicianSignatureDataUrl]);
 
   const currentGeneratedReport = (current?.attachments ?? []).find(
     (attachment) =>
@@ -445,12 +465,12 @@ export default function TechnicianMobile() {
   const missingVehiclePickupPhotos = isCarTrip && !pickupVehiclePhotosComplete;
   const canSendReport =
     Boolean(report.summary) &&
-    Boolean(clientSignatureDataUrl) &&
+    (Boolean(clientSignatureDataUrl) || clientSignatureRefused) &&
     Boolean(technicianSignatureDataUrl) &&
     !savingReport &&
     !missingVehiclePickupPhotos &&
     !technicalReportSubmitted;
-  const canWriteInternalNote = Boolean(clientSignatureDataUrl);
+  const canWriteInternalNote = Boolean(clientSignatureDataUrl) || clientSignatureRefused;
   const activeTrips = useMemo(
     () => appointments.filter((item) => !wasFinishedByTechnician(item)),
     [appointments]
@@ -509,7 +529,8 @@ export default function TechnicianMobile() {
     return {
       ...report,
       internalNote: internalNote.trim() || undefined,
-      clientSignatureDataUrl,
+      clientSignatureRefused,
+      clientSignatureDataUrl: clientSignatureRefused ? buildClientSignatureRefusalImage() : clientSignatureDataUrl,
       technicianSignatureDataUrl,
       finishedAt: new Date().toISOString()
     };
@@ -644,6 +665,7 @@ export default function TechnicianMobile() {
         throw err;
       }
       clearSignature('client');
+      setClientSignatureRefused(false);
       setTechnicianSignatureDataUrl(submittedTechnicianSignature);
       setReport({ summary: '' });
       setInternalNote('');
@@ -959,6 +981,7 @@ export default function TechnicianMobile() {
   }
 
   function startSignature(event: PointerEvent<HTMLCanvasElement>, target: 'client' | 'technician') {
+    if (target === 'client' && clientSignatureRefused) setClientSignatureRefused(false);
     const canvas = getSignatureCanvas(target);
     const context = canvas?.getContext('2d');
     if (!canvas || !context) return;
@@ -1594,7 +1617,7 @@ export default function TechnicianMobile() {
                 ref={clientSignatureCanvasRef}
                 width={640}
                 height={220}
-                className="h-44 w-full touch-none rounded-xl border bg-white"
+                className={`h-44 w-full touch-none rounded-xl border bg-white ${clientSignatureRefused ? 'pointer-events-none opacity-40' : ''}`}
                 onPointerDown={(event) => startSignature(event, 'client')}
                 onPointerMove={(event) => drawSignature(event, 'client')}
                 onPointerUp={() => stopSignature('client')}
@@ -1604,6 +1627,23 @@ export default function TechnicianMobile() {
               <Button type="button" variant="outline" className="w-full" onClick={() => clearSignature('client')}>
                 Limpar assinatura do cliente
               </Button>
+              <Button
+                type="button"
+                variant={clientSignatureRefused ? 'destructive' : 'outline'}
+                className="min-h-11 w-full whitespace-normal px-3 py-2 text-center"
+                onClick={() => {
+                  const nextValue = !clientSignatureRefused;
+                  if (nextValue) clearSignature('client');
+                  setClientSignatureRefused(nextValue);
+                }}
+              >
+                {clientSignatureRefused ? 'Recusa de assinatura registrada' : 'Cliente não quis assinar'}
+              </Button>
+              {clientSignatureRefused && (
+                <p className="text-center text-xs text-red-600 dark:text-red-400">
+                  A recusa será registrada na ordem de serviço.
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

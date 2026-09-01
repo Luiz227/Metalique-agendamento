@@ -72,6 +72,10 @@ function isImageFile(file: File) {
   return file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name);
 }
 
+function isVideoFile(file: File) {
+  return file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm|avi|mkv)$/i.test(file.name);
+}
+
 async function compressImageForUpload(file: File) {
   if (!isImageFile(file)) return file;
 
@@ -171,6 +175,17 @@ const VEHICLE_PHOTO_LABELS = [
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+class AttachmentBatchError extends Error {
+  constructor(
+    message: string,
+    readonly failedAttachments: PendingAttachment[],
+    readonly sentCount: number
+  ) {
+    super(message);
+    this.name = 'AttachmentBatchError';
+  }
 }
 
 function shouldRetryUploadStatus(status: number) {
@@ -618,9 +633,11 @@ export default function TechnicianMobile() {
       try {
         await uploadPendingAttachmentsBatch();
       } catch (err) {
-        if (isNetworkLikeError(err) && pendingAttachments.length > 0) {
-          await saveCurrentUploadOffline('attachments', undefined, pendingAttachments);
-          setMessage('Relatorio enviado ao Drive. Anexos salvos no aparelho e serao enviados quando a internet voltar.');
+        const failedAttachments = err instanceof AttachmentBatchError ? err.failedAttachments : pendingAttachments;
+        if (failedAttachments.length > 0) {
+          await saveCurrentUploadOffline('attachments', undefined, failedAttachments);
+          setMessage(`Relatório enviado. ${failedAttachments.length} anexo(s) ficaram salvos no aparelho para nova tentativa automática.`);
+          setErrorMessage(err instanceof Error ? err.message : 'Não foi possível enviar todos os anexos.');
           await load(true);
           return;
         }
@@ -666,14 +683,15 @@ export default function TechnicianMobile() {
       setMessage('Arquivos enviados ao Drive com sucesso.');
       await load(true);
     } catch (err) {
-      if (isNetworkLikeError(err) && pendingAttachments.length > 0) {
+      const failedAttachments = err instanceof AttachmentBatchError ? err.failedAttachments : pendingAttachments;
+      if (failedAttachments.length > 0) {
         try {
-          await saveCurrentUploadOffline('attachments', undefined, pendingAttachments);
-          setMessage('Anexos salvos no aparelho. Eles serao enviados automaticamente quando a internet voltar.');
-          setErrorMessage('');
+          await saveCurrentUploadOffline('attachments', undefined, failedAttachments);
+          setMessage(`${failedAttachments.length} anexo(s) ficaram salvos no aparelho para nova tentativa automática.`);
+          setErrorMessage(err instanceof Error ? err.message : 'Não foi possível enviar todos os anexos.');
           return;
         } catch (queueErr) {
-          setErrorMessage(queueErr instanceof Error ? queueErr.message : 'Nao foi possivel salvar os anexos offline.');
+          setErrorMessage(queueErr instanceof Error ? queueErr.message : 'Não foi possível salvar os anexos no aparelho.');
           return;
         }
       }
@@ -709,13 +727,17 @@ export default function TechnicianMobile() {
     if (failedMessages.length > 0) {
       const sentCount = pendingAttachments.length - failedAttachments.length;
       const sentPrefix = sentCount > 0 ? `${sentCount} arquivo(s) enviado(s). ` : '';
-      throw new Error(`${sentPrefix}Falha em ${failedAttachments.length} arquivo(s): ${failedMessages.join(' | ')}`);
+      throw new AttachmentBatchError(
+        `${sentPrefix}Falha em ${failedAttachments.length} arquivo(s): ${failedMessages.join(' | ')}`,
+        failedAttachments,
+        sentCount
+      );
     }
   }
 
   async function uploadFileNow(file: File | undefined, type: string, displayName?: string, appointmentId = current?.id) {
     if (!appointmentId || !file) return;
-    if (file.type.startsWith('video/') && file.size > MAX_VIDEO_ATTACHMENT_SIZE) {
+    if (isVideoFile(file) && file.size > MAX_VIDEO_ATTACHMENT_SIZE) {
       throw new Error(`Video muito grande. Grave um video menor ou envie o arquivo com ate ${MAX_VIDEO_ATTACHMENT_SIZE_MB} MB.`);
     }
     const uploadFile = await compressImageForUpload(file);
@@ -827,8 +849,8 @@ export default function TechnicianMobile() {
     if (!file) return;
     setMessage('');
     setErrorMessage('');
-    if (file.type.startsWith('video/') && file.size > MAX_VIDEO_ATTACHMENT_SIZE) {
-      setErrorMessage(`Video muito grande. Grave um video menor ou envie o arquivo com ate ${MAX_VIDEO_ATTACHMENT_SIZE_MB} MB.`);
+    if (isVideoFile(file) && file.size > MAX_VIDEO_ATTACHMENT_SIZE) {
+      setErrorMessage(`${file.name} não foi anexado porque ultrapassa ${MAX_VIDEO_ATTACHMENT_SIZE_MB} MB.`);
       return;
     }
     const isImage = isImageFile(file);
@@ -850,7 +872,33 @@ export default function TechnicianMobile() {
     category: PendingAttachment['category'] = type === 'documento-tecnico' ? 'general-document' : 'general-media'
   ) {
     if (!files?.length) return;
-    Array.from(files).forEach((file) => addAttachment(file, type, category));
+    setMessage('');
+    const selectedFiles = Array.from(files);
+    const oversizedVideos = selectedFiles.filter(
+      (file) => isVideoFile(file) && file.size > MAX_VIDEO_ATTACHMENT_SIZE
+    );
+    const acceptedFiles = selectedFiles.filter(
+      (file) => !isVideoFile(file) || file.size <= MAX_VIDEO_ATTACHMENT_SIZE
+    );
+    const newItems = acceptedFiles.map((file, index): PendingAttachment => ({
+      id: `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 9)}`,
+      file,
+      displayName: buildDefaultAttachmentName(file.name, category),
+      type,
+      category,
+      previewUrl: isImageFile(file) ? URL.createObjectURL(file) : undefined
+    }));
+
+    if (newItems.length > 0) {
+      setPendingAttachments((prev) => [...prev, ...newItems]);
+    }
+    if (oversizedVideos.length > 0) {
+      setErrorMessage(
+        `${oversizedVideos.length} vídeo(s) não foram anexados porque ultrapassam ${MAX_VIDEO_ATTACHMENT_SIZE_MB} MB: ${oversizedVideos.map((file) => file.name).join(', ')}`
+      );
+    } else {
+      setErrorMessage('');
+    }
   }
 
   function renameAttachment(id: string, displayName: string) {
